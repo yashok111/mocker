@@ -83,75 +83,95 @@ func (r *Repo) resolvePortableDiagramRows(ctx context.Context, tx *sql.Tx, g *Ef
 	})
 }
 func visitPortableDiagramRefs(d *DiagramDocument, visit func(*DiagramRef) error) error {
-	list := func(refs []DiagramRef) error {
-		for i := range refs {
-			if err := visit(&refs[i]); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
 	for i := range d.Payload.Elements {
-		if err := list(d.Payload.Elements[i].Refs); err != nil {
+		if err := visitDiagramRefList(d.Payload.Elements[i].Refs, visit); err != nil {
 			return err
 		}
 	}
 	for i := range d.Payload.Links {
-		if err := list(d.Payload.Links[i].Refs); err != nil {
+		if err := visitDiagramRefList(d.Payload.Links[i].Refs, visit); err != nil {
 			return err
 		}
 	}
 	if p := d.Interactions; p != nil {
-		if err := list(p.ScopeRefs); err != nil {
+		if err := visitInteractionRefs(p, visit); err != nil {
 			return err
-		}
-		for i := range p.Participants {
-			if err := list(p.Participants[i].Refs); err != nil {
-				return err
-			}
-		}
-		for i := range p.Steps {
-			if err := list(p.Steps[i].Refs); err != nil {
-				return err
-			}
 		}
 	}
 	if p := d.Lifecycle; p != nil {
-		if err := visit(&p.Entity); err != nil {
+		if err := visitLifecycleRefs(p, visit); err != nil {
 			return err
 		}
-		if err := list(p.StateFields); err != nil {
+	}
+	if p := d.BusinessMap; p != nil {
+		return visitBusinessMapRefs(p, visit)
+	}
+	return nil
+}
+
+func visitDiagramRefList(refs []DiagramRef, visit func(*DiagramRef) error) error {
+	for i := range refs {
+		if err := visit(&refs[i]); err != nil {
 			return err
 		}
-		for i := range p.States {
-			if err := list(p.States[i].Refs); err != nil {
-				return err
-			}
+	}
+	return nil
+}
+
+func visitInteractionRefs(p *InteractionPayload, visit func(*DiagramRef) error) error {
+	if err := visitDiagramRefList(p.ScopeRefs, visit); err != nil {
+		return err
+	}
+	for i := range p.Participants {
+		if err := visitDiagramRefList(p.Participants[i].Refs, visit); err != nil {
+			return err
 		}
-		for i := range p.Transitions {
-			t := &p.Transitions[i]
-			for _, refs := range [][]DiagramRef{t.Refs, t.Triggers, t.Writes, t.Events} {
-				if err := list(refs); err != nil {
-					return err
-				}
-			}
+	}
+	for i := range p.Steps {
+		if err := visitDiagramRefList(p.Steps[i].Refs, visit); err != nil {
+			return err
 		}
-		for i := range p.Rules {
-			if err := visit(&p.Rules[i].Trigger); err != nil {
+	}
+	return nil
+}
+
+func visitLifecycleRefs(p *LifecyclePayload, visit func(*DiagramRef) error) error {
+	if err := visit(&p.Entity); err != nil {
+		return err
+	}
+	if err := visitDiagramRefList(p.StateFields, visit); err != nil {
+		return err
+	}
+	for i := range p.States {
+		if err := visitDiagramRefList(p.States[i].Refs, visit); err != nil {
+			return err
+		}
+	}
+	for i := range p.Transitions {
+		t := &p.Transitions[i]
+		for _, refs := range [][]DiagramRef{t.Refs, t.Triggers, t.Writes, t.Events} {
+			if err := visitDiagramRefList(refs, visit); err != nil {
 				return err
 			}
 		}
 	}
-	if p := d.BusinessMap; p != nil {
-		for i := range p.Elements {
-			if err := list(p.Elements[i].Refs); err != nil {
-				return err
-			}
+	for i := range p.Rules {
+		if err := visit(&p.Rules[i].Trigger); err != nil {
+			return err
 		}
-		for i := range p.Links {
-			if err := list(p.Links[i].Refs); err != nil {
-				return err
-			}
+	}
+	return nil
+}
+
+func visitBusinessMapRefs(p *BusinessMapPayload, visit func(*DiagramRef) error) error {
+	for i := range p.Elements {
+		if err := visitDiagramRefList(p.Elements[i].Refs, visit); err != nil {
+			return err
+		}
+	}
+	for i := range p.Links {
+		if err := visitDiagramRefList(p.Links[i].Refs, visit); err != nil {
+			return err
 		}
 	}
 	return nil

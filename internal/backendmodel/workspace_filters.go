@@ -42,37 +42,50 @@ func workspaceMatches(ctx context.Context, g *EffectiveGraphSnapshot, in GraphQu
 		return true, nil
 	}
 	if in.ServiceID != "" {
-		nodes := g.indexedReads().payloads
-		if err := validateWorkspaceService(g, in.ServiceID); err != nil {
+		match, err := workspaceServiceMatch(g, in.ServiceID, typ, id)
+		if err != nil || !match {
 			return false, err
-		}
-		belongs := func(id string) bool {
-			seen := map[string]bool{}
-			for id != "" && !seen[id] {
-				seen[id] = true
-				if id == in.ServiceID {
-					return true
-				}
-				payload, ok := nodes["node\x00"+id]
-				if !ok || payload.ParentID == nil {
-					return false
-				}
-				id = *payload.ParentID
-			}
-			return false
-		}
-		match := belongs(id)
-		if typ == "edge" {
-			payload, ok := nodes["edge\x00"+id]
-			match = ok && (belongs(payload.From) || belongs(payload.To))
-		}
-		if !match {
-			return false, nil
 		}
 	}
 	if in.Certainty == "" && in.SourceSnapshotID == "" {
 		return true, nil
 	}
+	return workspaceProofMatch(g, in, typ, id)
+}
+
+// workspaceServiceMatch: a node matches when it sits under the service, an
+// edge when either endpoint does.
+func workspaceServiceMatch(g *EffectiveGraphSnapshot, serviceID, typ, id string) (bool, error) {
+	nodes := g.indexedReads().payloads
+	if err := validateWorkspaceService(g, serviceID); err != nil {
+		return false, err
+	}
+	belongs := func(id string) bool {
+		seen := map[string]bool{}
+		for id != "" && !seen[id] {
+			seen[id] = true
+			if id == serviceID {
+				return true
+			}
+			payload, ok := nodes["node\x00"+id]
+			if !ok || payload.ParentID == nil {
+				return false
+			}
+			id = *payload.ParentID
+		}
+		return false
+	}
+	if typ == "edge" {
+		payload, ok := nodes["edge\x00"+id]
+		return ok && (belongs(payload.From) || belongs(payload.To)), nil
+	}
+	return belongs(id), nil
+}
+
+// workspaceProofMatch filters by the record's source certainty and by the
+// snapshot its proof comes from. Without a source graph only "unresolved"
+// can match, and no snapshot can.
+func workspaceProofMatch(g *EffectiveGraphSnapshot, in GraphQueryInput, typ, id string) (bool, error) {
 	if g.Source == nil {
 		return in.Certainty == "unresolved" && in.SourceSnapshotID == "", nil
 	}

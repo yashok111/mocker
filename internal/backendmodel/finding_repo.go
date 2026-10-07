@@ -130,22 +130,7 @@ func (r *Repo) ReviewFinding(ctx context.Context, pid, fp string, in FindingRevi
 			return findingConflict("Review version or positive basis changed; reload history")
 		}
 		if in.ResolutionAnalysis != nil {
-			var status, scope string
-			e = tx.QueryRowContext(ctx, `SELECT c.status,c.scope_key FROM backend_finding_checks c JOIN backend_analysis_jobs j ON j.project_id=c.project_id AND j.id=c.job_id WHERE c.project_id=? AND c.job_id=? AND c.result_version=? AND c.fingerprint=? AND j.status='completed' AND j.kind='diagnostics' AND j.result_version=c.result_version`, pid, in.ResolutionAnalysis.JobID, in.ResolutionAnalysis.ResultVersion, fp).Scan(&status, &scope)
-			if errors.Is(e, sql.ErrNoRows) || e == nil && status != "absent" {
-				return findingConflict("Resolution needs an exact completed recheck with sufficient absence coverage")
-			}
-			if e != nil {
-				return e
-			}
-			occurrences, e := recheckedOccurrenceJobs(ctx, tx, pid, fp, in.BasisHash, scope, in.ResolutionAnalysis.JobID)
-			if e != nil {
-				return e
-			}
-			if len(occurrences) == 0 {
-				return findingConflict("Recheck scope differs or predates this occurrence")
-			}
-			if e = requireRecheckRevision(ctx, tx, pid, in.ResolutionAnalysis.JobID, occurrences); e != nil {
+			if e = requireFindingResolution(ctx, tx, pid, fp, in); e != nil {
 				return e
 			}
 		}
@@ -167,6 +152,28 @@ func (r *Repo) ReviewFinding(ctx context.Context, pid, fp string, in FindingRevi
 		return e
 	})
 	return out, err
+}
+
+// requireFindingResolution admits a "resolved" review only on an exact
+// completed recheck that saw the finding absent over the same scope, after
+// the occurrence it resolves.
+func requireFindingResolution(ctx context.Context, tx *sql.Tx, pid, fp string, in FindingReviewInput) error {
+	var status, scope string
+	e := tx.QueryRowContext(ctx, `SELECT c.status,c.scope_key FROM backend_finding_checks c JOIN backend_analysis_jobs j ON j.project_id=c.project_id AND j.id=c.job_id WHERE c.project_id=? AND c.job_id=? AND c.result_version=? AND c.fingerprint=? AND j.status='completed' AND j.kind='diagnostics' AND j.result_version=c.result_version`, pid, in.ResolutionAnalysis.JobID, in.ResolutionAnalysis.ResultVersion, fp).Scan(&status, &scope)
+	if errors.Is(e, sql.ErrNoRows) || e == nil && status != "absent" {
+		return findingConflict("Resolution needs an exact completed recheck with sufficient absence coverage")
+	}
+	if e != nil {
+		return e
+	}
+	occurrences, e := recheckedOccurrenceJobs(ctx, tx, pid, fp, in.BasisHash, scope, in.ResolutionAnalysis.JobID)
+	if e != nil {
+		return e
+	}
+	if len(occurrences) == 0 {
+		return findingConflict("Recheck scope differs or predates this occurrence")
+	}
+	return requireRecheckRevision(ctx, tx, pid, in.ResolutionAnalysis.JobID, occurrences)
 }
 
 // recheckedOccurrenceJobs lists the jobs of the occurrences of fp with this

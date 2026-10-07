@@ -66,12 +66,8 @@ func (r *Repo) ImportChanges(ctx context.Context, pid, sid string, in ImportChan
 	if in.PreviewVersion <= 0 {
 		return nil, invalid("previewVersion", "A positive saved preview version is required")
 	}
-	types := []string{"source", "identity", "deletion"}
-	if session.Mode == "composed" {
-		types = append(types, "assertion_conflict", "claim_identity", "migration")
-	}
-	if in.RecordType != "" && !slices.Contains(types, in.RecordType) {
-		return nil, invalid("recordType", "Select source, identity or deletion")
+	if err := validateImportChangeType(session, in.RecordType); err != nil {
+		return nil, err
 	}
 	var version int64
 	var doc, details string
@@ -111,14 +107,9 @@ func (r *Repo) ImportChanges(ctx context.Context, pid, sid string, in ImportChan
 		return nil, err
 	}
 	out := &ImportChangesPage{SessionID: sid, PreviewVersion: version, CandidateHash: p.CandidateHash, RecordType: in.RecordType, Items: []ImportChangeItem{}}
-	filtered := []ImportChangeItem{}
-	for _, x := range all {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if in.RecordType == "" || in.RecordType == x.RecordType {
-			filtered = append(filtered, x)
-		}
+	filtered, err := filterImportChanges(ctx, all, in.RecordType)
+	if err != nil {
+		return nil, err
 	}
 	if offset > len(filtered) {
 		return nil, invalid("cursor", "Invalid offset")
@@ -130,6 +121,33 @@ func (r *Repo) ImportChanges(ctx context.Context, pid, sid string, in ImportChan
 	}
 	return out, nil
 }
+
+// validateImportChangeType: a composed session's preview also lists claim
+// conflicts, claim identities and migrations.
+func validateImportChangeType(session *ImportSession, recordType string) error {
+	types := []string{"source", "identity", "deletion"}
+	if session.Mode == "composed" {
+		types = append(types, "assertion_conflict", "claim_identity", "migration")
+	}
+	if recordType != "" && !slices.Contains(types, recordType) {
+		return invalid("recordType", "Select source, identity or deletion")
+	}
+	return nil
+}
+
+func filterImportChanges(ctx context.Context, all []ImportChangeItem, recordType string) ([]ImportChangeItem, error) {
+	filtered := []ImportChangeItem{}
+	for _, x := range all {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if recordType == "" || recordType == x.RecordType {
+			filtered = append(filtered, x)
+		}
+	}
+	return filtered, nil
+}
+
 func loadSavedStatus(ctx context.Context, q importReader, out *ImportStatus) error {
 	var doc string
 	err := q.QueryRowContext(ctx, `SELECT document FROM backend_import_previews WHERE session_id=?`, out.Session.ID).Scan(&doc)

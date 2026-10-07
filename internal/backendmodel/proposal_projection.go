@@ -37,11 +37,17 @@ type ProposalProjectedEdge struct {
 	EffectiveFacet *EffectiveFacet `json:"effectiveFacet"`
 }
 
-func effectiveProposalFacet(p Proposal, revisionID *string, id, kind string, attrs map[string]jsontext.Value, overlay *ProposalOverlay) (*EffectiveFacet, error) {
-	if overlay != nil && (overlay.SubjectID != id || overlay.Kind != kind || overlay.FacetKey != p.FacetKey) {
-		return nil, notFound()
+// proposalOverlayFits reports whether an overlay belongs to this subject
+// and facet and, when it edits a source record, to this proposal's baseline.
+func proposalOverlayFits(p Proposal, id, kind string, overlay *ProposalOverlay) bool {
+	if overlay.SubjectID != id || overlay.Kind != kind || overlay.FacetKey != p.FacetKey {
+		return false
 	}
-	if overlay != nil && overlay.Base != nil && (overlay.Base.SubjectID != id || overlay.Base.RevisionID != p.BaseRevisionID || overlay.Base.SemanticHash != p.BaseSemanticHash || overlay.Base.FacetKey != p.FacetKey) {
+	return overlay.Base == nil || overlay.Base.SubjectID == id && overlay.Base.RevisionID == p.BaseRevisionID && overlay.Base.SemanticHash == p.BaseSemanticHash && overlay.Base.FacetKey == p.FacetKey
+}
+
+func effectiveProposalFacet(p Proposal, revisionID *string, id, kind string, attrs map[string]jsontext.Value, overlay *ProposalOverlay) (*EffectiveFacet, error) {
+	if overlay != nil && !proposalOverlayFits(p, id, kind, overlay) {
 		return nil, notFound()
 	}
 	f := &EffectiveFacet{Origin: "proposal", ProposalID: p.ID, ProposalRevisionID: revisionID, FacetKey: p.FacetKey, SubjectID: id, Values: map[string]jsontext.Value{}, PropertyOrigins: map[string]ProposalPropertyOrigin{}, BasisEvidenceIDs: []string{}, Limitations: []string{"Desired structure; existing data, writers and runtime enforcement are unverified"}}

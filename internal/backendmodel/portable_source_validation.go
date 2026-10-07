@@ -32,6 +32,40 @@ func portableSourceGraph(s *PortableSource) (*SourceGraphSnapshot, error) {
 }
 
 func ValidatePortableSource(ctx context.Context, s *PortableSource) error {
+	if err := validatePortableSourceShape(ctx, s); err != nil {
+		return err
+	}
+	graph, err := portableSourceGraph(s)
+	if err != nil {
+		return err
+	}
+	sources, err := portableSourceSnapshots(s.Coverage.Snapshots)
+	if err != nil {
+		return err
+	}
+	records, err := portableSourceRecords(s)
+	if err != nil {
+		return err
+	}
+	proofs, err := validatePortableSourceEvidence(s.Evidence, sources, records)
+	if err != nil {
+		return err
+	}
+	if err := validatePortableProofClosure(records, proofs); err != nil {
+		return err
+	}
+	if s.Revision.SchemaVersion != ComposedSchemaVersion {
+		return nil
+	}
+	if err := validateComposedPortableClaims(s, graph); err != nil {
+		return err
+	}
+	return validateComposedPortableHashes(s, graph)
+}
+
+// validatePortableSourceShape runs the checks that need no graph: identity,
+// record and byte limits, and the structural graph rules.
+func validatePortableSourceShape(ctx context.Context, s *PortableSource) error {
 	if !ValidID(s.Revision.ID) || !ValidID(s.Revision.ProjectID) || !slices.Contains(SupportedModelSchemaVersions(), s.Revision.SchemaVersion) {
 		return invalid("revision", "Invalid immutable source revision")
 	}
@@ -52,43 +86,53 @@ func ValidatePortableSource(ctx context.Context, s *PortableSource) error {
 	if len(d) > 0 {
 		return changeInvalid(d)
 	}
-	graph, err := portableSourceGraph(s)
-	if err != nil {
-		return err
-	}
-	records := map[string][]string{}
-	proofs := map[string]Evidence{}
+	return nil
+}
+
+func portableSourceSnapshots(snapshots []SourceSnapshot) (map[string]SourceSnapshot, error) {
 	sources := map[string]SourceSnapshot{}
-	for _, src := range s.Coverage.Snapshots {
+	for _, src := range snapshots {
 		if !ValidID(src.ID) || !ValidID(src.RepositoryID) || sources[src.ID].ID != "" {
-			return invalid("snapshots", "Invalid/duplicate source snapshot")
+			return nil, invalid("snapshots", "Invalid/duplicate source snapshot")
 		}
 		// Reuse manifest field/path/schema quotas without manufacturing source code.
 		manifest := SourceManifest{RepositoryName: "portable", Provider: src.Provider, Snapshot: src.SnapshotManifest}
 		if err := validateManifest(manifest); err != nil {
-			return err
+			return nil, err
 		}
 		sources[src.ID] = src
 	}
+	return sources, nil
+}
+
+// portableSourceRecords maps every record to the proof it cites; only an
+// unresolved target may cite none.
+func portableSourceRecords(s *PortableSource) (map[string][]string, error) {
+	records := map[string][]string{}
 	for _, n := range s.Nodes {
 		if n.Kind != "unresolved_target" && len(n.EvidenceIDs) == 0 {
-			return invalid("evidenceIds", "Known source node requires evidence")
+			return nil, invalid("evidenceIds", "Known source node requires evidence")
 		}
 		records[n.ID] = n.EvidenceIDs
 	}
 	for _, e := range s.Edges {
 		if len(e.EvidenceIDs) == 0 {
-			return invalid("evidenceIds", "Source edge requires evidence")
+			return nil, invalid("evidenceIds", "Source edge requires evidence")
 		}
 		records[e.ID] = e.EvidenceIDs
 	}
-	for _, e := range s.Evidence {
+	return records, nil
+}
+
+func validatePortableSourceEvidence(evidence []Evidence, sources map[string]SourceSnapshot, records map[string][]string) (map[string]Evidence, error) {
+	proofs := map[string]Evidence{}
+	for _, e := range evidence {
 		if !ValidID(e.ID) || proofs[e.ID].ID != "" || !slices.Contains(records[e.SubjectID], e.ID) {
-			return invalid("evidence", "Missing subject or duplicate evidence")
+			return nil, invalid("evidence", "Missing subject or duplicate evidence")
 		}
 		source, ok := sources[e.Source.SnapshotID]
 		if !ok || source.RepositoryID != e.Source.RepositoryID {
-			return invalid("evidence", "Missing exact snapshot owner")
+			return nil, invalid("evidence", "Missing exact snapshot owner")
 		}
 		input := ImportEvidence{ExternalKey: e.ExternalKey, SubjectType: "node", SubjectKey: "portable", PropertyPath: e.PropertyPath, Method: e.Method, Status: e.Status, Source: e.Source, Explanation: e.Explanation, Snippet: e.Snippet}
 		session := &ImportSession{RepositoryID: source.RepositoryID, SnapshotID: source.ID, Manifest: SourceManifest{RepositoryName: "portable", Provider: source.Provider, Snapshot: source.SnapshotManifest}}
@@ -98,10 +142,16 @@ func ValidatePortableSource(ctx context.Context, s *PortableSource) error {
 			input.Status = "explicit"
 		}
 		if err := validateEvidence(input, session); err != nil {
-			return err
+			return nil, err
 		}
 		proofs[e.ID] = e
 	}
+	return proofs, nil
+}
+
+// validatePortableProofClosure: every cited proof is cited once per record
+// and belongs to the record that cites it.
+func validatePortableProofClosure(records map[string][]string, proofs map[string]Evidence) error {
 	for id, refs := range records {
 		seen := map[string]bool{}
 		for _, eid := range refs {
@@ -114,86 +164,102 @@ func ValidatePortableSource(ctx context.Context, s *PortableSource) error {
 			}
 		}
 	}
-	if s.Revision.SchemaVersion == ComposedSchemaVersion {
-		if s.SourceVector == nil {
-			return invalid("sourceVector", "Composed source requires complete vector")
+	return nil
+}
+
+// validateComposedPortableClaims checks a composed source's exact claims and
+// recomputes the materialized projection from its provider selections.
+func validateComposedPortableClaims(s *PortableSource, graph *SourceGraphSnapshot) error {
+	if s.SourceVector == nil {
+		return invalid("sourceVector", "Composed source requires complete vector")
+	}
+	seen := map[string]bool{}
+	for _, a := range s.Assertions {
+		if seen[sourceAssertionKey(a)] {
+			return invalid("assertion", "Duplicate exact claim")
 		}
-		seen := map[string]bool{}
-		for _, a := range s.Assertions {
-			if seen[sourceAssertionKey(a)] {
-				return invalid("assertion", "Duplicate exact claim")
-			}
-			seen[sourceAssertionKey(a)] = true
-			if err := validateSourceBindings(a); err != nil {
-				return err
-			}
-			if err := validateSourceOwnProof(nil, a, graph, false, nil); err != nil {
-				return err
-			}
+		seen[sourceAssertionKey(a)] = true
+		if err := validateSourceBindings(a); err != nil {
+			return err
 		}
-		// Recompute the materialized projection from exact provider selections.
-		current := map[string]SourceClaimCurrentness{}
-		for _, v := range s.Currentness {
-			current[sourceClaimKey(v.RecordType, v.RecordID, v.RepositoryID, v.ProviderNamespace)] = v
-		}
-		merger := sourceAssertionMerger{base: graph, current: current}
-		groups := map[string][]ProviderAssertion{}
-		for _, a := range s.Assertions {
-			key := a.RecordType + ":" + a.RecordID
-			groups[key] = append(groups[key], a)
-		}
-		for _, selection := range s.Selections {
-			claims := groups[selection.RecordType+":"+selection.ID]
-			if len(claims) == 0 {
-				return invalid("selection", "Missing claim")
-			}
-			conflict, err := merger.conflict(claims, selection.Property)
-			if err != nil {
-				return err
-			}
-			if conflict == nil {
-				return invalid("selection", "Selection targets no divergent property")
-			}
-		}
-		for _, n := range s.Nodes {
-			if err := validatePortableSelectedPayload(graph, "node", n.ID, sourceNodePayload(n)); err != nil {
-				return err
-			}
-		}
-		for _, e := range s.Edges {
-			if err := validatePortableSelectedPayload(graph, "edge", e.ID, sourceEdgePayload(e)); err != nil {
-				return err
-			}
+		if err := validateSourceOwnProof(nil, a, graph, false, nil); err != nil {
+			return err
 		}
 	}
-	if s.Revision.SchemaVersion == ComposedSchemaVersion {
-		index, err := sourceProofs(graph)
+	if err := validatePortableSelections(s, graph); err != nil {
+		return err
+	}
+	for _, n := range s.Nodes {
+		if err := validatePortableSelectedPayload(graph, "node", n.ID, sourceNodePayload(n)); err != nil {
+			return err
+		}
+	}
+	for _, e := range s.Edges {
+		if err := validatePortableSelectedPayload(graph, "edge", e.ID, sourceEdgePayload(e)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// validatePortableSelections: each selection names a claimed record and a
+// property on which its claims actually diverge.
+func validatePortableSelections(s *PortableSource, graph *SourceGraphSnapshot) error {
+	current := map[string]SourceClaimCurrentness{}
+	for _, v := range s.Currentness {
+		current[sourceClaimKey(v.RecordType, v.RecordID, v.RepositoryID, v.ProviderNamespace)] = v
+	}
+	merger := sourceAssertionMerger{base: graph, current: current}
+	groups := map[string][]ProviderAssertion{}
+	for _, a := range s.Assertions {
+		key := a.RecordType + ":" + a.RecordID
+		groups[key] = append(groups[key], a)
+	}
+	for _, selection := range s.Selections {
+		claims := groups[selection.RecordType+":"+selection.ID]
+		if len(claims) == 0 {
+			return invalid("selection", "Missing claim")
+		}
+		conflict, err := merger.conflict(claims, selection.Property)
 		if err != nil {
 			return err
 		}
-		for _, a := range graph.Assertions {
-			hash, err := sourceIntrinsicHash(a, graph.RawEvidence, sourceClaimLegacyBases(a, index))
-			if err != nil {
-				return err
-			}
-			if hash != a.AssertionHash {
-				return invalid("assertionHash", "Source assertion content does not match its exact hash")
-			}
+		if conflict == nil {
+			return invalid("selection", "Selection targets no divergent property")
 		}
-		raw, err := source6ContextJSON(graph)
+	}
+	return nil
+}
+
+// validateComposedPortableHashes recomputes every assertion hash, the source
+// context hash and the revision's semantic hash from the portable content.
+func validateComposedPortableHashes(s *PortableSource, graph *SourceGraphSnapshot) error {
+	index, err := sourceProofs(graph)
+	if err != nil {
+		return err
+	}
+	for _, a := range graph.Assertions {
+		hash, err := sourceIntrinsicHash(a, graph.RawEvidence, sourceClaimLegacyBases(a, index))
 		if err != nil {
 			return err
 		}
-		if hashBytes(raw) != s.SourceContentHash {
-			return invalid("sourceContentHash", "Source context content hash differs")
+		if hash != a.AssertionHash {
+			return invalid("assertionHash", "Source assertion content does not match its exact hash")
 		}
-		semantic, err := source6SemanticHash(graph)
-		if err != nil {
-			return err
-		}
-		if semantic != s.Revision.SemanticHash {
-			return invalid("semanticHash", "Source revision semantic hash differs")
-		}
+	}
+	raw, err := source6ContextJSON(graph)
+	if err != nil {
+		return err
+	}
+	if hashBytes(raw) != s.SourceContentHash {
+		return invalid("sourceContentHash", "Source context content hash differs")
+	}
+	semantic, err := source6SemanticHash(graph)
+	if err != nil {
+		return err
+	}
+	if semantic != s.Revision.SemanticHash {
+		return invalid("semanticHash", "Source revision semantic hash differs")
 	}
 	return nil
 }

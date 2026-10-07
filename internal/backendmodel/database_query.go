@@ -246,149 +246,26 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
-	var target *resolvedBackendTarget
-	var err error
-	if effective == nil && in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
-		revision, e := r.Revision(ctx, pid, in.RevisionID)
-		if e != nil {
-			return nil, e
-		}
-		if revision.SchemaVersion == ComposedSchemaVersion {
-			effective, err = r.ResolveEffectiveGraph(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID})
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	if effective != nil {
-		target = &resolvedBackendTarget{revisionID: effective.State.Revision.ID}
-	} else if in.ChangeProposal != nil || in.ImportCandidate != nil {
-		selector := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
-		if err := rejectStagedView(selector); err != nil {
-			return nil, err
-		}
-		effective, err = r.ResolveEffectiveGraph(ctx, pid, selector)
-		if err != nil {
-			return nil, err
-		}
-		target = &resolvedBackendTarget{revisionID: effective.State.Revision.ID}
-	} else {
-		target, err = r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if target.proposal != nil && (in.DatastoreID != target.proposal.DatastoreID || in.FacetKey != target.proposal.FacetKey) {
-		return nil, invalid("selection", "Proposal datastore and facet must match its baseline selection")
-	}
-	in.RevisionID = target.revisionID
-	if !ValidID(in.DatastoreID) {
-		return nil, notFound()
-	}
-	if !externalKey(in.FacetKey) {
-		return nil, invalid("facetKey", "Use a valid relational facet key")
-	}
-	if !slices.Contains([]string{"tables", "relationships"}, in.RecordType) {
-		return nil, invalid("recordType", "Select tables or relationships")
-	}
-	if in.RecordType == "tables" && (in.TableID != "" || in.tablePresent) || in.RecordType == "relationships" && (in.Search != "" || in.searchPresent) {
-		return nil, invalid("selectors", "Selectors are not valid for this record type")
-	}
-	if !utf8.ValidString(in.Search) || len(in.Search) > 1024 || strings.ContainsRune(in.Search, 0) {
-		return nil, invalid("search", "Invalid search string")
-	}
-	if in.tablePresent && in.TableID == "" || in.TableID != "" && !ValidID(in.TableID) {
-		return nil, invalid("tableId", "Table selector must be a canonical UUID")
-	}
-	var state *RevisionState
-	if effective != nil {
-		state = new(effective.State)
-	} else {
-		state, err = loadRevisionState(ctx, r.db.R, pid, in.RevisionID)
-	}
+	target, effective, err := r.resolveDatabaseTarget(ctx, pid, in, effective)
 	if err != nil {
 		return nil, err
 	}
-	p := &databaseProjection{effective: effective, proposal: target, in: in, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
-	if effective != nil {
-		p.source = effective.Source
-		p.sourceProof = map[*relationalFacet]lineageProof{}
-	} else if state.Revision.SchemaVersion == ComposedSchemaVersion {
-		p.source, err = r.ResolveSourceGraph(ctx, pid, in.RevisionID)
-		if err != nil {
-			return nil, err
-		}
-		p.sourceProof = map[*relationalFacet]lineageProof{}
+	if err := validateDatabaseSelection(&in, target); err != nil {
+		return nil, err
+	}
+	state, err := r.databaseState(ctx, pid, in.RevisionID, effective)
+	if err != nil {
+		return nil, err
+	}
+	p, err := r.newDatabaseProjection(ctx, pid, in, effective, target, state)
+	if err != nil {
+		return nil, err
 	}
 	if target.proposal != nil {
-		state.Nodes = append([]Node{}, state.Nodes...)
-		state.Edges = append([]Edge{}, state.Edges...)
-		for _, o := range target.draft.Overlays {
-			if o.Base == nil {
-				if o.RecordType == "node" {
-					state.Nodes = append(state.Nodes, Node{ID: o.SubjectID, Kind: o.Kind, Name: o.Name, ParentID: o.ParentID})
-				} else {
-					state.Edges = append(state.Edges, Edge{ID: o.SubjectID, Kind: o.Kind, From: o.FromID, To: o.ToID})
-				}
-			} else if o.RecordType == "edge" {
-				for i := range state.Edges {
-					if state.Edges[i].ID == o.SubjectID {
-						state.Edges[i].From, state.Edges[i].To = o.FromID, o.ToID
-					}
-				}
-			}
-		}
-		slices.SortFunc(state.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
-		slices.SortFunc(state.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+		overlayDesignedStructure(state, target)
 	}
-	for _, n := range state.Nodes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		p.nodes[n.ID] = n
-		if n.ParentID != nil {
-			p.children[*n.ParentID] = append(p.children[*n.ParentID], n)
-		}
-	}
-	ds, ok := p.nodes[in.DatastoreID]
-	if !ok {
-		return nil, notFound()
-	}
-	if (effective == nil && !isRelationalSchema(state.Revision.SchemaVersion) && state.Revision.SchemaVersion != ComposedSchemaVersion) || ds.Kind != "datastore" || !relationalSubject(ds.Kind, ds.Attributes, false) {
-		return nil, &FaultError{Status: 422, Code: "backend_relational_unavailable", Message: "Pinned revision has no relational datastore descriptor"}
-	}
-	var store func(string) string
-	store = func(id string) string {
-		if s, ok := p.stores[id]; ok {
-			return s
-		}
-		n, ok := p.nodes[id]
-		if !ok {
-			return ""
-		}
-		p.stores[id] = ""
-		if n.Kind == "datastore" {
-			p.stores[id] = id
-		} else if n.ParentID != nil {
-			p.stores[id] = store(*n.ParentID)
-		}
-		return p.stores[id]
-	}
-	for id := range p.nodes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		store(id)
-	}
-	if in.TableID != "" {
-		n, ok := p.nodes[in.TableID]
-		if !ok {
-			return nil, notFound()
-		}
-		if n.Kind != "table" || p.stores[n.ID] != in.DatastoreID {
-			return nil, invalid("tableId", "Table selector is outside the selected datastore")
-		}
+	if err := p.index(ctx, state); err != nil {
+		return nil, err
 	}
 	coverage, err := r.RevisionCoverage(ctx, pid, in.RevisionID)
 	if err != nil {
@@ -400,153 +277,397 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 		p.page.Pins = new(effective.Pins)
 		p.page.SemanticHash = effective.Pins.EffectiveSemanticHash
 	}
-	decode := func(id, kind string, attrs map[string]jsontext.Value, edge bool) error {
-		if o := target.overlay(id); o != nil && o.Base == nil {
-			return nil
+	if err := p.decodeSelection(ctx, state); err != nil {
+		return nil, err
+	}
+	if target.proposal != nil {
+		if err := p.applyDesiredFacets(); err != nil {
+			return nil, err
 		}
-		if !relationalSubject(kind, attrs, edge) {
-			return nil
+	}
+	p.observe(in.DatastoreID)
+	if err := p.collectTables(ctx, state.Nodes); err != nil {
+		return nil, err
+	}
+	if in.RecordType == "relationships" {
+		if err := p.collectRelationships(ctx, state.Edges); err != nil {
+			return nil, err
 		}
-		fs, _, err := relationalFacetObject(kind, attrs)
+	}
+	scope, err := databaseCursorScope(pid, in, state.Revision.SemanticHash, target, effective)
+	if err != nil {
+		return nil, err
+	}
+	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "database", pid, scope, true)
+	if err != nil {
+		return nil, err
+	}
+	p.paginate(pid, scope, limit, after)
+	slices.Sort(p.page.Limitations)
+	p.page.Limitations = slices.Compact(p.page.Limitations)
+	return p.page, nil
+}
+
+// resolveDatabaseTarget picks the graph a database read projects: a composed
+// revision and every staged target read through the effective graph, every
+// other read through the plain revision or proposal target. It returns the
+// effective graph it resolved, or the one the caller passed in.
+func (r *Repo) resolveDatabaseTarget(ctx context.Context, pid string, in DatabaseQueryInput, effective *EffectiveGraphSnapshot) (*resolvedBackendTarget, *EffectiveGraphSnapshot, error) {
+	var err error
+	if effective == nil && in.RevisionID != "" && in.Proposal == nil && in.ChangeProposal == nil {
+		revision, e := r.Revision(ctx, pid, in.RevisionID)
+		if e != nil {
+			return nil, nil, e
+		}
+		if revision.SchemaVersion == ComposedSchemaVersion {
+			effective, err = r.ResolveEffectiveGraph(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID})
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+	}
+	if effective != nil {
+		return &resolvedBackendTarget{revisionID: effective.State.Revision.ID}, effective, nil
+	}
+	if in.ChangeProposal != nil || in.ImportCandidate != nil {
+		selector := graphTarget(in.RevisionID, in.Proposal, in.ChangeProposal, in.ImportCandidate)
+		if err := rejectStagedView(selector); err != nil {
+			return nil, nil, err
+		}
+		effective, err = r.ResolveEffectiveGraph(ctx, pid, selector)
+		if err != nil {
+			return nil, nil, err
+		}
+		return &resolvedBackendTarget{revisionID: effective.State.Revision.ID}, effective, nil
+	}
+	target, err := r.resolveBackendTarget(ctx, pid, BackendReadTarget{RevisionID: in.RevisionID, Proposal: in.Proposal})
+	if err != nil {
+		return nil, nil, err
+	}
+	return target, nil, nil
+}
+
+// validateDatabaseSelection checks the request against its resolved target
+// and pins in.RevisionID to the revision the target resolved to. The
+// proposal baseline check runs first: it is the one rule that needs the target.
+func validateDatabaseSelection(in *DatabaseQueryInput, target *resolvedBackendTarget) error {
+	if target.proposal != nil && (in.DatastoreID != target.proposal.DatastoreID || in.FacetKey != target.proposal.FacetKey) {
+		return invalid("selection", "Proposal datastore and facet must match its baseline selection")
+	}
+	in.RevisionID = target.revisionID
+	if !ValidID(in.DatastoreID) {
+		return notFound()
+	}
+	if !externalKey(in.FacetKey) {
+		return invalid("facetKey", "Use a valid relational facet key")
+	}
+	if !slices.Contains([]string{"tables", "relationships"}, in.RecordType) {
+		return invalid("recordType", "Select tables or relationships")
+	}
+	return validateDatabaseSelectors(*in)
+}
+
+// validateDatabaseSelectors judges the optional table and search selectors;
+// presence, not value, decides whether a selector is legal for the record type.
+func validateDatabaseSelectors(in DatabaseQueryInput) error {
+	if in.RecordType == "tables" && (in.TableID != "" || in.tablePresent) || in.RecordType == "relationships" && (in.Search != "" || in.searchPresent) {
+		return invalid("selectors", "Selectors are not valid for this record type")
+	}
+	if !utf8.ValidString(in.Search) || len(in.Search) > 1024 || strings.ContainsRune(in.Search, 0) {
+		return invalid("search", "Invalid search string")
+	}
+	if in.tablePresent && in.TableID == "" || in.TableID != "" && !ValidID(in.TableID) {
+		return invalid("tableId", "Table selector must be a canonical UUID")
+	}
+	return nil
+}
+
+func (r *Repo) databaseState(ctx context.Context, pid, revisionID string, effective *EffectiveGraphSnapshot) (*RevisionState, error) {
+	if effective != nil {
+		return new(effective.State), nil
+	}
+	return loadRevisionState(ctx, r.db.R, pid, revisionID)
+}
+
+// newDatabaseProjection builds the empty projection; a composed revision read
+// without an effective graph still proves its facets through the source graph.
+func (r *Repo) newDatabaseProjection(ctx context.Context, pid string, in DatabaseQueryInput, effective *EffectiveGraphSnapshot, target *resolvedBackendTarget, state *RevisionState) (*databaseProjection, error) {
+	p := &databaseProjection{effective: effective, proposal: target, in: in, nodes: map[string]Node{}, children: map[string][]Node{}, facets: map[string]map[string]*relationalFacet{}, evidence: map[string]Evidence{}, stores: map[string]string{}, observed: map[string]bool{}, limitations: map[string]bool{}, uniqueResults: map[string]databaseUniqueness{}}
+	if effective != nil {
+		p.source = effective.Source
+		p.sourceProof = map[*relationalFacet]lineageProof{}
+	} else if state.Revision.SchemaVersion == ComposedSchemaVersion {
+		var err error
+		p.source, err = r.ResolveSourceGraph(ctx, pid, in.RevisionID)
+		if err != nil {
+			return nil, err
+		}
+		p.sourceProof = map[*relationalFacet]lineageProof{}
+	}
+	return p, nil
+}
+
+// overlayDesignedStructure adds the records a proposal designs and re-points
+// the edges it moves, on copies of the state's slices, in ID order.
+func overlayDesignedStructure(state *RevisionState, target *resolvedBackendTarget) {
+	state.Nodes = append([]Node{}, state.Nodes...)
+	state.Edges = append([]Edge{}, state.Edges...)
+	for _, o := range target.draft.Overlays {
+		if o.Base == nil {
+			if o.RecordType == "node" {
+				state.Nodes = append(state.Nodes, Node{ID: o.SubjectID, Kind: o.Kind, Name: o.Name, ParentID: o.ParentID})
+			} else {
+				state.Edges = append(state.Edges, Edge{ID: o.SubjectID, Kind: o.Kind, From: o.FromID, To: o.ToID})
+			}
+		} else if o.RecordType == "edge" {
+			for i := range state.Edges {
+				if state.Edges[i].ID == o.SubjectID {
+					state.Edges[i].From, state.Edges[i].To = o.FromID, o.ToID
+				}
+			}
+		}
+	}
+	slices.SortFunc(state.Nodes, func(a, b Node) int { return strings.Compare(a.ID, b.ID) })
+	slices.SortFunc(state.Edges, func(a, b Edge) int { return strings.Compare(a.ID, b.ID) })
+}
+
+// index builds the node tree and each node's datastore, refusing a read
+// whose datastore or table selector does not resolve inside this revision.
+func (p *databaseProjection) index(ctx context.Context, state *RevisionState) error {
+	for _, n := range state.Nodes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		p.nodes[n.ID] = n
+		if n.ParentID != nil {
+			p.children[*n.ParentID] = append(p.children[*n.ParentID], n)
+		}
+	}
+	ds, ok := p.nodes[p.in.DatastoreID]
+	if !ok {
+		return notFound()
+	}
+	if (p.effective == nil && !isRelationalSchema(state.Revision.SchemaVersion) && state.Revision.SchemaVersion != ComposedSchemaVersion) || ds.Kind != "datastore" || !relationalSubject(ds.Kind, ds.Attributes, false) {
+		return &FaultError{Status: 422, Code: "backend_relational_unavailable", Message: "Pinned revision has no relational datastore descriptor"}
+	}
+	for id := range p.nodes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		p.storeOf(id)
+	}
+	if p.in.TableID != "" {
+		n, ok := p.nodes[p.in.TableID]
+		if !ok {
+			return notFound()
+		}
+		if n.Kind != "table" || p.stores[n.ID] != p.in.DatastoreID {
+			return invalid("tableId", "Table selector is outside the selected datastore")
+		}
+	}
+	return nil
+}
+
+// storeOf memoises the datastore a node sits under ("" when none); the
+// placeholder written before recursing stops a parent cycle.
+func (p *databaseProjection) storeOf(id string) string {
+	if s, ok := p.stores[id]; ok {
+		return s
+	}
+	n, ok := p.nodes[id]
+	if !ok {
+		return ""
+	}
+	p.stores[id] = ""
+	if n.Kind == "datastore" {
+		p.stores[id] = id
+	} else if n.ParentID != nil {
+		p.stores[id] = p.storeOf(*n.ParentID)
+	}
+	return p.stores[id]
+}
+
+// decodeFacets decodes one record's relational facets and, on a source-backed
+// read, the proof of each. A record the proposal designs has no stored facet.
+func (p *databaseProjection) decodeFacets(id, kind string, attrs map[string]jsontext.Value, edge bool) error {
+	if o := p.proposal.overlay(id); o != nil && o.Base == nil {
+		return nil
+	}
+	if !relationalSubject(kind, attrs, edge) {
+		return nil
+	}
+	fs, _, err := relationalFacetObject(kind, attrs)
+	if err != nil {
+		return err
+	}
+	p.facets[id] = map[string]*relationalFacet{}
+	for key, raw := range fs {
+		f, err := decodeRelationalFacetMode(kind, raw, true, p.source == nil && p.effective == nil)
 		if err != nil {
 			return err
 		}
-		p.facets[id] = map[string]*relationalFacet{}
-		for key, raw := range fs {
-			f, err := decodeRelationalFacetMode(kind, raw, true, p.source == nil && p.effective == nil)
+		p.facets[id][key] = f
+		if p.source != nil || p.effective != nil {
+			proof, err := p.facetProof(id, key, edge)
 			if err != nil {
 				return err
 			}
-			p.facets[id][key] = f
-			if p.source != nil || p.effective != nil {
-				typ := "node"
-				if edge {
-					typ = "edge"
-				}
-				var proof lineageProof
-				var err error
-				if p.effective != nil {
-					proof, err = effectiveFacetProof(p.effective, typ, id, key)
-				} else {
-					proof, err = sourceRecordProof(p.source, typ, id, &LineageValueRef{Kind: "column", NodeID: id, FacetKey: key})
-				}
-				if err != nil {
-					return err
-				}
-				p.sourceProof[f] = proof
-			}
+			p.sourceProof[f] = proof
 		}
-		return nil
 	}
+	return nil
+}
+
+func (p *databaseProjection) facetProof(id, key string, edge bool) (lineageProof, error) {
+	typ := "node"
+	if edge {
+		typ = "edge"
+	}
+	if p.effective != nil {
+		return effectiveFacetProof(p.effective, typ, id, key)
+	}
+	return sourceRecordProof(p.source, typ, id, &LineageValueRef{Kind: "column", NodeID: id, FacetKey: key})
+}
+
+// decodeSelection decodes the facets a page can reach: every record of the
+// selected datastore, plus the tables (and their children) its FKs target.
+func (p *databaseProjection) decodeSelection(ctx context.Context, state *RevisionState) error {
 	for _, e := range state.Evidence {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
 		p.evidence[e.ID] = e
 	}
-	targetTables := map[string]bool{}
+	targetTables, err := p.referencedTables(ctx, state.Edges)
+	if err != nil {
+		return err
+	}
+	for _, n := range state.Nodes {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if p.stores[n.ID] == p.in.DatastoreID || targetTables[n.ID] || n.ParentID != nil && targetTables[*n.ParentID] {
+			if err := p.decodeFacets(n.ID, n.Kind, n.Attributes, false); err != nil {
+				return err
+			}
+		}
+	}
 	for _, e := range state.Edges {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if e.Kind == "references" && p.stores[e.From] == p.in.DatastoreID {
+			if err := p.decodeFacets(e.ID, e.Kind, e.Attributes, true); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (p *databaseProjection) referencedTables(ctx context.Context, edges []Edge) (map[string]bool, error) {
+	targetTables := map[string]bool{}
+	for _, e := range edges {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		if e.Kind == "references" && p.stores[e.From] == in.DatastoreID {
+		if e.Kind == "references" && p.stores[e.From] == p.in.DatastoreID {
 			targetTables[e.To] = true
 		}
 	}
-	for _, n := range state.Nodes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
+	return targetTables, nil
+}
+
+// applyDesiredFacets lays each proposal overlay's desired values over the
+// selected facet, keeping the source facet's common analysis fields.
+func (p *databaseProjection) applyDesiredFacets() error {
+	for _, o := range p.proposal.draft.Overlays {
+		raw, err := json.Marshal(o.Values)
+		if err != nil {
+			return err
 		}
-		if p.stores[n.ID] == in.DatastoreID || targetTables[n.ID] || n.ParentID != nil && targetTables[*n.ParentID] {
-			if err := decode(n.ID, n.Kind, n.Attributes, false); err != nil {
-				return nil, err
-			}
+		f := &relationalFacet{}
+		if err := json.Unmarshal(raw, f); err != nil {
+			return err
 		}
+		if source := p.selected(o.SubjectID); source != nil {
+			f.relationalFacetCommon = source.relationalFacetCommon
+		}
+		if p.facets[o.SubjectID] == nil {
+			p.facets[o.SubjectID] = map[string]*relationalFacet{}
+		}
+		p.facets[o.SubjectID][p.in.FacetKey] = f
 	}
-	for _, e := range state.Edges {
+	p.page.ViewSchemaVersion, p.page.ProposalPins = ProposalDocumentVersion, p.proposal.pins
+	p.page.Limitations = append(p.page.Limitations, "Desired structure; existing data, writers and runtime enforcement are unverified")
+	return nil
+}
+
+// collectTables observes every structural record of the datastore (an
+// observation records its limitations even when no table item is listed)
+// and lists the tables that match the search.
+func (p *databaseProjection) collectTables(ctx context.Context, nodes []Node) error {
+	for _, n := range nodes {
 		if err := ctx.Err(); err != nil {
-			return nil, err
+			return err
 		}
-		if e.Kind == "references" && p.stores[e.From] == in.DatastoreID {
-			if err := decode(e.ID, e.Kind, e.Attributes, true); err != nil {
-				return nil, err
-			}
-		}
-	}
-	if target.proposal != nil {
-		for _, o := range target.draft.Overlays {
-			raw, err := json.Marshal(o.Values)
-			if err != nil {
-				return nil, err
-			}
-			f := &relationalFacet{}
-			if err := json.Unmarshal(raw, f); err != nil {
-				return nil, err
-			}
-			if source := p.selected(o.SubjectID); source != nil {
-				f.relationalFacetCommon = source.relationalFacetCommon
-			}
-			if p.facets[o.SubjectID] == nil {
-				p.facets[o.SubjectID] = map[string]*relationalFacet{}
-			}
-			p.facets[o.SubjectID][in.FacetKey] = f
-		}
-		p.page.ViewSchemaVersion, p.page.ProposalPins = ProposalDocumentVersion, target.pins
-		p.page.Limitations = append(p.page.Limitations, "Desired structure; existing data, writers and runtime enforcement are unverified")
-	}
-	p.observe(in.DatastoreID)
-	for _, n := range state.Nodes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if p.stores[n.ID] != in.DatastoreID || !slices.Contains([]string{"table", "db_schema", "constraint", "index"}, n.Kind) {
+		if p.stores[n.ID] != p.in.DatastoreID || !slices.Contains([]string{"table", "db_schema", "constraint", "index"}, n.Kind) {
 			continue
 		}
 		f := p.observe(n.ID)
-		if n.Kind != "table" {
+		if n.Kind != "table" || f == nil {
 			continue
 		}
-		if f == nil {
-			continue
-		}
-		var count int64
-		for _, c := range p.children[n.ID] {
-			if c.Kind == "column" && p.observe(c.ID) != nil {
-				count++
-			}
-		}
-		if in.RecordType != "tables" || !strings.Contains(strings.ToLower(f.QualifiedName), strings.ToLower(in.Search)) {
+		count := p.observedColumnCount(n.ID)
+		if p.in.RecordType != "tables" || !strings.Contains(strings.ToLower(f.QualifiedName), strings.ToLower(p.in.Search)) {
 			continue
 		}
 		comparison, err := compareRelationalFacetsMode(n.Kind, n.Attributes, false, p.source == nil && p.effective == nil)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		p.page.TableItems = append(p.page.TableItems, TableItem{TableID: n.ID, SchemaID: *n.ParentID, QualifiedName: f.QualifiedName, ColumnCount: count, FacetKeys: slices.Sorted(maps.Keys(p.facets[n.ID])), DriftStatus: comparison.Status})
 	}
-	if in.RecordType == "relationships" {
-		for _, e := range state.Edges {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			if e.Kind != "references" || p.stores[e.From] != in.DatastoreID {
-				continue
-			}
-			f := p.observe(e.ID)
-			cf := p.observe(e.From)
-			if f == nil || cf == nil {
-				continue
-			}
-			from := p.nodes[e.From]
-			if in.TableID != "" && *from.ParentID != in.TableID && e.To != in.TableID {
-				continue
-			}
-			item := p.relationship(e, f, cf)
-			p.page.RelationshipItems = append(p.page.RelationshipItems, item)
+	return nil
+}
+
+func (p *databaseProjection) observedColumnCount(table string) int64 {
+	var count int64
+	for _, c := range p.children[table] {
+		if c.Kind == "column" && p.observe(c.ID) != nil {
+			count++
 		}
 	}
-	// Presence decides selector legality, while the cursor binds normalized
-	// semantic filters. Empty and omitted table-search values select the same data.
+	return count
+}
+
+func (p *databaseProjection) collectRelationships(ctx context.Context, edges []Edge) error {
+	for _, e := range edges {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if e.Kind != "references" || p.stores[e.From] != p.in.DatastoreID {
+			continue
+		}
+		f := p.observe(e.ID)
+		cf := p.observe(e.From)
+		if f == nil || cf == nil {
+			continue
+		}
+		from := p.nodes[e.From]
+		if p.in.TableID != "" && *from.ParentID != p.in.TableID && e.To != p.in.TableID {
+			continue
+		}
+		item := p.relationship(e, f, cf)
+		p.page.RelationshipItems = append(p.page.RelationshipItems, item)
+	}
+	return nil
+}
+
+// databaseCursorScope is the digest a page cursor binds to. Presence decides
+// selector legality, while the cursor binds normalized semantic filters:
+// empty and omitted table-search values select the same data.
+func databaseCursorScope(pid string, in DatabaseQueryInput, semanticHash string, target *resolvedBackendTarget, effective *EffectiveGraphSnapshot) (string, error) {
 	scope, err := requestDigest(struct {
 		ProjectID    string `json:"projectId"`
 		RevisionID   string `json:"revisionId"`
@@ -556,9 +677,9 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 		RecordType   string `json:"recordType"`
 		Search       string `json:"search"`
 		TableID      string `json:"tableId"`
-	}{pid, in.RevisionID, state.Revision.SemanticHash, in.DatastoreID, in.FacetKey, in.RecordType, in.Search, in.TableID})
+	}{pid, in.RevisionID, semanticHash, in.DatastoreID, in.FacetKey, in.RecordType, in.Search, in.TableID})
 	if err != nil {
-		return nil, err
+		return "", err
 	}
 	if target.pins != nil {
 		scope, err = requestDigest(struct {
@@ -566,7 +687,7 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 			Pins        *ProposalReadPins
 		}{scope, target.pins})
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
 	if effective != nil {
@@ -575,78 +696,33 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 			Pins  EffectiveGraphPins
 		}{scope, effective.Pins})
 		if err != nil {
-			return nil, err
+			return "", err
 		}
 	}
-	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "database", pid, scope, true)
-	if err != nil {
-		return nil, err
-	}
-	if in.RecordType == "tables" {
+	return scope, nil
+}
+
+func (p *databaseProjection) paginate(pid, scope string, limit int, after string) {
+	if p.in.RecordType == "tables" {
 		p.page.TableItems = slices.DeleteFunc(p.page.TableItems, func(t TableItem) bool { return t.TableID <= after })
 		if len(p.page.TableItems) > limit {
 			p.page.NextCursor = encodeGraphPage("database", pid, scope, p.page.TableItems[limit-1].TableID)
 			p.page.TableItems = p.page.TableItems[:limit]
 		}
-	} else {
-		p.page.RelationshipItems = slices.DeleteFunc(p.page.RelationshipItems, func(e RelationshipItem) bool { return e.EdgeID <= after })
-		if len(p.page.RelationshipItems) > limit {
-			p.page.NextCursor = encodeGraphPage("database", pid, scope, p.page.RelationshipItems[limit-1].EdgeID)
-			p.page.RelationshipItems = p.page.RelationshipItems[:limit]
-		}
+		return
 	}
-	slices.Sort(p.page.Limitations)
-	p.page.Limitations = slices.Compact(p.page.Limitations)
-	return p.page, nil
+	p.page.RelationshipItems = slices.DeleteFunc(p.page.RelationshipItems, func(e RelationshipItem) bool { return e.EdgeID <= after })
+	if len(p.page.RelationshipItems) > limit {
+		p.page.NextCursor = encodeGraphPage("database", pid, scope, p.page.RelationshipItems[limit-1].EdgeID)
+		p.page.RelationshipItems = p.page.RelationshipItems[:limit]
+	}
 }
 
 func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) RelationshipItem {
-	constraint := p.nodes[e.From]
-	proofIDs := slices.Clone(f.EvidenceIDs)
-	if p.source != nil {
-		proofIDs = slices.Clone(p.sourceProof[f].evidenceIDs)
-	}
-	item := RelationshipItem{EdgeID: e.ID, ConstraintID: e.From, SourceTableID: *constraint.ParentID, ColumnPairs: []DatabaseColumnPair{}, EvidenceIDs: proofIDs, SourceCardinality: Cardinality{Basis: []string{}}, TargetCardinality: Cardinality{Basis: []string{}}, Status: "explicit"}
-	if to := p.nodes[e.To]; to.Kind == "table" {
-		item.TargetTableID = new(to.ID)
-	}
-	for _, pair := range f.ColumnPairs {
-		item.ColumnPairs = append(item.ColumnPairs, DatabaseColumnPair{FromColumnID: pair.FromColumnID, ToColumnID: pair.ToColumnID})
-	}
-	if f.TargetReason != "" {
-		item.TargetReason = new(f.TargetReason)
-	}
+	item := p.relationshipItem(e, f)
 	designed := p.proposal != nil && p.proposal.proposal != nil
-	declared := p.proofCurrent(f) && p.proofCurrent(cf)
-	if designed && p.proposal.overlay(e.ID) != nil && p.proposal.overlay(e.From) != nil {
-		declared = true
-	}
-	if !designed && (p.proofStale(f) || p.proofStale(cf)) {
-		item.Status = "stale"
-	} else if !declared {
-		item.Status = "inferred"
-	}
-	missing := p.observe(item.SourceTableID) == nil
-	if item.TargetTableID == nil {
-		missing = true
-	} else if p.observe(*item.TargetTableID) == nil {
-		missing = true
-	}
-	fromColumns, toColumns := make([]string, 0, len(f.ColumnPairs)), make([]string, 0, len(f.ColumnPairs))
-	currentColumns := true
-	for _, pair := range f.ColumnPairs {
-		fromColumns = append(fromColumns, pair.FromColumnID)
-		toColumns = append(toColumns, pair.ToColumnID)
-		for _, id := range []string{pair.FromColumnID, pair.ToColumnID} {
-			col := p.observe(id)
-			if col == nil {
-				missing = true
-			}
-			if !p.propertyCurrent(id, "/nullable") {
-				currentColumns = false
-			}
-		}
-	}
+	item.Status = p.relationshipStatus(e, f, cf, designed)
+	fromColumns, toColumns, missing, currentColumns := p.relationshipColumns(&item, f)
 	if missing {
 		item.Status = "unresolved"
 		if item.TargetReason == nil {
@@ -662,6 +738,100 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	}
 	item.SourceCardinality.Min = new(int64(0))
 	item.SourceCardinality.Basis = append(item.SourceCardinality.Basis, "Declared relationship "+e.ID+" does not require a source row for every target")
+	targetUnique := p.relationshipMaxima(&item, fromColumns, toColumns)
+	matchSimple := rawStringEquals(f.MatchType.Value, "simple") && f.MatchType.Status == "known"
+	enforced := scalarBool(cf.Deferrable, false) && scalarBool(cf.InitiallyDeferred, false) && matchSimple
+	allNotNull, nullable, unknown := p.sourceNullability(&item, fromColumns, designed)
+	switch {
+	case enforced && targetUnique && (nullable || allNotNull && !unknown):
+		item.TargetCardinality.Min = new(int64(1))
+		if nullable {
+			item.TargetCardinality.Min = new(int64(0))
+		}
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, p.enforcedMinimumBasis(e, designed))
+	case matchSimple && nullable:
+		// A NULL source row references no target row whatever the
+		// enforcement, deferrability or target key, so one known nullable
+		// source column proves min0 under known MATCH SIMPLE, as
+		// database.md promises; only min1 needs the enforcement and
+		// target-key gates (review 2026-10-06, F82).
+		item.TargetCardinality.Min = new(int64(0))
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Known nullable source column under MATCH SIMPLE "+e.From+" leaves a source row without a target")
+	default:
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Minimum unknown: selected nullability, nondeferrable MATCH SIMPLE enforcement or target key is not established for "+e.ID)
+	}
+	return p.projectRelationship(item, e)
+}
+
+// relationshipItem is the item before any status or cardinality decision:
+// identity, column pairs and the proof that names it.
+func (p *databaseProjection) relationshipItem(e Edge, f *relationalFacet) RelationshipItem {
+	constraint := p.nodes[e.From]
+	proofIDs := slices.Clone(f.EvidenceIDs)
+	if p.source != nil {
+		proofIDs = slices.Clone(p.sourceProof[f].evidenceIDs)
+	}
+	item := RelationshipItem{EdgeID: e.ID, ConstraintID: e.From, SourceTableID: *constraint.ParentID, ColumnPairs: []DatabaseColumnPair{}, EvidenceIDs: proofIDs, SourceCardinality: Cardinality{Basis: []string{}}, TargetCardinality: Cardinality{Basis: []string{}}, Status: "explicit"}
+	if to := p.nodes[e.To]; to.Kind == "table" {
+		item.TargetTableID = new(to.ID)
+	}
+	for _, pair := range f.ColumnPairs {
+		item.ColumnPairs = append(item.ColumnPairs, DatabaseColumnPair{FromColumnID: pair.FromColumnID, ToColumnID: pair.ToColumnID})
+	}
+	if f.TargetReason != "" {
+		item.TargetReason = new(f.TargetReason)
+	}
+	return item
+}
+
+// relationshipStatus decides explicit/stale/inferred from the FK and its
+// constraint's proof; a designed FK the proposal also designs counts as
+// declared, and a designed read never reports stale.
+func (p *databaseProjection) relationshipStatus(e Edge, f, cf *relationalFacet, designed bool) string {
+	declared := p.proofCurrent(f) && p.proofCurrent(cf)
+	if designed && p.proposal.overlay(e.ID) != nil && p.proposal.overlay(e.From) != nil {
+		declared = true
+	}
+	if !designed && (p.proofStale(f) || p.proofStale(cf)) {
+		return "stale"
+	}
+	if !declared {
+		return "inferred"
+	}
+	return "explicit"
+}
+
+// relationshipColumns observes both tables and every paired column, in that
+// order, and reports whether any of them is missing and whether every
+// column's nullability is currently proved.
+func (p *databaseProjection) relationshipColumns(item *RelationshipItem, f *relationalFacet) (fromColumns, toColumns []string, missing, currentColumns bool) {
+	missing = p.observe(item.SourceTableID) == nil
+	if item.TargetTableID == nil {
+		missing = true
+	} else if p.observe(*item.TargetTableID) == nil {
+		missing = true
+	}
+	fromColumns, toColumns = make([]string, 0, len(f.ColumnPairs)), make([]string, 0, len(f.ColumnPairs))
+	currentColumns = true
+	for _, pair := range f.ColumnPairs {
+		fromColumns = append(fromColumns, pair.FromColumnID)
+		toColumns = append(toColumns, pair.ToColumnID)
+		for _, id := range []string{pair.FromColumnID, pair.ToColumnID} {
+			col := p.observe(id)
+			if col == nil {
+				missing = true
+			}
+			if !p.propertyCurrent(id, "/nullable") {
+				currentColumns = false
+			}
+		}
+	}
+	return fromColumns, toColumns, missing, currentColumns
+}
+
+// relationshipMaxima sets both maximum cardinalities and reports whether the
+// target columns are unique, which the minimum decision needs.
+func (p *databaseProjection) relationshipMaxima(item *RelationshipItem, fromColumns, toColumns []string) bool {
 	// Covering, not ordered: the referenced columns are unique as a set
 	// whenever they contain a complete key, in any declared order (review
 	// 2026-10-06, F78, projection half). The designer's FK admission in
@@ -678,21 +848,16 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	} else if complete {
 		item.SourceCardinality.Max = new("many")
 	}
-	matchSimple := rawStringEquals(f.MatchType.Value, "simple") && f.MatchType.Status == "known"
-	enforced := scalarBool(cf.Deferrable, false) && scalarBool(cf.InitiallyDeferred, false) && matchSimple
-	allNotNull, nullable, unknown := true, false, false
+	return targetUnique
+}
+
+// sourceNullability records each source column's nullability basis and
+// classifies the set: all NOT NULL, any known nullable, any unknown.
+func (p *databaseProjection) sourceNullability(item *RelationshipItem, fromColumns []string, designed bool) (allNotNull, nullable, unknown bool) {
+	allNotNull = true
 	for _, id := range fromColumns {
 		n := p.selected(id).Nullable
-		basis := "Selected source column " + id + " nullable " + n.Status + " " + string(n.Value) + " with evidence " + p.selectedEvidence(p.selected(id))
-		if effectiveBasis := p.effectiveNullableBasis(id, n.Value); effectiveBasis != "" {
-			basis = effectiveBasis
-		}
-		if designed {
-			if overlay := p.proposal.overlay(id); overlay != nil && overlay.PropertyOrigins["/nullable"].Kind == "intent" {
-				basis = "Desired column " + id + " nullable " + string(n.Value) + " from command " + overlay.PropertyOrigins["/nullable"].CommandID + "; runtime is unverified"
-			}
-		}
-		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, basis)
+		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, p.nullableBasis(id, n, designed))
 		if scalarBool(n, true) {
 			nullable = true
 			allNotNull = false
@@ -701,31 +866,31 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 			allNotNull = false
 		}
 	}
-	if enforced && targetUnique && (nullable || allNotNull && !unknown) {
-		item.TargetCardinality.Min = new(int64(1))
-		if nullable {
-			item.TargetCardinality.Min = new(int64(0))
-		}
-		basis := "Current explicit nondeferrable MATCH SIMPLE " + e.From + " with selected source nullability"
-		if p.effectiveRelationshipIntent(e) {
-			basis = "Desired nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
-		}
-		if designed {
-			basis = "Designed nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
-		}
-		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, basis)
-	} else if matchSimple && nullable {
-		// A NULL source row references no target row whatever the
-		// enforcement, deferrability or target key, so one known nullable
-		// source column proves min0 under known MATCH SIMPLE, as
-		// database.md promises; only min1 needs the enforcement and
-		// target-key gates (review 2026-10-06, F82).
-		item.TargetCardinality.Min = new(int64(0))
-		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Known nullable source column under MATCH SIMPLE "+e.From+" leaves a source row without a target")
-	} else {
-		item.TargetCardinality.Basis = append(item.TargetCardinality.Basis, "Minimum unknown: selected nullability, nondeferrable MATCH SIMPLE enforcement or target key is not established for "+e.ID)
+	return allNotNull, nullable, unknown
+}
+
+func (p *databaseProjection) nullableBasis(id string, n *relationalScalar, designed bool) string {
+	basis := "Selected source column " + id + " nullable " + n.Status + " " + string(n.Value) + " with evidence " + p.selectedEvidence(p.selected(id))
+	if effectiveBasis := p.effectiveNullableBasis(id, n.Value); effectiveBasis != "" {
+		basis = effectiveBasis
 	}
-	return p.projectRelationship(item, e)
+	if designed {
+		if overlay := p.proposal.overlay(id); overlay != nil && overlay.PropertyOrigins["/nullable"].Kind == "intent" {
+			basis = "Desired column " + id + " nullable " + string(n.Value) + " from command " + overlay.PropertyOrigins["/nullable"].CommandID + "; runtime is unverified"
+		}
+	}
+	return basis
+}
+
+func (p *databaseProjection) enforcedMinimumBasis(e Edge, designed bool) string {
+	basis := "Current explicit nondeferrable MATCH SIMPLE " + e.From + " with selected source nullability"
+	if p.effectiveRelationshipIntent(e) {
+		basis = "Desired nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
+	}
+	if designed {
+		basis = "Designed nondeferrable MATCH SIMPLE " + e.From + " with desired nullability; runtime enforcement is unverified"
+	}
+	return basis
 }
 func scalarBool(s *relationalScalar, want bool) bool {
 	return s != nil && s.Status == "known" && string(s.Value) == fmt.Sprint(want)
@@ -743,22 +908,6 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 	tf := p.selected(table)
 	complete = p.proofCurrent(tf) && tf.ConstraintsStatus == "complete"
 	basis = []string{}
-	// ordered is the exact ordered match a designed FK reference must
-	// make. Otherwise the question is whether the columns are globally
-	// unique, and a complete key on any subset of them answers it: set
-	// equality answered "many" for an FK over {id, tenant_id} although the
-	// PK on {id} makes it unique (review 2026-10-06, F77).
-	match := func(candidate []string) bool {
-		if ordered {
-			return slices.Equal(candidate, columns)
-		}
-		for _, id := range candidate {
-			if !slices.Contains(columns, id) {
-				return false
-			}
-		}
-		return len(candidate) > 0
-	}
 	for _, n := range p.children[table] {
 		if n.Kind != "constraint" && n.Kind != "index" {
 			continue
@@ -769,13 +918,7 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 			basis = append(basis, "Missing selected key proof "+n.ID)
 			continue
 		}
-		// A designed constraint of a non-key kind (a designed FK) can
-		// never be a unique key, so it is skipped before the proof check
-		// its synthetic facet always fails: it made the source table's
-		// complete inventory incomplete, and every FK from that table lost
-		// its proved source max "many" (review 2026-10-06, F81). A
-		// designed key still fails the check: intent proves no uniqueness.
-		if n.Kind == "constraint" && p.designedSubject(n.ID) && f.ConstraintKind != "primary_key" && f.ConstraintKind != "unique" {
+		if p.designedNonKey(n, f) {
 			continue
 		}
 		if !p.proofCurrent(f) {
@@ -783,50 +926,19 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 			basis = append(basis, "Stale or inferred selected constraint/index proof "+n.ID)
 			continue
 		}
-		var candidate []string
-		if n.Kind == "constraint" {
-			if f.ConstraintKind != "primary_key" && f.ConstraintKind != "unique" {
-				continue
-			}
-			candidate = f.ColumnIDs
-		} else {
-			if scalarBool(f.Unique, false) {
-				continue
-			}
-			if !scalarBool(f.Unique, true) {
-				complete = false
-				continue
-			}
-			if f.Predicate.Status != "known" {
-				complete = false
-				continue
-			}
-			if string(f.Predicate.Value) != "null" {
-				continue
-			}
-			for _, term := range f.Terms {
-				if term.ColumnID == "" {
-					candidate = nil
-					break
-				}
-				candidate = append(candidate, term.ColumnID)
-			}
-			if len(candidate) == 0 {
-				continue
-			}
+		candidate, ok, incomplete := uniqueKeyCandidate(n, f)
+		if incomplete {
+			complete = false
 		}
-		keyColumnsCurrent := true
-		for _, id := range candidate {
-			if !p.proofCurrent(p.selected(id)) {
-				keyColumnsCurrent = false
-			}
+		if !ok {
+			continue
 		}
-		if !p.proofCurrent(f) || f.AnalysisStatus != "complete" || !keyColumnsCurrent {
+		if !p.proofCurrent(f) || f.AnalysisStatus != "complete" || !p.keyColumnsCurrent(candidate) {
 			complete = false
 			basis = append(basis, "Incomplete, stale or inferred selected key "+n.ID)
 			continue
 		}
-		if !match(candidate) {
+		if !keyColumnsMatch(candidate, columns, ordered) {
 			basis = append(basis, "Current explicit nonmatching global key "+n.ID+" with evidence "+p.selectedEvidence(f))
 			continue
 		}
@@ -841,6 +953,73 @@ func (p *databaseProjection) unique(table string, columns []string, ordered bool
 		}
 	}
 	return
+}
+
+// designedNonKey reports a designed constraint of a non-key kind (a designed
+// FK): it can never be a unique key, so it is skipped before the proof check
+// its synthetic facet always fails: it made the source table's complete
+// inventory incomplete, and every FK from that table lost its proved source
+// max "many" (review 2026-10-06, F81). A designed key still fails the check:
+// intent proves no uniqueness.
+func (p *databaseProjection) designedNonKey(n Node, f *relationalFacet) bool {
+	return n.Kind == "constraint" && p.designedSubject(n.ID) && f.ConstraintKind != "primary_key" && f.ConstraintKind != "unique"
+}
+
+// uniqueKeyCandidate reads the columns a constraint or index would make
+// unique. ok is false when the record is no unique key (or one over an
+// expression); incomplete marks a record whose uniqueness cannot be decided,
+// which makes the table's key inventory incomplete.
+func uniqueKeyCandidate(n Node, f *relationalFacet) (candidate []string, ok, incomplete bool) {
+	if n.Kind == "constraint" {
+		if f.ConstraintKind != "primary_key" && f.ConstraintKind != "unique" {
+			return nil, false, false
+		}
+		return f.ColumnIDs, true, false
+	}
+	if scalarBool(f.Unique, false) {
+		return nil, false, false
+	}
+	if !scalarBool(f.Unique, true) || f.Predicate.Status != "known" {
+		return nil, false, true
+	}
+	if string(f.Predicate.Value) != "null" {
+		return nil, false, false
+	}
+	for _, term := range f.Terms {
+		if term.ColumnID == "" {
+			candidate = nil
+			break
+		}
+		candidate = append(candidate, term.ColumnID)
+	}
+	return candidate, len(candidate) > 0, false
+}
+
+func (p *databaseProjection) keyColumnsCurrent(candidate []string) bool {
+	current := true
+	for _, id := range candidate {
+		if !p.proofCurrent(p.selected(id)) {
+			current = false
+		}
+	}
+	return current
+}
+
+// keyColumnsMatch: ordered is the exact ordered match a designed FK
+// reference must make. Otherwise the question is whether the columns are
+// globally unique, and a complete key on any subset of them answers it: set
+// equality answered "many" for an FK over {id, tenant_id} although the PK on
+// {id} makes it unique (review 2026-10-06, F77).
+func keyColumnsMatch(candidate, columns []string, ordered bool) bool {
+	if ordered {
+		return slices.Equal(candidate, columns)
+	}
+	for _, id := range candidate {
+		if !slices.Contains(columns, id) {
+			return false
+		}
+	}
+	return len(candidate) > 0
 }
 
 func (p *databaseProjection) observeSourceFacet(id string, f *relationalFacet) *relationalFacet {

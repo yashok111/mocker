@@ -307,71 +307,17 @@ func stateIdentity(s RevisionState, typ, key string) (string, string) {
 
 func publishBindings(ctx context.Context, tx *sql.Tx, s *ImportSession, g *graphCandidate, rid string) error {
 	if g.Composed != nil {
-		selected := &graphCandidate{Nodes: []Node{}, Edges: []Edge{}, Evidence: []Evidence{}}
-		for _, a := range g.Composed.Source.Assertions {
-			if a.Owner.RepositoryID != s.RepositoryID || a.Owner.ProviderNamespace != s.Manifest.Provider.Namespace {
-				continue
-			}
-			if a.RecordType == "node" {
-				selected.Nodes = append(selected.Nodes, Node{ID: a.RecordID, ExternalKey: a.ExternalKey})
-			} else {
-				selected.Edges = append(selected.Edges, Edge{ID: a.RecordID, ExternalKey: a.ExternalKey})
-			}
-		}
-		for _, e := range g.Evidence {
-			if e.Ownership != nil && e.Ownership.RepositoryID == s.RepositoryID && e.Ownership.ProviderNamespace == s.Manifest.Provider.Namespace {
-				selected.Evidence = append(selected.Evidence, e)
-			}
-		}
-		return publishBindings(ctx, tx, s, selected, rid)
+		return publishBindings(ctx, tx, s, composedOwnBindings(g, s), rid)
 	}
 	// Retire first so a mapped active alias can be inserted under the unique index.
 	if _, err := tx.ExecContext(ctx, `UPDATE backend_identity_bindings SET state='retired',revision_id=? WHERE project_id=? AND repository_id=? AND provider_namespace=? AND state='active'`, rid, s.ProjectID, s.RepositoryID, s.Manifest.Provider.Namespace); err != nil {
 		return err
 	}
-	write := func(typ, key, id, state string) error {
-		b, err := binding(ctx, tx, s, typ, key)
-		if err != nil {
-			return err
-		}
-		if b != nil && b.ID != id {
-			return identityConflict("A key was bound to another UUID")
-		}
-		_, err = tx.ExecContext(ctx, `INSERT INTO backend_identity_bindings(project_id,repository_id,provider_namespace,record_type,external_key,id,state,revision_id) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_id,repository_id,provider_namespace,record_type,external_key) DO UPDATE SET state=excluded.state,revision_id=excluded.revision_id`, s.ProjectID, s.RepositoryID, s.Manifest.Provider.Namespace, typ, key, id, state, rid)
+	w := bindingWriter{ctx: ctx, tx: tx, s: s, rid: rid}
+	if err := w.activate(g); err != nil {
 		return err
 	}
-	for _, n := range g.Nodes {
-		if err := write("node", n.ExternalKey, n.ID, "active"); err != nil {
-			return err
-		}
-	}
-	for _, e := range g.Edges {
-		if err := write("edge", e.ExternalKey, e.ID, "active"); err != nil {
-			return err
-		}
-	}
-	for _, e := range g.Evidence {
-		if err := write("evidence", e.ExternalKey, e.ID, "active"); err != nil {
-			return err
-		}
-	}
-	rows, err := tx.QueryContext(ctx, `SELECT record_type,external_key,id FROM backend_import_identities WHERE session_id=?`, s.ID)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = rows.Close() }()
-	allocations := []RecordIdentity{}
-	for rows.Next() {
-		var a RecordIdentity
-		if err := rows.Scan(&a.RecordType, &a.ExternalKey, &a.ID); err != nil {
-			return err
-		}
-		allocations = append(allocations, a)
-	}
-	err = rows.Err()
-	if closeErr := rows.Close(); err == nil {
-		err = closeErr
-	}
+	allocations, err := readSessionAllocations(ctx, tx, s.ID)
 	if err != nil {
 		return err
 	}
@@ -381,7 +327,7 @@ func publishBindings(ctx context.Context, tx *sql.Tx, s *ImportSession, g *graph
 			return err
 		}
 		if b == nil {
-			if err := write(a.RecordType, a.ExternalKey, a.ID, "reserved"); err != nil {
+			if err := w.write(a.RecordType, a.ExternalKey, a.ID, "reserved"); err != nil {
 				return err
 			}
 		}
@@ -390,20 +336,114 @@ func publishBindings(ctx context.Context, tx *sql.Tx, s *ImportSession, g *graph
 	if err != nil {
 		return err
 	}
+	return w.applyDeletions(decisions, g.DeletionDecisions)
+}
+
+// composedOwnBindings narrows a composed candidate to the records and proof
+// this session's repository and provider namespace own: only those bind.
+func composedOwnBindings(g *graphCandidate, s *ImportSession) *graphCandidate {
+	selected := &graphCandidate{Nodes: []Node{}, Edges: []Edge{}, Evidence: []Evidence{}}
+	for _, a := range g.Composed.Source.Assertions {
+		if a.Owner.RepositoryID != s.RepositoryID || a.Owner.ProviderNamespace != s.Manifest.Provider.Namespace {
+			continue
+		}
+		if a.RecordType == "node" {
+			selected.Nodes = append(selected.Nodes, Node{ID: a.RecordID, ExternalKey: a.ExternalKey})
+		} else {
+			selected.Edges = append(selected.Edges, Edge{ID: a.RecordID, ExternalKey: a.ExternalKey})
+		}
+	}
+	for _, e := range g.Evidence {
+		if e.Ownership != nil && e.Ownership.RepositoryID == s.RepositoryID && e.Ownership.ProviderNamespace == s.Manifest.Provider.Namespace {
+			selected.Evidence = append(selected.Evidence, e)
+		}
+	}
+	return selected
+}
+
+// readSessionAllocations reads the identities the session reserved. The
+// cursor is closed before returning: the caller writes in the same
+// transaction on the single SQLite connection.
+func readSessionAllocations(ctx context.Context, tx *sql.Tx, sessionID string) ([]RecordIdentity, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT record_type,external_key,id FROM backend_import_identities WHERE session_id=?`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	allocations := []RecordIdentity{}
+	for rows.Next() {
+		var a RecordIdentity
+		if err := rows.Scan(&a.RecordType, &a.ExternalKey, &a.ID); err != nil {
+			return nil, err
+		}
+		allocations = append(allocations, a)
+	}
+	err = rows.Err()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return nil, err
+	}
+	return allocations, nil
+}
+
+// bindingWriter upserts the identity bindings one publication writes.
+type bindingWriter struct {
+	ctx context.Context
+	tx  *sql.Tx
+	s   *ImportSession
+	rid string
+}
+
+func (w bindingWriter) write(typ, key, id, state string) error {
+	b, err := binding(w.ctx, w.tx, w.s, typ, key)
+	if err != nil {
+		return err
+	}
+	if b != nil && b.ID != id {
+		return identityConflict("A key was bound to another UUID")
+	}
+	_, err = w.tx.ExecContext(w.ctx, `INSERT INTO backend_identity_bindings(project_id,repository_id,provider_namespace,record_type,external_key,id,state,revision_id) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(project_id,repository_id,provider_namespace,record_type,external_key) DO UPDATE SET state=excluded.state,revision_id=excluded.revision_id`, w.s.ProjectID, w.s.RepositoryID, w.s.Manifest.Provider.Namespace, typ, key, id, state, w.rid)
+	return err
+}
+
+func (w bindingWriter) activate(g *graphCandidate) error {
+	for _, n := range g.Nodes {
+		if err := w.write("node", n.ExternalKey, n.ID, "active"); err != nil {
+			return err
+		}
+	}
+	for _, e := range g.Edges {
+		if err := w.write("edge", e.ExternalKey, e.ID, "active"); err != nil {
+			return err
+		}
+	}
+	for _, e := range g.Evidence {
+		if err := w.write("evidence", e.ExternalKey, e.ID, "active"); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// applyDeletions marks deleted the records the session's staged deletion
+// decisions name, then the old proof of every resolved deletion decision.
+func (w bindingWriter) applyDeletions(decisions []ImportCommand, resolved []DeletionDecision) error {
 	for _, c := range decisions {
 		if c.Deletion != nil {
 			d := c.Deletion
-			if _, err := tx.ExecContext(ctx, `UPDATE backend_identity_bindings SET state='deleted',revision_id=? WHERE project_id=? AND repository_id=? AND provider_namespace=? AND record_type=? AND id=?`, rid, s.ProjectID, s.RepositoryID, s.Manifest.Provider.Namespace, d.RecordType, d.ExpectedID); err != nil {
+			if _, err := w.tx.ExecContext(w.ctx, `UPDATE backend_identity_bindings SET state='deleted',revision_id=? WHERE project_id=? AND repository_id=? AND provider_namespace=? AND record_type=? AND id=?`, w.rid, w.s.ProjectID, w.s.RepositoryID, w.s.Manifest.Provider.Namespace, d.RecordType, d.ExpectedID); err != nil {
 				return err
 			}
 		}
 	}
-	for _, decision := range g.DeletionDecisions {
+	for _, decision := range resolved {
 		if !decision.Resolved {
 			continue
 		}
 		for _, ref := range decision.OldEvidenceRefs {
-			if _, err := tx.ExecContext(ctx, `UPDATE backend_identity_bindings SET state='deleted',revision_id=? WHERE project_id=? AND repository_id=? AND provider_namespace=? AND record_type='evidence' AND id=?`, rid, s.ProjectID, s.RepositoryID, s.Manifest.Provider.Namespace, ref.EvidenceID); err != nil {
+			if _, err := w.tx.ExecContext(w.ctx, `UPDATE backend_identity_bindings SET state='deleted',revision_id=? WHERE project_id=? AND repository_id=? AND provider_namespace=? AND record_type='evidence' AND id=?`, w.rid, w.s.ProjectID, w.s.RepositoryID, w.s.Manifest.Provider.Namespace, ref.EvidenceID); err != nil {
 				return err
 			}
 		}
