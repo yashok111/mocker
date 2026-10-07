@@ -41,7 +41,11 @@ describe("diagram selection replay admission", () => {
     const changed = { ...input, selectors: [{ kind: "semantic" as const, id: "second" }] };
     view.rerender(tree(changed));
     expect(prepare).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button"));
+    // Since 41ca3c6 the preparation block also renders the observation
+    // selector's own button, so the replay button is addressed by name.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Подготовить поддерживаемый replay выбранного элемента" }),
+    );
     await waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
     expect(prepare).toHaveBeenCalledWith("project", diagram, changed);
   });
