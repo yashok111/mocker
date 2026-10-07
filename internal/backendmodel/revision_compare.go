@@ -24,109 +24,15 @@ func CompareRevisionStates(ctx context.Context, before, after RevisionState) (*R
 	}
 	out := &RevisionDelta{Changes: []RecordDelta{}}
 	for _, typ := range []string{"node", "edge", "evidence"} {
-		left, err := comparisonRecords(ctx, before, typ)
-		if err != nil {
+		if err := compareRecordType(ctx, before, after, typ, out); err != nil {
 			return nil, err
-		}
-		right, err := comparisonRecords(ctx, after, typ)
-		if err != nil {
-			return nil, err
-		}
-		keys := map[string]bool{}
-		for id := range left {
-			keys[id] = true
-		}
-		for id := range right {
-			keys[id] = true
-		}
-		for _, id := range slices.Sorted(maps.Keys(keys)) {
-			if err := ctx.Err(); err != nil {
-				return nil, err
-			}
-			old, oldOK := left[id]
-			current, newOK := right[id]
-			change := RecordDelta{RecordType: typ, ID: id, ChangeKinds: []string{}, ChangedPaths: []string{}}
-			if oldOK {
-				change.Before = recordSide(typ, old)
-			}
-			if newOK {
-				change.After = recordSide(typ, current)
-			}
-			counts := comparisonCounts(&out.Summary, typ)
-			switch {
-			case !oldOK:
-				change.ChangeKinds = append(change.ChangeKinds, "added")
-				counts.Added++
-			case !newOK:
-				change.ChangeKinds = append(change.ChangeKinds, "removed")
-				counts.Removed++
-			default:
-				paths, err := changedFields(old.fields, current.fields)
-				if err != nil {
-					return nil, err
-				}
-				if len(paths) > 0 {
-					change.ChangeKinds = append(change.ChangeKinds, "modified")
-					change.ChangedPaths = append(change.ChangedPaths, paths...)
-					counts.Modified++
-				}
-				oldFresh, err := requestDigest(old.freshness)
-				if err != nil {
-					return nil, err
-				}
-				newFresh, err := requestDigest(current.freshness)
-				if err != nil {
-					return nil, err
-				}
-				if oldFresh != newFresh {
-					change.ChangeKinds = append(change.ChangeKinds, "freshness_changed")
-					change.ChangedPaths = append(change.ChangedPaths, "/freshness")
-					out.Summary.FreshnessChanges++
-				}
-				if old.key != current.key {
-					if typ == "node" || typ == "edge" {
-						out.Changes = append(out.Changes, RecordDelta{RecordType: "identity", ID: typ + "/" + current.key + "/" + id, ChangeKinds: []string{"identity_mapped"}, ChangedPaths: []string{"/externalKey"}, Before: recordSide(typ, old), After: recordSide(typ, current)})
-						out.Summary.IdentityMappings++
-					} else {
-						change.ChangeKinds = append(change.ChangeKinds, "modified")
-						change.ChangedPaths = append(change.ChangedPaths, "/externalKey")
-						if len(paths) == 0 {
-							counts.Modified++
-						}
-					}
-				}
-			}
-			if len(change.ChangeKinds) > 0 {
-				slices.Sort(change.ChangeKinds)
-				change.ChangeKinds = slices.Compact(change.ChangeKinds)
-				slices.Sort(change.ChangedPaths)
-				change.ChangedPaths = slices.Compact(change.ChangedPaths)
-				out.Changes = append(out.Changes, change)
-			}
 		}
 	}
 	for _, change := range sourceChanges(before, after) {
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		facet := "modified"
-		if change.Before == nil {
-			facet = "added"
-		} else if change.After == nil && change.DeletionConfirmed {
-			facet = "removed"
-		}
-		sourceID := change.Path
-		if change.RepositoryID != "" || change.ProviderNamespace != "" {
-			sourceID = change.RepositoryID + "/" + change.ProviderNamespace + "/" + change.Path
-		}
-		delta := RecordDelta{RecordType: "source", ID: sourceID, ChangeKinds: []string{facet}, ChangedPaths: []string{"/" + change.Kind}}
-		if change.Before != nil {
-			delta.Before = &RecordSide{RecordType: "source", ID: sourceID, SnapshotID: change.Before.SnapshotID, Path: change.Path, Name: new(change.Path)}
-		}
-		if change.After != nil {
-			delta.After = &RecordSide{RecordType: "source", ID: sourceID, SnapshotID: change.After.SnapshotID, Path: change.Path, Name: new(change.Path)}
-		}
-		out.Changes = append(out.Changes, delta)
+		out.Changes = append(out.Changes, sourceRecordDelta(change))
 		out.Summary.SourceChanges++
 	}
 	if err := compareRevisionArtifacts(ctx, before, after, out); err != nil {
@@ -139,6 +45,127 @@ func CompareRevisionStates(ctx context.Context, before, after RevisionState) (*R
 		return strings.Compare(a.ID, b.ID)
 	})
 	return out, ctx.Err()
+}
+
+// compareRecordType appends the delta of every record of one type, in ID
+// order, to out.
+func compareRecordType(ctx context.Context, before, after RevisionState, typ string, out *RevisionDelta) error {
+	left, err := comparisonRecords(ctx, before, typ)
+	if err != nil {
+		return err
+	}
+	right, err := comparisonRecords(ctx, after, typ)
+	if err != nil {
+		return err
+	}
+	keys := map[string]bool{}
+	for id := range left {
+		keys[id] = true
+	}
+	for id := range right {
+		keys[id] = true
+	}
+	for _, id := range slices.Sorted(maps.Keys(keys)) {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		old, oldOK := left[id]
+		current, newOK := right[id]
+		change := RecordDelta{RecordType: typ, ID: id, ChangeKinds: []string{}, ChangedPaths: []string{}}
+		if oldOK {
+			change.Before = recordSide(typ, old)
+		}
+		if newOK {
+			change.After = recordSide(typ, current)
+		}
+		counts := comparisonCounts(&out.Summary, typ)
+		switch {
+		case !oldOK:
+			change.ChangeKinds = append(change.ChangeKinds, "added")
+			counts.Added++
+		case !newOK:
+			change.ChangeKinds = append(change.ChangeKinds, "removed")
+			counts.Removed++
+		default:
+			if err := compareModifiedRecord(&change, counts, old, current, out); err != nil {
+				return err
+			}
+		}
+		if len(change.ChangeKinds) > 0 {
+			slices.Sort(change.ChangeKinds)
+			change.ChangeKinds = slices.Compact(change.ChangeKinds)
+			slices.Sort(change.ChangedPaths)
+			change.ChangedPaths = slices.Compact(change.ChangedPaths)
+			out.Changes = append(out.Changes, change)
+		}
+	}
+	return nil
+}
+
+// compareModifiedRecord classifies a record present on both sides: changed
+// fields, changed freshness and a changed external key. A node or edge key
+// change is an identity mapping of its own; an evidence key change is a
+// modification of the record.
+func compareModifiedRecord(change *RecordDelta, counts *ComparisonCounts, old, current compareRecord, out *RevisionDelta) error {
+	typ, id := change.RecordType, change.ID
+	paths, err := changedFields(old.fields, current.fields)
+	if err != nil {
+		return err
+	}
+	if len(paths) > 0 {
+		change.ChangeKinds = append(change.ChangeKinds, "modified")
+		change.ChangedPaths = append(change.ChangedPaths, paths...)
+		counts.Modified++
+	}
+	oldFresh, err := requestDigest(old.freshness)
+	if err != nil {
+		return err
+	}
+	newFresh, err := requestDigest(current.freshness)
+	if err != nil {
+		return err
+	}
+	if oldFresh != newFresh {
+		change.ChangeKinds = append(change.ChangeKinds, "freshness_changed")
+		change.ChangedPaths = append(change.ChangedPaths, "/freshness")
+		out.Summary.FreshnessChanges++
+	}
+	if old.key == current.key {
+		return nil
+	}
+	if typ == "node" || typ == "edge" {
+		out.Changes = append(out.Changes, RecordDelta{RecordType: "identity", ID: typ + "/" + current.key + "/" + id, ChangeKinds: []string{"identity_mapped"}, ChangedPaths: []string{"/externalKey"}, Before: recordSide(typ, old), After: recordSide(typ, current)})
+		out.Summary.IdentityMappings++
+		return nil
+	}
+	change.ChangeKinds = append(change.ChangeKinds, "modified")
+	change.ChangedPaths = append(change.ChangedPaths, "/externalKey")
+	if len(paths) == 0 {
+		counts.Modified++
+	}
+	return nil
+}
+
+// sourceRecordDelta renders one source file change as a comparison record.
+func sourceRecordDelta(change SourceChange) RecordDelta {
+	facet := "modified"
+	if change.Before == nil {
+		facet = "added"
+	} else if change.After == nil && change.DeletionConfirmed {
+		facet = "removed"
+	}
+	sourceID := change.Path
+	if change.RepositoryID != "" || change.ProviderNamespace != "" {
+		sourceID = change.RepositoryID + "/" + change.ProviderNamespace + "/" + change.Path
+	}
+	delta := RecordDelta{RecordType: "source", ID: sourceID, ChangeKinds: []string{facet}, ChangedPaths: []string{"/" + change.Kind}}
+	if change.Before != nil {
+		delta.Before = &RecordSide{RecordType: "source", ID: sourceID, SnapshotID: change.Before.SnapshotID, Path: change.Path, Name: new(change.Path)}
+	}
+	if change.After != nil {
+		delta.After = &RecordSide{RecordType: "source", ID: sourceID, SnapshotID: change.After.SnapshotID, Path: change.Path, Name: new(change.Path)}
+	}
+	return delta
 }
 
 func recordSide(typ string, record compareRecord) *RecordSide {
@@ -243,14 +270,8 @@ func changedFields(before, after map[string]any) ([]string, error) {
 // CompareRevisions reads exact immutable revisions; head changes cannot alter
 // comparison pins, hashes or page ordering.
 func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevisionsInput) (*RevisionComparison, error) {
-	if !ValidID(pid) || !ValidID(in.FromRevisionID) || !ValidID(in.ToRevisionID) {
-		return nil, notFound()
-	}
-	if in.RecordType != "" && !slices.Contains([]string{"node", "edge", "evidence", "source", "identity", "artifact"}, in.RecordType) {
-		return nil, invalid("recordType", "Unsupported comparison record type")
-	}
-	if in.ChangeKind != "" && !slices.Contains([]string{"added", "removed", "modified", "identity_mapped", "freshness_changed"}, in.ChangeKind) {
-		return nil, invalid("changeKind", "Unsupported comparison change kind")
+	if err := validateCompareRevisionsInput(pid, in); err != nil {
+		return nil, err
 	}
 	from, err := loadRevisionState(ctx, r.db.R, pid, in.FromRevisionID)
 	if err != nil {
@@ -264,23 +285,13 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	if err != nil {
 		return nil, err
 	}
-	var sourceBefore, sourceAfter *SourceReadContext
-	var sourceGraphBefore, sourceGraphAfter *SourceGraphSnapshot
-	if from.Revision.SchemaVersion == ComposedSchemaVersion {
-		graph, err := r.ResolveSourceGraph(ctx, pid, in.FromRevisionID)
-		if err != nil {
-			return nil, err
-		}
-		sourceGraphBefore = graph
-		sourceBefore = sourceReadContext(graph, "", "", "")
+	sourceGraphBefore, sourceBefore, err := r.comparisonSourceGraph(ctx, pid, in.FromRevisionID, from)
+	if err != nil {
+		return nil, err
 	}
-	if to.Revision.SchemaVersion == ComposedSchemaVersion {
-		graph, err := r.ResolveSourceGraph(ctx, pid, in.ToRevisionID)
-		if err != nil {
-			return nil, err
-		}
-		sourceGraphAfter = graph
-		sourceAfter = sourceReadContext(graph, "", "", "")
+	sourceGraphAfter, sourceAfter, err := r.comparisonSourceGraph(ctx, pid, in.ToRevisionID, to)
+	if err != nil {
+		return nil, err
 	}
 	if sourceGraphBefore != nil || sourceGraphAfter != nil {
 		if err := appendSourceClaimDeltas(ctx, delta, sourceGraphBefore, sourceGraphAfter); err != nil {
@@ -288,24 +299,9 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 		}
 	}
 	left, right := comparisonPin(*from), comparisonPin(*to)
-	hash, err := requestDigest(struct {
-		Version  int
-		From, To ComparisonPin
-		Changes  []RecordDelta
-	}{1, left, right, delta.Changes})
+	hash, err := revisionComparisonHash(left, right, delta.Changes, sourceBefore, sourceAfter)
 	if err != nil {
 		return nil, err
-	}
-	if sourceBefore != nil || sourceAfter != nil {
-		hash, err = requestDigest(struct {
-			Version                   int
-			From, To                  ComparisonPin
-			Changes                   []RecordDelta
-			SourceBefore, SourceAfter *SourceReadContext
-		}{1, left, right, delta.Changes, sourceBefore, sourceAfter})
-		if err != nil {
-			return nil, err
-		}
 	}
 	scope, err := requestDigest(struct{ Hash, RecordType, ChangeKind string }{hash, in.RecordType, in.ChangeKind})
 	if err != nil {
@@ -315,12 +311,9 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	if err != nil {
 		return nil, err
 	}
-	start := 0
-	if after != "" {
-		start, err = strconv.Atoi(after)
-		if err != nil || start < 0 {
-			return nil, invalid("cursor", "Invalid comparison offset")
-		}
+	start, err := comparisonOffset(after)
+	if err != nil {
+		return nil, err
 	}
 	out := &RevisionComparison{SourceBefore: sourceBefore, SourceAfter: sourceAfter, From: left, To: right, ComparisonVersion: 1, ComparisonHash: hash, Summary: delta.Summary, CoverageBefore: from.Revision.Coverage, CoverageAfter: to.Revision.Coverage, Limitations: []string{"Structural comparison describes provider assertions; it does not verify runtime behavior or impact safety."}, Items: []ComparisonItem{}}
 	for _, state := range []*RevisionState{from, to} {
@@ -328,44 +321,16 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	}
 	slices.Sort(out.Limitations)
 	out.Limitations = slices.Compact(out.Limitations)
-	filtered := []RecordDelta{}
-	for _, change := range delta.Changes {
-		if err := ctx.Err(); err != nil {
-			return nil, err
-		}
-		if in.RecordType != "" && in.RecordType != change.RecordType || in.ChangeKind != "" && !slices.Contains(change.ChangeKinds, in.ChangeKind) {
-			continue
-		}
-		filtered = append(filtered, change)
+	filtered, err := filterRevisionComparison(ctx, delta.Changes, in)
+	if err != nil {
+		return nil, err
 	}
 	if start > len(filtered) {
 		return nil, invalid("cursor", "Comparison offset exceeds result")
 	}
 	end := min(start+limit, len(filtered))
 	for _, change := range filtered[start:end] {
-		item := ComparisonItem{RecordType: change.RecordType, ID: change.ID, ChangeKinds: change.ChangeKinds, ChangedPaths: change.ChangedPaths}
-		item.ContextChanged = change.ContextChanged
-		if change.Before != nil {
-			item.SourceClaimBefore = change.Before.SourceClaim
-			item.EditorArtifactBefore = change.Before.EditorArtifact
-			item.ArtifactGroupBefore = change.Before.ArtifactGroup
-			item.ArtifactBefore = change.Before.Artifact
-			item.Before = comparisonRef(pid, in.FromRevisionID, change.Before)
-			item.NameBefore = change.Before.Name
-			item.KeyBefore = change.Before.Key
-			item.FreshnessBefore = change.Before.Freshness
-		}
-		if change.After != nil {
-			item.SourceClaimAfter = change.After.SourceClaim
-			item.EditorArtifactAfter = change.After.EditorArtifact
-			item.ArtifactGroupAfter = change.After.ArtifactGroup
-			item.ArtifactAfter = change.After.Artifact
-			item.After = comparisonRef(pid, in.ToRevisionID, change.After)
-			item.NameAfter = change.After.Name
-			item.KeyAfter = change.After.Key
-			item.FreshnessAfter = change.After.Freshness
-		}
-		out.Items = append(out.Items, item)
+		out.Items = append(out.Items, comparisonItem(pid, in, change))
 	}
 	if end < len(filtered) {
 		out.NextCursor = encodeGraphPage("revision-compare", pid, scope, strconv.Itoa(end))
@@ -396,4 +361,99 @@ func compareRevisionArtifacts(ctx context.Context, before, after RevisionState, 
 		return err
 	}
 	return compareEditorArtifacts(ctx, before, after, out)
+}
+
+func validateCompareRevisionsInput(pid string, in CompareRevisionsInput) error {
+	if !ValidID(pid) || !ValidID(in.FromRevisionID) || !ValidID(in.ToRevisionID) {
+		return notFound()
+	}
+	if in.RecordType != "" && !slices.Contains([]string{"node", "edge", "evidence", "source", "identity", "artifact"}, in.RecordType) {
+		return invalid("recordType", "Unsupported comparison record type")
+	}
+	if in.ChangeKind != "" && !slices.Contains([]string{"added", "removed", "modified", "identity_mapped", "freshness_changed"}, in.ChangeKind) {
+		return invalid("changeKind", "Unsupported comparison change kind")
+	}
+	return nil
+}
+
+// comparisonSourceGraph resolves a composed revision's source graph and its
+// read context; a pre-composition revision has neither.
+func (r *Repo) comparisonSourceGraph(ctx context.Context, pid, rid string, state *RevisionState) (*SourceGraphSnapshot, *SourceReadContext, error) {
+	if state.Revision.SchemaVersion != ComposedSchemaVersion {
+		return nil, nil, nil
+	}
+	graph, err := r.ResolveSourceGraph(ctx, pid, rid)
+	if err != nil {
+		return nil, nil, err
+	}
+	return graph, sourceReadContext(graph, "", "", ""), nil
+}
+
+// revisionComparisonHash keeps the pre-composition hash shape unchanged: the
+// source read contexts join the digest only when either side has one.
+func revisionComparisonHash(left, right ComparisonPin, changes []RecordDelta, sourceBefore, sourceAfter *SourceReadContext) (string, error) {
+	if sourceBefore != nil || sourceAfter != nil {
+		return requestDigest(struct {
+			Version                   int
+			From, To                  ComparisonPin
+			Changes                   []RecordDelta
+			SourceBefore, SourceAfter *SourceReadContext
+		}{1, left, right, changes, sourceBefore, sourceAfter})
+	}
+	return requestDigest(struct {
+		Version  int
+		From, To ComparisonPin
+		Changes  []RecordDelta
+	}{1, left, right, changes})
+}
+
+func comparisonOffset(after string) (int, error) {
+	if after == "" {
+		return 0, nil
+	}
+	start, err := strconv.Atoi(after)
+	if err != nil || start < 0 {
+		return 0, invalid("cursor", "Invalid comparison offset")
+	}
+	return start, nil
+}
+
+func filterRevisionComparison(ctx context.Context, changes []RecordDelta, in CompareRevisionsInput) ([]RecordDelta, error) {
+	filtered := []RecordDelta{}
+	for _, change := range changes {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		if in.RecordType != "" && in.RecordType != change.RecordType || in.ChangeKind != "" && !slices.Contains(change.ChangeKinds, in.ChangeKind) {
+			continue
+		}
+		filtered = append(filtered, change)
+	}
+	return filtered, nil
+}
+
+func comparisonItem(pid string, in CompareRevisionsInput, change RecordDelta) ComparisonItem {
+	item := ComparisonItem{RecordType: change.RecordType, ID: change.ID, ChangeKinds: change.ChangeKinds, ChangedPaths: change.ChangedPaths}
+	item.ContextChanged = change.ContextChanged
+	if change.Before != nil {
+		item.SourceClaimBefore = change.Before.SourceClaim
+		item.EditorArtifactBefore = change.Before.EditorArtifact
+		item.ArtifactGroupBefore = change.Before.ArtifactGroup
+		item.ArtifactBefore = change.Before.Artifact
+		item.Before = comparisonRef(pid, in.FromRevisionID, change.Before)
+		item.NameBefore = change.Before.Name
+		item.KeyBefore = change.Before.Key
+		item.FreshnessBefore = change.Before.Freshness
+	}
+	if change.After != nil {
+		item.SourceClaimAfter = change.After.SourceClaim
+		item.EditorArtifactAfter = change.After.EditorArtifact
+		item.ArtifactGroupAfter = change.After.ArtifactGroup
+		item.ArtifactAfter = change.After.Artifact
+		item.After = comparisonRef(pid, in.ToRevisionID, change.After)
+		item.NameAfter = change.After.Name
+		item.KeyAfter = change.After.Key
+		item.FreshnessAfter = change.After.Freshness
+	}
+	return item
 }

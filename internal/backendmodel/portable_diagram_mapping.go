@@ -53,118 +53,148 @@ func (m *portableMapper) diagram(v *DiagramVersion) {
 	v.receiptJSON = ""
 	d := &v.Document
 	if d.Kind == "architecture" {
-		m.member("diagram_element", parent, &d.Payload.PrimarySystemID)
-		for i := range d.Payload.Elements {
-			e := &d.Payload.Elements[i]
-			m.member("diagram_element", parent, &e.ID)
-			m.member("diagram_element", parent, &e.ParentID)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
-		for i := range d.Payload.Links {
-			e := &d.Payload.Links[i]
-			m.member("diagram_link", parent, &e.ID)
-			m.member("diagram_element", parent, &e.From)
-			m.member("diagram_element", parent, &e.To)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
+		m.architectureMembers(parent, &d.Payload)
 	}
 	if p := d.Interactions; p != nil {
-		architecture := ""
-		if p.Architecture != nil {
-			architecture = p.Architecture.ID
-			m.id("diagram", &p.Architecture.ID)
-		}
-		m.diagramRefs(p.ScopeRefs)
-		for i := range p.Participants {
-			e := &p.Participants[i]
-			m.member("diagram_element", parent, &e.ID)
-			if e.ArchitectureElementID != "" {
-				m.member("diagram_element", architecture, &e.ArchitectureElementID)
-			}
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
-		for i := range p.Steps {
-			e := &p.Steps[i]
-			m.member("diagram_element", parent, &e.ID)
-			m.member("diagram_element", parent, &e.From)
-			m.member("diagram_element", parent, &e.To)
-			m.member("diagram_element", parent, &e.ReplyTo)
-			m.list("diagram_element", e.BranchPath, parent)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
-		for i := range p.Branches {
-			e := &p.Branches[i]
-			m.member("diagram_element", parent, &e.ID)
-			m.member("diagram_element", parent, &e.ParentID)
-			m.member("diagram_element", parent, &e.GroupID)
-			m.diagramOrigin(&e.Origin)
-		}
-		for i := range p.Order {
-			e := &p.Order[i]
-			m.member("diagram_link", parent, &e.ID)
-			m.member("diagram_element", parent, &e.From)
-			m.member("diagram_element", parent, &e.To)
-			m.diagramOrigin(&e.Origin)
-		}
+		m.interactionMembers(parent, p)
 	}
 	if p := d.Lifecycle; p != nil {
-		m.diagramRef(&p.Entity)
-		m.diagramRefs(p.StateFields)
-		m.diagramOrigin(&p.CoverageOrigin)
-		for i := range p.States {
-			e := &p.States[i]
-			m.member("diagram_element", parent, &e.ID)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
-		for i := range p.Transitions {
-			e := &p.Transitions[i]
-			m.member("diagram_link", parent, &e.ID)
-			m.member("diagram_element", parent, &e.From)
-			m.member("diagram_element", parent, &e.To)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-			m.diagramRefs(e.Triggers)
-			m.diagramRefs(e.Writes)
-			m.diagramRefs(e.Events)
-		}
-		for i := range p.Rules {
-			e := &p.Rules[i]
-			m.member("diagram_link", parent, &e.ID)
-			m.member("diagram_element", parent, &e.From)
-			m.member("diagram_element", parent, &e.To)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRef(&e.Trigger)
-		}
+		m.lifecycleMembers(parent, p)
 	}
 	if p := d.BusinessMap; p != nil {
-		architecture := ""
-		if p.Architecture != nil {
-			architecture = p.Architecture.ID
-			m.id("diagram", &p.Architecture.ID)
-		}
-		for i := range p.Elements {
-			e := &p.Elements[i]
-			m.member("diagram_element", parent, &e.ID)
-			if e.ArchitectureElementID != "" {
-				m.member("diagram_element", architecture, &e.ArchitectureElementID)
-			}
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
-		for i := range p.Links {
-			e := &p.Links[i]
-			m.member("diagram_link", parent, &e.ID)
-			m.member("diagram_element", parent, &e.From)
-			m.member("diagram_element", parent, &e.To)
-			m.diagramOrigin(&e.Origin)
-			m.diagramRefs(e.Refs)
-		}
+		m.businessMapMembers(parent, p)
 	}
+	m.provenanceMembers(parent, v)
+	if v.Provenance.Previous != nil {
+		m.id("diagram", &v.Provenance.Previous.ID)
+	}
+	if v.Provenance.Fork != nil {
+		m.id("diagram", &v.Provenance.Fork.Source.ID)
+	}
+	// Gaps are recomputed by domain validation, never trusted as orphan authority.
+	v.Gaps = []DiagramGap{}
+}
+
+func (m *portableMapper) architectureMembers(parent string, d *ArchitecturePayload) {
+	m.member("diagram_element", parent, &d.PrimarySystemID)
+	for i := range d.Elements {
+		e := &d.Elements[i]
+		m.member("diagram_element", parent, &e.ID)
+		m.member("diagram_element", parent, &e.ParentID)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+	for i := range d.Links {
+		e := &d.Links[i]
+		m.member("diagram_link", parent, &e.ID)
+		m.member("diagram_element", parent, &e.From)
+		m.member("diagram_element", parent, &e.To)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+}
+
+func (m *portableMapper) interactionMembers(parent string, p *InteractionPayload) {
+	architecture := ""
+	if p.Architecture != nil {
+		architecture = p.Architecture.ID
+		m.id("diagram", &p.Architecture.ID)
+	}
+	m.diagramRefs(p.ScopeRefs)
+	for i := range p.Participants {
+		e := &p.Participants[i]
+		m.member("diagram_element", parent, &e.ID)
+		if e.ArchitectureElementID != "" {
+			m.member("diagram_element", architecture, &e.ArchitectureElementID)
+		}
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+	for i := range p.Steps {
+		e := &p.Steps[i]
+		m.member("diagram_element", parent, &e.ID)
+		m.member("diagram_element", parent, &e.From)
+		m.member("diagram_element", parent, &e.To)
+		m.member("diagram_element", parent, &e.ReplyTo)
+		m.list("diagram_element", e.BranchPath, parent)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+	for i := range p.Branches {
+		e := &p.Branches[i]
+		m.member("diagram_element", parent, &e.ID)
+		m.member("diagram_element", parent, &e.ParentID)
+		m.member("diagram_element", parent, &e.GroupID)
+		m.diagramOrigin(&e.Origin)
+	}
+	for i := range p.Order {
+		e := &p.Order[i]
+		m.member("diagram_link", parent, &e.ID)
+		m.member("diagram_element", parent, &e.From)
+		m.member("diagram_element", parent, &e.To)
+		m.diagramOrigin(&e.Origin)
+	}
+}
+
+func (m *portableMapper) lifecycleMembers(parent string, p *LifecyclePayload) {
+	m.diagramRef(&p.Entity)
+	m.diagramRefs(p.StateFields)
+	m.diagramOrigin(&p.CoverageOrigin)
+	for i := range p.States {
+		e := &p.States[i]
+		m.member("diagram_element", parent, &e.ID)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+	for i := range p.Transitions {
+		e := &p.Transitions[i]
+		m.member("diagram_link", parent, &e.ID)
+		m.member("diagram_element", parent, &e.From)
+		m.member("diagram_element", parent, &e.To)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+		m.diagramRefs(e.Triggers)
+		m.diagramRefs(e.Writes)
+		m.diagramRefs(e.Events)
+	}
+	for i := range p.Rules {
+		e := &p.Rules[i]
+		m.member("diagram_link", parent, &e.ID)
+		m.member("diagram_element", parent, &e.From)
+		m.member("diagram_element", parent, &e.To)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRef(&e.Trigger)
+	}
+}
+
+func (m *portableMapper) businessMapMembers(parent string, p *BusinessMapPayload) {
+	architecture := ""
+	if p.Architecture != nil {
+		architecture = p.Architecture.ID
+		m.id("diagram", &p.Architecture.ID)
+	}
+	for i := range p.Elements {
+		e := &p.Elements[i]
+		m.member("diagram_element", parent, &e.ID)
+		if e.ArchitectureElementID != "" {
+			m.member("diagram_element", architecture, &e.ArchitectureElementID)
+		}
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+	for i := range p.Links {
+		e := &p.Links[i]
+		m.member("diagram_link", parent, &e.ID)
+		m.member("diagram_element", parent, &e.From)
+		m.member("diagram_element", parent, &e.To)
+		m.diagramOrigin(&e.Origin)
+		m.diagramRefs(e.Refs)
+	}
+}
+
+// provenanceMembers remaps provenance member IDs. Each event names a member
+// of the diagram version it points at, so its row kind is looked up there.
+func (m *portableMapper) provenanceMembers(parent string, v *DiagramVersion) {
 	// Provenance event member IDs belong to the referenced diagram, not the
 	// current fork. Determine their row kind before rewriting any identity.
 	kindFor := func(id string) string {
@@ -201,14 +231,6 @@ func (m *portableMapper) diagram(v *DiagramVersion) {
 			m.id("diagram", &e.InheritedFrom.Pin.ID)
 		}
 	}
-	if v.Provenance.Previous != nil {
-		m.id("diagram", &v.Provenance.Previous.ID)
-	}
-	if v.Provenance.Fork != nil {
-		m.id("diagram", &v.Provenance.Fork.Source.ID)
-	}
-	// Gaps are recomputed by domain validation, never trusted as orphan authority.
-	v.Gaps = []DiagramGap{}
 }
 func (m *portableMapper) diagramMemberKind(parent, id string) string {
 	return m.kinds["diagram:"+parent+":"+id]

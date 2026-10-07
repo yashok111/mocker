@@ -470,6 +470,30 @@ func (b *artifactPreviewBuilder) compareEditorBindings(ctx context.Context, grou
 	return nil
 }
 
+// keepUnavailableGroup reports a pin whose target cannot be read and keeps
+// the group's old bindings, except a source another command of this request
+// rebinds: keeping both made the vector admission fail with 400 "Duplicate
+// API source binding" instead of this blocking diagnostic, which now names
+// those sources (review 2026-10-06, F62).
+func (b *artifactPreviewBuilder) keepUnavailableGroup(key ArtifactKey, oldPin ArtifactPin, hadOld bool, previousAPI []APIArtifactBinding, previousEditor []EditorBinding) {
+	out := b.out
+	var claimed []string
+	kept := []APIArtifactBinding{}
+	for _, binding := range previousAPI {
+		if owner, ok := b.inputAPI[binding.SourceNodeID]; ok && owner != key {
+			claimed = append(claimed, binding.SourceNodeID)
+			continue
+		}
+		kept = append(kept, binding)
+	}
+	b.diagnostic("backend_artifact_target_unavailable", key, nil, claimed, "Selected immutable artifact is unavailable or unverified", true)
+	if hadOld {
+		out.Pins = append(out.Pins, oldPin)
+		out.APIBindings = append(out.APIBindings, kept...)
+		out.EditorBindings = append(out.EditorBindings, previousEditor...)
+	}
+}
+
 func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPinCommand, pins map[ArtifactKey]ArtifactPin, frozen *ArtifactContext) error {
 	key := c.Artifact
 	out, request := b.out, b.request
@@ -496,26 +520,7 @@ func (b *artifactPreviewBuilder) applyCommand(ctx context.Context, c ArtifactPin
 			return e
 		}
 		if err != nil {
-			// The group keeps its old bindings, except a source another command
-			// of this request rebinds: keeping both made the vector admission
-			// fail with 400 "Duplicate API source binding" instead of this
-			// blocking diagnostic, which now names those sources
-			// (review 2026-10-06, F62).
-			var claimed []string
-			kept := []APIArtifactBinding{}
-			for _, binding := range previousAPI {
-				if owner, ok := b.inputAPI[binding.SourceNodeID]; ok && owner != key {
-					claimed = append(claimed, binding.SourceNodeID)
-					continue
-				}
-				kept = append(kept, binding)
-			}
-			b.diagnostic("backend_artifact_target_unavailable", key, nil, claimed, "Selected immutable artifact is unavailable or unverified", true)
-			if hadOld {
-				out.Pins = append(out.Pins, oldPin)
-				out.APIBindings = append(out.APIBindings, kept...)
-				out.EditorBindings = append(out.EditorBindings, previousEditor...)
-			}
+			b.keepUnavailableGroup(key, oldPin, hadOld, previousAPI, previousEditor)
 			return nil
 		}
 		nextAPI, err = b.resolveAPIBindings(ctx, c, nextPin)

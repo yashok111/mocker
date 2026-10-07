@@ -30,15 +30,8 @@ func (r *Repo) importPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *Diagr
 	}
 	old := v.Pin
 	v.receiptJSON = ""
-	if v.Document.Interactions != nil {
-		if err := replacePortableDiagramPin(v.Document.Interactions.Architecture, known, DiagramPin{}, DiagramPin{}); err != nil {
-			return err
-		}
-	}
-	if v.Document.BusinessMap != nil {
-		if err := replacePortableDiagramPin(v.Document.BusinessMap.Architecture, known, DiagramPin{}, DiagramPin{}); err != nil {
-			return err
-		}
+	if err := rebindPortableDiagramArchitecture(&v.Document, known); err != nil {
+		return err
 	}
 	graph, err := resolveEffectiveGraph(ctx, tx, v.ProjectID, v.Document.Target)
 	if err != nil {
@@ -57,6 +50,55 @@ func (r *Repo) importPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *Diagr
 		return err
 	}
 	v.TargetHash = graph.Pins.TargetHash
+	if err := rebindPortableProvenance(ctx, tx, v, known, old); err != nil {
+		return err
+	}
+	if err := validatePortableProvenance(ctx, tx, v); err != nil {
+		return err
+	}
+	previous, err := portableDiagramPredecessor(ctx, tx, v)
+	if err != nil {
+		return err
+	}
+	// Only earlier, validated included versions supply historical membership.
+	// No unverified foreign provenance record enters this resolver.
+	gaps, err := resolveDiagramEvidence(ctx, graph, v.Document, previous)
+	if err != nil {
+		return err
+	}
+	extra, err := resolveInteractionArchitectureRead(ctx, tx, v.ProjectID, graph, v.Document, previous)
+	if err != nil {
+		return err
+	}
+	gaps = append(gaps, extra...)
+	extra, err = resolveBusinessMapArchitectureRead(ctx, tx, v.ProjectID, graph, v.Document, previous)
+	if err != nil {
+		return err
+	}
+	v.Gaps = append(gaps, extra...)
+	v.ProvenanceHash, err = requestDigest(v.Provenance)
+	return err
+}
+
+// rebindPortableDiagramArchitecture points a document's architecture pins
+// at the local versions imported before it.
+func rebindPortableDiagramArchitecture(d *DiagramDocument, known map[DiagramPin]DiagramPin) error {
+	if d.Interactions != nil {
+		if err := replacePortableDiagramPin(d.Interactions.Architecture, known, DiagramPin{}, DiagramPin{}); err != nil {
+			return err
+		}
+	}
+	if d.BusinessMap != nil {
+		if err := replacePortableDiagramPin(d.BusinessMap.Architecture, known, DiagramPin{}, DiagramPin{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// rebindPortableProvenance points every provenance pin at its local version;
+// a pin naming the version being imported (old) becomes its new pin.
+func rebindPortableProvenance(ctx context.Context, tx *sql.Tx, v *DiagramVersion, known map[DiagramPin]DiagramPin, old DiagramPin) error {
 	if err := replacePortableDiagramPin(v.Provenance.Previous, known, DiagramPin{}, DiagramPin{}); err != nil {
 		return err
 	}
@@ -83,49 +125,43 @@ func (r *Repo) importPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *Diagr
 			}
 		}
 	}
-	if err := validatePortableProvenance(ctx, tx, v); err != nil {
-		return err
-	}
-	var previous *DiagramVersion
+	return nil
+}
+
+// portableDiagramPredecessor loads the version a save continues or a fork
+// copies; a save must also be a valid edit of it.
+func portableDiagramPredecessor(ctx context.Context, tx *sql.Tx, v *DiagramVersion) (*DiagramVersion, error) {
 	if v.Provenance.Previous != nil {
 		pin := v.Provenance.Previous
-		previous, err = loadDiagram(ctx, tx, v.ProjectID, pin.ID, pin.Version)
+		previous, err := loadDiagram(ctx, tx, v.ProjectID, pin.ID, pin.Version)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		if err := validateDiagramSave(previous, v.Document); err != nil {
-			return err
+			return nil, err
 		}
 		if err := rejectRetiredDiagramIDs(ctx, tx, v.ProjectID, v.Pin.ID, previous, v.Document); err != nil {
-			return err
+			return nil, err
 		}
-	} else if v.Provenance.Fork != nil {
+		return previous, nil
+	}
+	if v.Provenance.Fork != nil {
 		pin := v.Provenance.Fork.Source
-		previous, err = loadDiagram(ctx, tx, v.ProjectID, pin.ID, pin.Version)
-		if err != nil {
-			return err
-		}
+		return loadDiagram(ctx, tx, v.ProjectID, pin.ID, pin.Version)
 	}
-	// Only earlier, validated included versions supply historical membership.
-	// No unverified foreign provenance record enters this resolver.
-	gaps, err := resolveDiagramEvidence(ctx, graph, v.Document, previous)
-	if err != nil {
-		return err
-	}
-	extra, err := resolveInteractionArchitectureRead(ctx, tx, v.ProjectID, graph, v.Document, previous)
-	if err != nil {
-		return err
-	}
-	gaps = append(gaps, extra...)
-	extra, err = resolveBusinessMapArchitectureRead(ctx, tx, v.ProjectID, graph, v.Document, previous)
-	if err != nil {
-		return err
-	}
-	v.Gaps = append(gaps, extra...)
-	v.ProvenanceHash, err = requestDigest(v.Provenance)
-	return err
+	return nil, nil
 }
+
 func validatePortableProvenance(ctx context.Context, tx *sql.Tx, v *DiagramVersion) error {
+	if err := validatePortableProvenanceAction(ctx, tx, v); err != nil {
+		return err
+	}
+	return validatePortableProvenanceMembers(ctx, tx, v)
+}
+
+// validatePortableProvenanceAction checks the provenance format and that its
+// action agrees with the version number and its previous/fork links.
+func validatePortableProvenanceAction(ctx context.Context, tx *sql.Tx, v *DiagramVersion) error {
 	p := v.Provenance
 	if p.Format != "backend-diagram-provenance-v1" {
 		return invalid("provenance", "Unknown provenance version")
@@ -162,6 +198,14 @@ func validatePortableProvenance(ctx context.Context, tx *sql.Tx, v *DiagramVersi
 	default:
 		return invalid("provenance", "Unknown provenance action")
 	}
+	return nil
+}
+
+// validatePortableProvenanceMembers requires exactly one provenance entry per
+// semantic member, each event naming an exact historical version that holds
+// the member and agrees on author and time.
+func validatePortableProvenanceMembers(ctx context.Context, tx *sql.Tx, v *DiagramVersion) error {
+	p := v.Provenance
 	members := diagramSemanticRows(v.Document)
 	seen := map[string]bool{}
 	member := func(pin DiagramPin, id string) (*DiagramVersion, error) {
