@@ -192,7 +192,7 @@ func runOrdersCompatibility(t *testing.T, variant, drop string) *replay.Run {
 		t.Fatal(err)
 	}
 	s := replay.NewService(replay.NewRepo(db), graphs, []replay.Target{{TargetInfo: replay.TargetInfo{ID: "compatibility", Version: 1, IsolationID: isolation}, Transport: transport, ConfigFingerprint: transport.(interface{ ConfigHash() string }).ConfigHash()}})
-	s.ActorAllowed = func(_ context.Context, actor string) bool { return actor == "compatibility-actor" }
+	s.ActorAllowed = func(_ context.Context, actor string) (bool, error) { return actor == "compatibility-actor", nil }
 	if err = s.RecoverInterrupted(t.Context()); err != nil {
 		t.Fatal(err)
 	}

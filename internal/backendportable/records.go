@@ -247,7 +247,10 @@ func decodeModel(records []Record, manifest Manifest) (*bm.PortableModel, error)
 				}
 				var proof bm.Evidence
 				if err := json.Unmarshal([]byte(v.Raw), &proof, json.RejectUnknownMembers(true)); err != nil {
-					return nil, err
+					// Review 2026-10-06, F69: the envelope hash covers whatever the
+					// exporter wrote, so an empty or unknown raw proof reaches here
+					// intact; the bare decoder error was a logged 500.
+					return nil, fault(422, "Invalid raw evidence proof: "+err.Error())
 				}
 				a, _ := DocumentHash(proof)
 				b, _ := DocumentHash(*v.Evidence)

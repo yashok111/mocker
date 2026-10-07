@@ -2,6 +2,7 @@ package admin
 
 import (
 	"bytes"
+	"context"
 	"encoding/json/v2"
 	"errors"
 	"io"
@@ -23,6 +24,18 @@ func (s *Server) backendError(w http.ResponseWriter, err error) {
 		httpx.JSON(w, fault.Status, struct {
 			Error *backendmodel.FaultError `json:"error"`
 		}{fault})
+		return
+	}
+	// Review 2026-10-06, F176: a request that was cancelled or ran out of
+	// time (often while queued behind the single writer, where store.Write
+	// wraps it as "begin: context canceled") is not a server fault. It was
+	// logged at ERROR and answered as a non-retryable 500, which polluted the
+	// log and told a client that only timed out not to try again. A client
+	// that disconnected never reads this answer; one that hit a deadline does.
+	// The precedent is stepRepositoryError's execution_cancelled.
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		s.log.Info("backend project request ended early", "err", err)
+		httpx.JSON(w, 503, map[string]any{"error": backendmodel.FaultError{Code: "backend_request_cancelled", Message: "Request was cancelled or timed out before the operation finished", Retryable: true}})
 		return
 	}
 	s.log.Error("backend project", "err", err)

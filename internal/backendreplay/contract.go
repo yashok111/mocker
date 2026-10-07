@@ -186,7 +186,10 @@ func ValidateDiagramBindings(ctx context.Context, r DiagramReader, pid string, v
 			return e
 		}
 		if s == nil || s.Pin != in.Pin || s.TargetHash != v.TargetHash || !reflect.DeepEqual(s.Target, v.Target) || s.Truncated || len(s.Gaps) > 0 || (expectedScopeHash != "" && s.ScopeHash != expectedScopeHash) {
-			return fmt.Errorf("incompatible or incomplete diagram scope")
+			// Review 2026-10-06, F1: a plain error here was answered as a
+			// logged 500 backend_internal although narrowing the scope is the
+			// caller's fix; it is the same class as "Target pin mismatch".
+			return conflictReplay("Incompatible or incomplete diagram scope")
 		}
 		return nil
 	}

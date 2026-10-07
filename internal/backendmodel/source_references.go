@@ -3,6 +3,7 @@ package backendmodel
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -88,8 +89,26 @@ func sourceCommandPayload(c ImportCommand) (SourceAssertionPayload, error) {
 	return p, nil
 }
 
+// decodeSourceMember decodes one caller-supplied source6 member and answers a
+// decoder failure as a 422 at the member's path. Review 2026-10-06, F49: these
+// members are jsontext.Value on the wire, so no admin shape check sees them,
+// and the raw decoder error ("unexpected end of JSON input" for a facet
+// without its required evidenceKeys) reached backendError as a logged 500
+// backend_internal with no path. A FaultError a custom UnmarshalJSON already
+// returned (ImportRecordRef) is kept as it is.
+func decodeSourceMember(path string, raw jsontext.Value, out any) error {
+	err := json.Unmarshal(raw, out)
+	if err == nil {
+		return nil
+	}
+	if fault, ok := errors.AsType[*FaultError](err); ok {
+		return fault
+	}
+	return semantic(path, "Source member is missing or does not match the source6 schema")
+}
+
 func (n *sourcePayloadNormalizer) reference(raw jsontext.Value, site SourceReferenceSite) (jsontext.Value, error) {
-	if err := json.Unmarshal(raw, &site.Ref); err != nil {
+	if err := decodeSourceMember(site.Path, raw, &site.Ref); err != nil {
 		return nil, err
 	}
 	target, err := n.resolve(site)
@@ -168,7 +187,7 @@ func (n *sourcePayloadNormalizer) convert(m map[string]jsontext.Value, member so
 	}
 	if member.array {
 		var values []jsontext.Value
-		if err := json.Unmarshal(value, &values); err != nil {
+		if err := decodeSourceMember(site.Path, value, &values); err != nil {
 			return err
 		}
 		for i := range values {
@@ -299,7 +318,7 @@ func (n *sourcePayloadNormalizer) mappingValue(
 func (n *sourcePayloadNormalizer) normalizeMapping() error {
 	attrs := n.payload.Attributes
 	var sources []jsontext.Value
-	if err := json.Unmarshal(attrs["sources"], &sources); err != nil {
+	if err := decodeSourceMember("/attributes/sources", attrs["sources"], &sources); err != nil {
 		return err
 	}
 	for i := range sources {
@@ -373,7 +392,7 @@ func (n *sourcePayloadNormalizer) normalizeFacets() error {
 		if err := n.normalizeFacetReferences(m, path, key); err != nil {
 			return err
 		}
-		if err := n.normalizeFacetProof(m); err != nil {
+		if err := n.normalizeFacetProof(m, path); err != nil {
 			return err
 		}
 		facets[key], _ = json.Marshal(m)
@@ -405,7 +424,7 @@ func (n *sourcePayloadNormalizer) normalizeFacetReferences(m map[string]jsontext
 			continue
 		}
 		var values []jsontext.Value
-		if err := json.Unmarshal(raw, &values); err != nil {
+		if err := decodeSourceMember(path+"/"+collection, raw, &values); err != nil {
 			return err
 		}
 		property := TypedSourcePropertySelector{Kind: "relational_facet", FacetKey: key, Group: collection}
@@ -454,9 +473,11 @@ func (n *sourcePayloadNormalizer) normalizeFacetEntry(entry map[string]jsontext.
 	return nil
 }
 
-func (n *sourcePayloadNormalizer) normalizeFacetProof(m map[string]jsontext.Value) error {
+func (n *sourcePayloadNormalizer) normalizeFacetProof(m map[string]jsontext.Value, path string) error {
 	var keys []string
-	if err := json.Unmarshal(m["evidenceKeys"], &keys); err != nil {
+	// A missing evidenceKeys decodes as empty input and fails here, which is
+	// how a facet without its required proof is refused.
+	if err := decodeSourceMember(path+"/evidenceKeys", m["evidenceKeys"], &keys); err != nil {
 		return err
 	}
 	ids := []string{}
