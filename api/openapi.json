@@ -14625,7 +14625,8 @@
                 "diagram-view-v1",
                 "artifact-context-v3",
                 "backend-portable-v1",
-                "backend-replay-v1"
+                "backend-replay-v1",
+                "backend-observations-v1"
               ]
             }
           },
