@@ -75,6 +75,10 @@ Decided, behaviour kept (one line each):
 - **F157:** `inferFingerprint` stays accepted for backward compatibility and is
   marked deprecated; no node carries a query fingerprint, so it never matches
   (`api/openapi.json`, `correlation.md`).
+- **F168:** `buildReplay` still builds a transport for every
+  `MOCKER_TEST_TARGETS` entry at startup and refuses to start on the first
+  error; connections pin an IP at startup (`.env.example`), so a target that
+  does not resolve is a configuration error to see at once, not a run to skip.
 
 ## HTTP record proxy (2026-10-02)
 
