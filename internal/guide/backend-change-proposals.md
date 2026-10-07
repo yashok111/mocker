@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:888f13728117c684f3e47ab9c7030d1242dba8370a7438f710faa622ed3bcc33"
-  manifestHash: "sha256:888f13728117c684f3e47ab9c7030d1242dba8370a7438f710faa622ed3bcc33"
+  guideSetId: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
+  manifestHash: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
 ---
 
 # Prepare a full graph proposal
@@ -35,7 +35,7 @@ Every command includes a new canonical commandId and a nonblank reason. Keep com
 | remove_node / remove_edge | id |
 | upsert_edge | id, kind, from, to, complete attributes |
 | alter_column | columnId, facetKey, change: native_type / nullable / default typed complete group |
-| alter_constraint / alter_index | action and exact object/facet; create additionally name/tableId/definition, update definition, remove omits those groups |
+| alter_constraint / alter_index | action and exact object/facet; create additionally name/tableId/definition, update definition, remove omits those groups. update writes the definition under facetKey and ADDS that facet when the object does not carry it yet (remove and alter_column refuse an absent facet), so read the object's facetKeys first |
 | edit_flow_step | stepId, complete attributes |
 | edit_branch | edgeId, kind next/branch/error/returns, from, to, complete attributes |
 | set_field_mapping | mappingId, parentId, ordered sources, destination, transform, analysisStatus, gaps; optional typed transport/description |

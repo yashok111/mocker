@@ -311,7 +311,13 @@ Strict commands (every command requires commandId and nonblank reason):
   columnPairs:[{fromColumnId,toColumnId}],updateAction,deleteAction,matchType,
   deferrable,initiallyDeferred}`; update replaces name/tableId with constraintId.
   Source and target tables/columns must belong to the pinned selection. Pair order
-  is meaningful. Restrict dialect features to actual declared PostgreSQL/SQLite
+  is meaningful: admission requires the target columns, in pair order, to be a
+  complete PK/UNIQUE key of the target table in that key's exact column order
+  (MySQL/InnoDB requires it; PostgreSQL/SQLite do not). With a complete key
+  inventory a reordered pair list is the diagnostic "Ordered target columns do
+  not match a selected complete global unique key" and no candidateHash, so
+  order the pairs by the target key. Cardinality inference above is looser on
+  purpose: a covering key in any order proves target max one. Restrict dialect features to actual declared PostgreSQL/SQLite
   support; preview validates the final batch, including SET NULL/nullability.
 - `{type:"set_criteria",criteria:[{key,kind,targetIds,description}]}` replaces
   authored criteria only. Allowed authored kinds are existing_data, writers,

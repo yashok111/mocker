@@ -441,7 +441,7 @@ REST paths are `/api/backend-projects/{projectId}/analyses` (POST/GET), `/{jobId
 
 ## Static diagnostic findings (verify1)
 
-`start_backend_analysis` additionally accepts kind `diagnostics`, exact source/full proposal target and optional exact `diagramScope`. `list_backend_findings {projectId,jobId,resultVersion,limit?,cursor?}` reads immutable occurrences with separate live review history. `review_backend_finding {projectId,fingerprint,expectedVersion,basisHash,status,reason,idempotencyKey,resolutionAnalysis?}` mutates review only. Resolved requires exact completed scoped absence proof; unknown is insufficient. Replay identical review requests after lost replies.
+`start_backend_analysis` additionally accepts kind `diagnostics`, exact source/full proposal target and optional exact `diagramScope`. `list_backend_findings {projectId,jobId,resultVersion,limit?,cursor?}` reads immutable occurrences with separate live review history. `review_backend_finding {projectId,fingerprint,expectedVersion,basisHash,status,reason,idempotencyKey,resolutionAnalysis?}` mutates review only. Resolved requires exact completed scoped absence proof over a revision of this project no older than the occurrence's (else 422 `backend_finding_recheck_target`); unknown is insufficient. Replay identical review requests after lost replies.
 
 ### B5.2 draft materialization, portable transfer and exact SVG
 

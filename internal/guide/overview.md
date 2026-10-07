@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:888f13728117c684f3e47ab9c7030d1242dba8370a7438f710faa622ed3bcc33"
-  manifestHash: "sha256:888f13728117c684f3e47ab9c7030d1242dba8370a7438f710faa622ed3bcc33"
+  guideSetId: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
+  manifestHash: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
 ---
 
 # mocker

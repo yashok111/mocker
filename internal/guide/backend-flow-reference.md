@@ -235,8 +235,16 @@ the full mapping and destination for pinned inspector navigation; starting an
 independent query there does not prove a through path. Known partial/inferred
 claims and redacted known transforms may expand with propagated review/status.
 
-Traversal bounds:5000visited full values,5000examined mappings,20000incidences;
-maxDepth counts mappings. Response truncation reasons value_limit,mapping_limit,
+Bounds:5000visited full values,5000mappings,20000incidences; maxDepth counts
+mappings. On source4 the mapping and incidence bounds count traversal work. On
+source5 and composed revisions they are index-construction limits: the query
+first indexes the revision's field_mapping nodes in node order and stops at
+5000 mappings or 20000 incidences (each mapping counts its sources plus one),
+whether or not the seed reaches them. A revision past either limit answers
+truncated:true with truncationReasons mapping_limit or reference_limit even
+when the traversal examined no mapping (examinedMappingCount may be 0), and a
+mapping beyond the cut is never returned; the result is not evidence of
+absence. Response truncation reasons value_limit,mapping_limit,
 reference_limit,depth_limit are separate from pagination. At depth limit only
 values with further mappings cause a boundary/truncation; terminal values and
 constants remain terminal. Cycle-safe traversal does not unroll execution.
@@ -305,6 +313,15 @@ exact UTF-8 raw immutable `document` bytes returned by the snapshot API. The
 legacy hydrated revision/editor may insert identity extensions; its JSON is not
 the raw hash input. `objectHash` hashes the selected authored value canonically,
 retaining extensions and authored `$ref`. Never substitute the latest snapshot.
+The API-artifact hash domain (source content/semantic anchors, API object hashes,
+binding identities, API/editor semantic and candidate hashes) hashes RFC 8785 canonical
+JSON, which writes every number as an IEEE-754 double: 1, 1.0 and 1e0 hash alike,
+and so do integers past 2^53 that round to one double (9007199254740993 and
+9007199254740992). This is deliberate and stays: every stored artifact context
+and portable export depends on that hash input. Stored bytes keep exact number
+lexemes; only the hash input is canonical, so equal hashes do not prove two large
+integers equal. Compare the stored values. Raw `contentHash` and the editor
+backend-editor-object-v1 hash keep exact numeric spellings.
 
 For a source HTTP operation use exactly `{objectKey}`: the opaque operation key
 from the owner's identity projection, not operationId, method/path or workspace
