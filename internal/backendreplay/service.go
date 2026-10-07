@@ -51,6 +51,7 @@ func NewService(repo *Repo, graphs *backendmodel.Repo, targets []Target) *Servic
 	}
 	return s
 }
+
 // actorID parses an account id. A malformed actor is a verdict (no such
 // account), never a failed lookup.
 func actorID(actor string) (int64, bool) {
