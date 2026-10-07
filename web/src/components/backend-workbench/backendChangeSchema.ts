@@ -2147,7 +2147,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       kind: {
         type: "string",
-        enum: ["diff", "impact", "diagnostics"],
+        enum: ["diff", "impact", "diagnostics", "scenario_measurement", "scenario_comparison"],
       },
       fromRevisionId: {
         type: "string",
@@ -2186,10 +2186,24 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       observationMode: {
         type: "string",
-        const: "none",
+        enum: ["none", "pinned"],
       },
       diagramScope: {
         $ref: "#/components/schemas/BackendDiagramScope",
+      },
+      observationPins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendObservationAnalysisPin",
+        },
+        maxItems: 20,
+      },
+      measurements: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendMeasurementInput",
+        },
+        maxItems: 2,
       },
     },
     required: [
@@ -2243,7 +2257,16 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       kind: {
         type: "string",
-        enum: ["diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"],
+        enum: [
+          "diff",
+          "impact",
+          "change_package",
+          "conformance",
+          "endpoint_review",
+          "diagnostics",
+          "scenario_measurement",
+          "scenario_comparison",
+        ],
       },
       status: {
         type: "string",
@@ -2754,6 +2777,8 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           "desired",
           "artifact_object",
           "diagnostic",
+          "diagram",
+          "observation",
         ],
       },
       id: {
@@ -3014,6 +3039,18 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           {
             $ref: "#/components/schemas/BackendAnalysisEndpointCheckDetail",
           },
+          {
+            $ref: "#/components/schemas/BackendScenarioMeasurements",
+          },
+          {
+            $ref: "#/components/schemas/BackendMeasurementComparison",
+          },
+          {
+            $ref: "#/components/schemas/BackendDiagramObserved",
+          },
+          {
+            $ref: "#/components/schemas/BackendObservedImpact",
+          },
         ],
       },
     },
@@ -3071,6 +3108,8 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
   },
   BackendAnalysisScope: {
     type: "object",
+    description:
+      "Copied into every result manifest. On start the normalized scope must serialize to at most 16 KiB, otherwise 413 backend_analysis_scope_limit.",
     additionalProperties: false,
     properties: {
       changedIds: {
@@ -3412,6 +3451,148 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         pattern: "^[!-~]+$",
       },
     },
+    required: ["kind", "fromRevisionId", "target", "scope", "limits", "idempotencyKey"],
+  },
+  BackendAnalysisStartMeasurement: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["scenario_measurement", "scenario_comparison"],
+      },
+      beforeRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      afterRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      observationPins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendObservationAnalysisPin",
+        },
+        minItems: 1,
+        maxItems: 20,
+        uniqueItems: true,
+      },
+      measurements: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendMeasurementInput",
+        },
+        minItems: 1,
+        maxItems: 2,
+      },
+      diagramScope: {
+        $ref: "#/components/schemas/BackendDiagramScopeInput",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
+    required: [
+      "kind",
+      "beforeRevisionId",
+      "observationPins",
+      "measurements",
+      "limits",
+      "idempotencyKey",
+    ],
+    allOf: [
+      {
+        if: {
+          properties: {
+            kind: {
+              const: "scenario_measurement",
+            },
+          },
+        },
+        then: {
+          not: {
+            required: ["afterRevisionId"],
+          },
+          properties: {
+            measurements: {
+              maxItems: 1,
+            },
+          },
+        },
+        else: {
+          required: ["afterRevisionId"],
+          not: {
+            required: ["diagramScope"],
+          },
+          properties: {
+            measurements: {
+              minItems: 2,
+            },
+          },
+        },
+      },
+    ],
+  },
+  BackendAnalysisStartObservedImpact: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["impact"],
+      },
+      fromRevisionId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      target: {
+        $ref: "#/components/schemas/BackendAnalysisTarget",
+      },
+      scope: {
+        $ref: "#/components/schemas/BackendAnalysisScope",
+      },
+      limits: {
+        $ref: "#/components/schemas/BackendAnalysisLimits",
+      },
+      observationMode: {
+        type: "string",
+        const: "pinned",
+      },
+      observationPins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendObservationAnalysisPin",
+        },
+        minItems: 1,
+        maxItems: 20,
+        uniqueItems: true,
+      },
+      idempotencyKey: {
+        type: "string",
+        minLength: 1,
+        maxLength: 128,
+        pattern: "^[!-~]+$",
+      },
+    },
     required: [
       "kind",
       "fromRevisionId",
@@ -3420,6 +3601,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       "limits",
       "observationMode",
       "idempotencyKey",
+      "observationPins",
     ],
   },
   BackendAnalysisStartPackage: {
@@ -4301,6 +4483,78 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       selector: {
         $ref: "#/components/schemas/BackendAPIArtifactSelector",
+      },
+    },
+  },
+  BackendArtifactContextV3: {
+    type: "object",
+    additionalProperties: false,
+    required: ["documentVersion", "sourceContentHash", "sourceSemanticHash", "groups"],
+    properties: {
+      documentVersion: {
+        type: "string",
+        enum: ["artifact-context-v3"],
+      },
+      sourceContentHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+      sourceSemanticHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+      groups: {
+        type: "array",
+        maxItems: 20,
+        items: {
+          $ref: "#/components/schemas/BackendArtifactNamespaceGroup",
+        },
+      },
+    },
+  },
+  BackendArtifactNamespace: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      scope: {
+        type: "string",
+        enum: ["local", "foreign"],
+      },
+      installationId: {
+        type: "string",
+        format: "uuid",
+      },
+    },
+    required: ["scope", "installationId"],
+  },
+  BackendArtifactNamespaceGroup: {
+    type: "object",
+    additionalProperties: false,
+    required: ["namespace", "pins", "apiBindings", "editorBindings"],
+    properties: {
+      namespace: {
+        $ref: "#/components/schemas/BackendArtifactNamespace",
+      },
+      pins: {
+        type: "array",
+        maxItems: 20,
+        items: {
+          $ref: "#/components/schemas/BackendArtifactPin",
+        },
+      },
+      apiBindings: {
+        type: "array",
+        maxItems: 200,
+        items: {
+          $ref: "#/components/schemas/BackendAPIArtifactBinding",
+        },
+      },
+      editorBindings: {
+        type: "array",
+        maxItems: 200,
+        items: {
+          $ref: "#/components/schemas/EditorBinding",
+        },
       },
     },
   },
@@ -5318,6 +5572,48 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           },
         },
         required: ["key", "required", "description", "kind", "targetIds"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          key: {
+            type: "string",
+            minLength: 1,
+            maxLength: 200,
+          },
+          required: {
+            type: "boolean",
+          },
+          description: {
+            type: "string",
+            minLength: 1,
+            maxLength: 4096,
+          },
+          kind: {
+            type: "string",
+            enum: ["artifact_object_matches_v3"],
+          },
+          selector: {
+            $ref: "#/components/schemas/BackendAPIArtifactSelector",
+          },
+          expectedHash: {
+            type: "string",
+            pattern: "^[a-f0-9]{64}$",
+          },
+          namespacedArtifact: {
+            $ref: "#/components/schemas/BackendNamespacedArtifactPin",
+          },
+        },
+        required: [
+          "key",
+          "required",
+          "description",
+          "kind",
+          "namespacedArtifact",
+          "selector",
+          "expectedHash",
+        ],
       },
     ],
   },
@@ -10803,6 +11099,9 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       rebase: {
         $ref: "#/components/schemas/BackendChangeRebaseAction",
       },
+      importOrigin: {
+        $ref: "#/components/schemas/BackendPortableAttribution",
+      },
     },
     required: [
       "id",
@@ -11478,6 +11777,24 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           },
         },
         required: ["kind", "artifact", "jsonPointer"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["artifact_v3"],
+          },
+          namespacedArtifact: {
+            $ref: "#/components/schemas/BackendNamespacedArtifactPin",
+          },
+          jsonPointer: {
+            type: "string",
+            enum: [""],
+          },
+        },
+        required: ["kind", "namespacedArtifact", "jsonPointer"],
       },
     ],
   },
@@ -12707,6 +13024,62 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     },
     required: ["ref", "origin", "targetHash"],
   },
+  BackendDiagramObserved: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      policy: {
+        type: "string",
+        const: "backend-observed-sequence-v1",
+      },
+      diagramScope: {
+        $ref: "#/components/schemas/BackendDiagramScope",
+      },
+      pins: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendObservationAnalysisPin",
+        },
+      },
+      measurements: {
+        $ref: "#/components/schemas/BackendScenarioMeasurements",
+      },
+      elements: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendObservedElement",
+        },
+      },
+      relations: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendObservedRelation",
+        },
+      },
+      gaps: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      limitations: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: [
+      "policy",
+      "diagramScope",
+      "pins",
+      "measurements",
+      "elements",
+      "relations",
+      "gaps",
+      "limitations",
+    ],
+  },
   BackendDiagramPin: {
     type: "object",
     additionalProperties: false,
@@ -12808,6 +13181,25 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           },
         },
         required: ["kind", "locator", "rowId"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["kind", "namespacedLocator", "rowId"],
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["namespaced_artifact"],
+          },
+          namespacedLocator: {
+            $ref: "#/components/schemas/BackendNamespacedDiagramLocator",
+          },
+          rowId: {
+            type: "string",
+            minLength: 1,
+            maxLength: 4096,
+          },
+        },
       },
     ],
     discriminator: {
@@ -13599,6 +13991,9 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
             },
           },
         },
+      },
+      {
+        $ref: "#/components/schemas/BackendArtifactContextV3",
       },
     ],
   },
@@ -17292,6 +17687,246 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendMeasuredMetric: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      unit: {
+        type: "string",
+        enum: ["count", "bytes", "ns"],
+      },
+      value: {
+        type: ["string", "null"],
+      },
+      p50: {
+        type: ["string", "null"],
+      },
+      p95: {
+        type: ["string", "null"],
+      },
+      samples: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendMetricSample",
+        },
+      },
+      sampleCount: {
+        type: "integer",
+        minimum: 0,
+      },
+      missingSamples: {
+        type: "integer",
+        minimum: 0,
+      },
+      basis: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+          },
+          basis: {
+            type: "string",
+          },
+          scope: {
+            type: "string",
+          },
+        },
+        required: ["kind"],
+      },
+      limitations: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: [
+      "unit",
+      "value",
+      "p50",
+      "p95",
+      "samples",
+      "sampleCount",
+      "missingSamples",
+      "basis",
+      "limitations",
+    ],
+  },
+  BackendMeasurementComparison: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      before: {
+        $ref: "#/components/schemas/BackendScenarioMeasurements",
+      },
+      after: {
+        $ref: "#/components/schemas/BackendScenarioMeasurements",
+      },
+      deltas: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sql_count: {
+            type: ["string", "null"],
+          },
+          external_call_count: {
+            type: ["string", "null"],
+          },
+          retry_count: {
+            type: ["string", "null"],
+          },
+          request_bytes: {
+            type: ["string", "null"],
+          },
+          response_bytes: {
+            type: ["string", "null"],
+          },
+          latency_ns: {
+            type: ["string", "null"],
+          },
+        },
+        required: [
+          "sql_count",
+          "external_call_count",
+          "retry_count",
+          "request_bytes",
+          "response_bytes",
+          "latency_ns",
+        ],
+      },
+      conditionDifferences: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      limitations: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: ["before", "after", "deltas", "conditionDifferences", "limitations"],
+  },
+  BackendMeasurementCondition: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      pin: {
+        $ref: "#/components/schemas/BackendObservationAnalysisPin",
+      },
+      context: {
+        $ref: "#/components/schemas/ObservationObservationContext",
+      },
+      mockedDependencies: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+      sourceCompatible: {
+        type: "boolean",
+      },
+      correlationGaps: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: ["pin", "context", "mockedDependencies", "sourceCompatible", "correlationGaps"],
+  },
+  BackendMeasurementInput: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      side: {
+        type: "string",
+        enum: ["before", "after"],
+      },
+      executionIds: {
+        type: "array",
+        items: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+        },
+        minItems: 1,
+        maxItems: 1000,
+        uniqueItems: true,
+      },
+      rootSpanIds: {
+        type: "array",
+        items: {
+          type: "string",
+          minLength: 1,
+          maxLength: 256,
+        },
+        maxItems: 1000,
+        uniqueItems: true,
+      },
+      basis: {
+        $ref: "#/components/schemas/BackendMetricBasis",
+      },
+      policy: {
+        type: "string",
+        const: "backend-scenario-measures-v1",
+      },
+    },
+    required: ["side", "executionIds", "rootSpanIds", "basis", "policy"],
+  },
+  BackendMetricBasis: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            const: "spans",
+            type: "string",
+          },
+        },
+        required: ["kind"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            const: "measurements",
+            type: "string",
+          },
+          basis: {
+            type: "string",
+            minLength: 1,
+            maxLength: 256,
+          },
+          scope: {
+            type: "string",
+            minLength: 1,
+            maxLength: 256,
+          },
+        },
+        required: ["kind", "basis", "scope"],
+      },
+    ],
+  },
+  BackendMetricSample: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      executionId: {
+        type: "string",
+      },
+      value: {
+        type: "string",
+        pattern: "^[0-9]+$",
+      },
+    },
+    required: ["executionId", "value"],
+  },
   BackendMigrationCandidateTarget: {
     type: "object",
     additionalProperties: false,
@@ -17403,6 +18038,32 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
     properties: {
       description: {
         type: ["string", "null"],
+      },
+    },
+  },
+  BackendNamespacedArtifactPin: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      namespace: {
+        $ref: "#/components/schemas/BackendArtifactNamespace",
+      },
+      pin: {
+        $ref: "#/components/schemas/BackendArtifactPin",
+      },
+    },
+    required: ["namespace", "pin"],
+  },
+  BackendNamespacedDiagramLocator: {
+    type: "object",
+    additionalProperties: false,
+    required: ["namespace", "locator"],
+    properties: {
+      namespace: {
+        $ref: "#/components/schemas/BackendArtifactNamespace",
+      },
+      locator: {
+        $ref: "#/components/schemas/ArtifactProjectionLocator",
       },
     },
   },
@@ -18526,6 +19187,162 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     ],
   },
+  BackendObservationAnalysisPin: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      observationSetId: {
+        type: "string",
+        format: "uuid",
+        pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+        not: {
+          const: "00000000-0000-0000-0000-000000000000",
+        },
+      },
+      version: {
+        type: "integer",
+        minimum: 1,
+      },
+      contentHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      correlationVersion: {
+        type: "integer",
+        minimum: 1,
+      },
+      correlationHash: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      side: {
+        type: "string",
+        enum: ["before", "after"],
+      },
+    },
+    required: [
+      "observationSetId",
+      "version",
+      "contentHash",
+      "correlationVersion",
+      "correlationHash",
+      "side",
+    ],
+  },
+  BackendObservedElement: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+        pattern: "^[a-f0-9]{64}$",
+      },
+      recordId: {
+        type: "string",
+      },
+      executionId: {
+        type: "string",
+      },
+      traceId: {
+        type: "string",
+      },
+      spanId: {
+        type: "string",
+      },
+      selectors: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendDiagramScopeSelector",
+        },
+      },
+      basis: {
+        type: "string",
+        enum: ["explicit", "source_mapping", "unresolved"],
+      },
+    },
+    required: ["id", "recordId", "executionId", "traceId", "spanId", "selectors", "basis"],
+  },
+  BackendObservedImpact: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      pin: {
+        $ref: "#/components/schemas/BackendObservationAnalysisPin",
+      },
+      recordId: {
+        type: "string",
+      },
+      executionId: {
+        type: "string",
+      },
+      ref: {
+        $ref: "#/components/schemas/BackendDiagramRef",
+      },
+      certainty: {
+        type: "string",
+        enum: ["confirmed", "possible"],
+      },
+      method: {
+        type: "string",
+      },
+      limitations: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: ["pin", "recordId", "executionId", "ref", "certainty", "method", "limitations"],
+  },
+  BackendObservedRelation: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      to: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+        enum: ["containment", "association", "event_precedence"],
+      },
+      proof: {
+        $ref: "#/components/schemas/ObservationLinkProof",
+      },
+      from: {
+        type: "string",
+      },
+    },
+    required: ["from", "to", "kind"],
+  },
+  BackendPortableAttribution: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      installationId: {
+        type: "string",
+        format: "uuid",
+      },
+      projectId: {
+        type: "string",
+        format: "uuid",
+      },
+      id: {
+        type: "string",
+        format: "uuid",
+      },
+      version: {
+        type: "integer",
+        format: "int64",
+        minimum: 1,
+        maximum: 9223372036854776000,
+      },
+      contentHash: {
+        type: "string",
+        pattern: "^[0-9a-f]{64}$",
+      },
+    },
+    required: ["installationId", "projectId", "id", "version", "contentHash"],
+  },
   BackendProposalReadTarget: {
     type: "object",
     additionalProperties: false,
@@ -19061,6 +19878,94 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         type: ["string", "null"],
       },
     },
+  },
+  BackendScenarioMeasurements: {
+    type: "object",
+    additionalProperties: false,
+    properties: {
+      policy: {
+        type: "string",
+        const: "backend-scenario-measures-v1",
+      },
+      input: {
+        $ref: "#/components/schemas/BackendMeasurementInput",
+      },
+      conditions: {
+        type: "array",
+        items: {
+          $ref: "#/components/schemas/BackendMeasurementCondition",
+        },
+      },
+      metrics: {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          sql_count: {
+            $ref: "#/components/schemas/BackendMeasuredMetric",
+          },
+          external_call_count: {
+            $ref: "#/components/schemas/BackendMeasuredMetric",
+          },
+          retry_count: {
+            $ref: "#/components/schemas/BackendMeasuredMetric",
+          },
+          request_bytes: {
+            $ref: "#/components/schemas/BackendMeasuredMetric",
+          },
+          response_bytes: {
+            $ref: "#/components/schemas/BackendMeasuredMetric",
+          },
+          latency_ns: {
+            $ref: "#/components/schemas/BackendMeasuredMetric",
+          },
+        },
+        required: [
+          "sql_count",
+          "external_call_count",
+          "retry_count",
+          "request_bytes",
+          "response_bytes",
+          "latency_ns",
+        ],
+      },
+      sampledExecutions: {
+        type: "integer",
+        minimum: 0,
+      },
+      failedExecutions: {
+        type: "integer",
+        minimum: 0,
+      },
+      skippedExecutions: {
+        type: "integer",
+        minimum: 0,
+      },
+      unknownExecutions: {
+        type: "integer",
+        minimum: 0,
+      },
+      populationRate: {
+        type: "null",
+      },
+      gaps: {
+        type: "array",
+        items: {
+          type: "string",
+        },
+      },
+    },
+    required: [
+      "policy",
+      "input",
+      "conditions",
+      "metrics",
+      "sampledExecutions",
+      "failedExecutions",
+      "skippedExecutions",
+      "unknownExecutions",
+      "populationRate",
+      "gaps",
+    ],
   },
   BackendServiceAttributes: {
     type: "object",
@@ -21225,6 +22130,305 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  ObservationEnvironment: {
+    additionalProperties: false,
+    properties: {
+      id: {
+        type: "string",
+      },
+      kind: {
+        type: "string",
+        enum: ["test", "staging", "production", "unknown"],
+      },
+    },
+    required: ["id", "kind"],
+    type: "object",
+  },
+  ObservationInputContext: {
+    additionalProperties: false,
+    properties: {
+      description: {
+        type: "string",
+      },
+      size: {
+        anyOf: [
+          {
+            format: "int64",
+            type: "integer",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      unit: {
+        anyOf: [
+          {
+            type: "string",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+    },
+    required: ["description", "size", "unit"],
+    type: "object",
+  },
+  ObservationInstrumentation: {
+    additionalProperties: false,
+    properties: {
+      bytes: {
+        type: "string",
+        enum: ["complete", "partial", "unknown"],
+      },
+      externalCalls: {
+        type: "string",
+        enum: ["complete", "partial", "unknown"],
+      },
+      latency: {
+        type: "string",
+        enum: ["complete", "partial", "unknown"],
+      },
+      limitations: {
+        items: {
+          type: "string",
+        },
+        type: "array",
+      },
+      retries: {
+        type: "string",
+        enum: ["complete", "partial", "unknown"],
+      },
+      sql: {
+        type: "string",
+        enum: ["complete", "partial", "unknown"],
+      },
+    },
+    required: ["sql", "externalCalls", "retries", "bytes", "latency", "limitations"],
+    type: "object",
+  },
+  ObservationLinkProof: {
+    additionalProperties: false,
+    properties: {
+      messageIdHash: {
+        type: "string",
+      },
+      predecessorEvent: {
+        type: "string",
+        enum: ["send"],
+      },
+      profile: {
+        type: "string",
+        enum: ["orders-message-causal-v1"],
+      },
+      successorEvent: {
+        type: "string",
+        enum: ["receive"],
+      },
+    },
+    required: ["profile", "messageIdHash", "predecessorEvent", "successorEvent"],
+    type: "object",
+  },
+  ObservationObservationContext: {
+    additionalProperties: false,
+    properties: {
+      configurationHash: {
+        type: "string",
+      },
+      environment: {
+        $ref: "#/components/schemas/ObservationEnvironment",
+      },
+      input: {
+        $ref: "#/components/schemas/ObservationInputContext",
+      },
+      instrumentation: {
+        $ref: "#/components/schemas/ObservationInstrumentation",
+      },
+      producer: {
+        $ref: "#/components/schemas/ObservationProducer",
+      },
+      sampling: {
+        $ref: "#/components/schemas/ObservationSampling",
+      },
+      scenario: {
+        anyOf: [
+          {
+            $ref: "#/components/schemas/ObservationScenario",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      source: {
+        $ref: "#/components/schemas/ObservationSource",
+      },
+      window: {
+        $ref: "#/components/schemas/ObservationWindow",
+      },
+    },
+    required: [
+      "producer",
+      "source",
+      "environment",
+      "window",
+      "configurationHash",
+      "input",
+      "sampling",
+      "instrumentation",
+      "scenario",
+    ],
+    type: "object",
+  },
+  ObservationProducer: {
+    additionalProperties: false,
+    properties: {
+      adapterVersion: {
+        type: "string",
+      },
+      id: {
+        type: "string",
+      },
+      schemaVersion: {
+        type: "string",
+      },
+    },
+    required: ["id", "schemaVersion", "adapterVersion"],
+    type: "object",
+  },
+  ObservationSampling: {
+    additionalProperties: false,
+    properties: {
+      kind: {
+        type: "string",
+        enum: ["all", "head", "tail", "unknown"],
+      },
+      probability: {
+        anyOf: [
+          {
+            type: "string",
+          },
+          {
+            type: "null",
+          },
+        ],
+      },
+      reason: {
+        type: "string",
+      },
+    },
+    required: ["kind", "probability", "reason"],
+    type: "object",
+  },
+  ObservationScenario: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["design_scenario"],
+          },
+          id: {
+            type: "string",
+          },
+          revisionId: {
+            type: "string",
+          },
+          contentHash: {
+            type: "string",
+          },
+        },
+        required: ["kind", "id", "revisionId", "contentHash"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          kind: {
+            type: "string",
+            enum: ["backend_replay"],
+          },
+          packageId: {
+            type: "string",
+          },
+          version: {
+            format: "int64",
+            type: "integer",
+          },
+          hash: {
+            type: "string",
+          },
+        },
+        required: ["kind", "packageId", "version", "hash"],
+      },
+    ],
+    discriminator: {
+      propertyName: "kind",
+    },
+  },
+  ObservationSource: {
+    oneOf: [
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          status: {
+            type: "string",
+            enum: ["known"],
+          },
+          serviceId: {
+            type: "string",
+          },
+          buildId: {
+            type: "string",
+          },
+          sourceFilesHash: {
+            type: "string",
+          },
+          repositoryId: {
+            type: "string",
+          },
+        },
+        required: ["status", "serviceId", "buildId", "sourceFilesHash", "repositoryId"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          status: {
+            type: "string",
+            enum: ["unknown"],
+          },
+          serviceId: {
+            type: "string",
+          },
+          reason: {
+            type: "string",
+          },
+        },
+        required: ["status", "serviceId", "reason"],
+      },
+    ],
+    discriminator: {
+      propertyName: "status",
+    },
+  },
+  ObservationWindow: {
+    additionalProperties: false,
+    properties: {
+      end: {
+        type: "string",
+      },
+      start: {
+        type: "string",
+      },
+    },
+    required: ["start", "end"],
+    type: "object",
+  },
   PreviewBackendChangeProposalCommandsRequest: {
     type: "object",
     additionalProperties: false,
@@ -22628,6 +23832,12 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
       {
         $ref: "#/components/schemas/BackendAnalysisStartDiagnostics",
+      },
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartMeasurement",
+      },
+      {
+        $ref: "#/components/schemas/BackendAnalysisStartObservedImpact",
       },
     ],
     type: "object",
