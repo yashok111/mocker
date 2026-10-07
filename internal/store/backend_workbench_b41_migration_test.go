@@ -5,11 +5,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yashok111/mocker/internal/testkit"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 func TestSource6MigrationOwnershipAndImmutability(t *testing.T) {
-	db := testkit.NewDB(t)
+	db := store.OpenInlinePayloadSchema(t)
 	seedB41StorageParents(t, db.W)
 	claim := `INSERT INTO backend_revision_assertions
 		(project_id,revision_id,record_type,record_id,repository_id,
@@ -96,7 +96,7 @@ func TestSource6MigrationOwnershipAndImmutability(t *testing.T) {
 }
 
 func TestAnnotationStorageAllowsOrphansAndRejectsForeignRevision(t *testing.T) {
-	db := testkit.NewDB(t)
+	db := store.OpenInlinePayloadSchema(t)
 	seedB41StorageParents(t, db.W)
 	query := `INSERT INTO backend_annotations
 		(id,project_id,record_type,target_id,revision_id,body,author,created_at,updated_at)

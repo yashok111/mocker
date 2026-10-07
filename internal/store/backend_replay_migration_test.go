@@ -44,7 +44,8 @@ func TestBackendReplayMigration24To25(t *testing.T) {
 		t.Fatal(err)
 	}
 	version, err := db.SchemaVersion(t.Context())
-	if err != nil || version != 25 {
+	// Was a literal 25 (the head when B5.3 landed); Migrate goes to the head.
+	if err != nil || version != latestMigration(t) {
 		t.Fatalf("version %d: %v", version, err)
 	}
 	var name string
