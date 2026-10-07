@@ -191,7 +191,11 @@ registry's login and publish endpoints.
 **The linter is golangci-lint v2**, `.golangci.yml` carried over from another backend of the owner's,
 so that the set is one across two repositories. Keep it at zero. Exceptions are only
 pinpoint `//nolint:<linter> // reason` at the site of the trigger, not widening the
-config. There are **39** of them now (`rg -c '//nolint:' cmd internal`, summed — the colon matters: a comment that merely mentions the directive is not one), and each
+config. There are **76** of them now (2026-10-07: the Backend Workbench
+review's lint pass took the tree from 774 findings to zero and from 42
+directives to 76; every gocyclo finding (218 functions) was refactored
+rather than excepted, and each new directive states its reason at the site)
+(`rg -c '//nolint:' cmd internal`, summed — the colon matters: a comment that merely mentions the directive is not one), and each
 carries the reason right in the line. **The breakdown below is a list of REASONS,
 not a census: the one command that counts them accurately is
 `grep -rho '//nolint:[a-z,]*' cmd internal | sed 's|//nolint:||' | tr ',' '\n' | sort | uniq -c`,

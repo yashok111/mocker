@@ -234,7 +234,7 @@ untracked files.
 **The linter is golangci-lint v2**, `.golangci.yml` shared with another
 backend of the owner's. Keep it at zero. Exceptions are only pinpoint
 `//nolint:<linter> // reason` at the site of the trigger, never a wider
-config: 39 today; the counting command, the census and the reason behind
+config: 76 today; the counting command, the census and the reason behind
 each — `docs/agent/ops.md`.
 
 **goleak is in every package with tests** (55 packages, three lines each,
