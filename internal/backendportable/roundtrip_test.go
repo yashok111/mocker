@@ -50,7 +50,7 @@ func makeRoundtripFixture(t *testing.T) *roundtripFixture {
 	s := NewService(db, models)
 	p, err := models.Create(t.Context(), bm.CreateInput{Name: "Roundtrip", IdempotencyKey: "project"})
 	check(t, err)
-	inventory := []bm.InventoryItem{}
+	inventory := make([]bm.InventoryItem, 0, 9)
 	for _, category := range []string{"files", "endpoints", "datastores", "migrations", "producers", "consumers", "jobs", "contracts", "tests"} {
 		n := int64(0)
 		if category == "files" {
