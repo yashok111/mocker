@@ -111,7 +111,7 @@ func TestIndependentFixtures(t *testing.T) {
 			if err = p.Decode(call(p.JournalEndpoint, run, nil, 200), &j, p.JournalLimit); err != nil {
 				t.Fatal(err)
 			}
-			kinds := []string{}
+			kinds := make([]string, 0, len(j.Events))
 			for _, e := range j.Events {
 				kinds = append(kinds, e.Kind)
 			}
@@ -139,33 +139,38 @@ func TestIndependentFixtures(t *testing.T) {
 			if storedOrder.Order != expectedOrder || storedOrder.BusinessKey != business {
 				t.Fatal(storedOrder)
 			}
-			rows, err := s.db.Query("SELECT document FROM charges WHERE run_id=? ORDER BY rowid", run)
-			if err != nil {
-				t.Fatal(err)
-			}
-			chargeIndex := 0
-			for rows.Next() {
-				var raw []byte
-				if err = rows.Scan(&raw); err != nil {
+			// The pool has one connection: the rows must be closed before the
+			// next call below, so they live in a function of their own.
+			chargeIndex := func() int {
+				rows, err := s.db.Query("SELECT document FROM charges WHERE run_id=? ORDER BY rowid", run)
+				if err != nil {
 					t.Fatal(err)
 				}
-				var c p.ChargeRecord
-				if err = p.Decode(raw, &c, p.BodyLimit); err != nil {
+				defer func() { _ = rows.Close() }()
+				chargeIndex := 0
+				for rows.Next() {
+					var raw []byte
+					if err = rows.Scan(&raw); err != nil {
+						t.Fatal(err)
+					}
+					var c p.ChargeRecord
+					if err = p.Decode(raw, &c, p.BodyLimit); err != nil {
+						t.Fatal(err)
+					}
+					if chargeIndex >= len(oracle.Charges) {
+						t.Fatal("extra charge")
+					}
+					want := oracle.Charges[chargeIndex]
+					if c.AmountMinor != want.AmountMinor || c.Currency != want.Currency || c.Scope != want.Scope || c.BusinessKey != business {
+						t.Fatal(c)
+					}
+					chargeIndex++
+				}
+				if err = rows.Err(); err != nil {
 					t.Fatal(err)
 				}
-				if chargeIndex >= len(oracle.Charges) {
-					t.Fatal("extra charge")
-				}
-				want := oracle.Charges[chargeIndex]
-				if c.AmountMinor != want.AmountMinor || c.Currency != want.Currency || c.Scope != want.Scope || c.BusinessKey != business {
-					t.Fatal(c)
-				}
-				chargeIndex++
-			}
-			if err = rows.Err(); err != nil {
-				t.Fatal(err)
-			}
-			rows.Close()
+				return chargeIndex
+			}()
 			if chargeIndex != len(oracle.Charges) {
 				t.Fatal("missing charge")
 			}

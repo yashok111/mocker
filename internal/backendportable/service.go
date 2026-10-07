@@ -148,7 +148,7 @@ func loadRecords(ctx context.Context, tx *sql.Tx, session string, m *Manifest) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []Record{}
 	index := 0
 	total := 0

@@ -215,35 +215,7 @@ func required(raw []byte, t reflect.Type, nullable bool) error {
 	}
 	switch t.Kind() {
 	case reflect.Struct:
-		var fields map[string]jsontext.Value
-		if json.Unmarshal(raw, &fields) != nil {
-			return invalid()
-		}
-		for i := 0; i < t.NumField(); i++ {
-			f := t.Field(i)
-			tag := f.Tag.Get("json")
-			if tag == "-" {
-				continue
-			}
-			if f.Anonymous && tag == "" {
-				if err := required(raw, f.Type, false); err != nil {
-					return err
-				}
-				continue
-			}
-			name, opts, _ := strings.Cut(tag, ",")
-			v, ok := fields[name]
-			if !ok {
-				if opts != "" {
-					continue
-				}
-				return invalid()
-			}
-			n := t == reflect.TypeFor[InputContext]() && (name == "size" || name == "unit") || t == reflect.TypeFor[Sampling]() && name == "probability" || t == reflect.TypeFor[ObservationContext]() && name == "scenario"
-			if err := required(v, f.Type, n); err != nil {
-				return err
-			}
-		}
+		return requiredFields(raw, t)
 	case reflect.Slice:
 		var values []jsontext.Value
 		if json.Unmarshal(raw, &values) != nil {
@@ -256,6 +228,45 @@ func required(raw []byte, t reflect.Type, nullable bool) error {
 		}
 	}
 	return nil
+}
+
+// requiredFields requires every field of struct t without an option in its
+// tag to be present, recursively; an embedded struct's fields are its own.
+func requiredFields(raw []byte, t reflect.Type) error {
+	var fields map[string]jsontext.Value
+	if json.Unmarshal(raw, &fields) != nil {
+		return invalid()
+	}
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		tag := f.Tag.Get("json")
+		if tag == "-" {
+			continue
+		}
+		if f.Anonymous && tag == "" {
+			if err := required(raw, f.Type, false); err != nil {
+				return err
+			}
+			continue
+		}
+		name, opts, _ := strings.Cut(tag, ",")
+		v, ok := fields[name]
+		if !ok {
+			if opts != "" {
+				continue
+			}
+			return invalid()
+		}
+		if err := required(v, f.Type, nullableField(t, name)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// nullableField names the only fields whose JSON null means "absent".
+func nullableField(t reflect.Type, name string) bool {
+	return t == reflect.TypeFor[InputContext]() && (name == "size" || name == "unit") || t == reflect.TypeFor[Sampling]() && name == "probability" || t == reflect.TypeFor[ObservationContext]() && name == "scenario"
 }
 func (v *ImportInput) UnmarshalJSON(b []byte) error {
 	type wire ImportInput
@@ -287,7 +298,7 @@ func (v *Record) UnmarshalJSON(b []byte) error {
 		return invalid()
 	}
 	allowed := "type id executionId backendRef identityRef diagramWitness "
-	req := ""
+	var req string
 	switch v.Type {
 	case "span":
 		req = "traceId spanId startTimeUnixNano endTimeUnixNano kind category status attrs"

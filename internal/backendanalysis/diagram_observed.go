@@ -45,87 +45,144 @@ func ObserveDiagram(ctx context.Context, scope bm.DiagramScope, data PinnedMeasu
 	if err != nil {
 		return nil, err
 	}
-	mappings := map[string]o.DiagramCorrelationRow{}
-	compatible := map[string]bool{}
-	sourceCompatibility := map[string]bool{}
+	v := &overlay{out: out, mappings: map[string]o.DiagramCorrelationRow{}, compatible: map[string]bool{}, sourceCompatibility: map[string]bool{}, spans: map[string][]uniqueObservation{}, selected: map[string]uniqueObservation{}}
+	if err = v.loadMappings(data, scope, metrics.Input.Side); err != nil {
+		return nil, err
+	}
+	for _, r := range rows {
+		if slices.Contains(metrics.Input.ExecutionIDs, r.Record.ExecutionID) && !controlRecord(r.Record) {
+			v.addElement(r)
+		}
+	}
+	for _, r := range rows {
+		if _, ok := v.selected[r.Key]; ok && r.Record.Type == "span" {
+			v.addRelations(r)
+		}
+	}
+	v.dropCausalCycles()
+	slices.SortFunc(out.Relations, func(a, b ObservedRelation) int {
+		x, _ := canonical(a)
+		y, _ := canonical(b)
+		return strings.Compare(string(x), string(y))
+	})
+	out.Relations = slices.CompactFunc(out.Relations, func(a, b ObservedRelation) bool { return reflect.DeepEqual(a, b) })
+	slices.Sort(out.Gaps)
+	out.Gaps = slices.Compact(out.Gaps)
+	return out, nil
+}
+
+// overlay builds one diagram overlay from the pinned sets' diagram mappings
+// and the selected executions' records.
+type overlay struct {
+	out                 *DiagramObserved
+	mappings            map[string]o.DiagramCorrelationRow
+	compatible          map[string]bool
+	sourceCompatibility map[string]bool
+	spans               map[string][]uniqueObservation
+	selected            map[string]uniqueObservation
+}
+
+// loadMappings indexes the side's diagram rows by observation identity and
+// record. Every set must correlate exactly this scope, and overlapping
+// evidence must map identically.
+func (v *overlay) loadMappings(data PinnedMeasurementData, scope bm.DiagramScope, side string) error {
 	for _, set := range data.Sets {
-		if set.Pin.Side != metrics.Input.Side {
+		if set.Pin.Side != side {
 			continue
 		}
 		if set.Correlation.DiagramScope == nil || !reflect.DeepEqual(*set.Correlation.DiagramScope, scope) {
-			return nil, fault(422, "diagram_pin_mismatch", "Overlay does not belong to the exact diagram scope")
+			return fault(422, "diagram_pin_mismatch", "Overlay does not belong to the exact diagram scope")
 		}
-		out.Pins = append(out.Pins, set.Pin)
+		v.out.Pins = append(v.out.Pins, set.Pin)
 		identity := observationIdentity(set.Version.Context)
-		sourceCompatibility[identity] = set.Correlation.SourceCompatible
+		v.sourceCompatibility[identity] = set.Correlation.SourceCompatible
 		for _, row := range set.Correlation.DiagramRows {
 			key := identity + "/" + row.RecordID
-			if old, ok := mappings[key]; ok && !reflect.DeepEqual(old, row) {
-				return nil, fault(422, "diagram_mapping_conflict", "Conflicting mappings for overlapping evidence")
+			if old, ok := v.mappings[key]; ok && !reflect.DeepEqual(old, row) {
+				return fault(422, "diagram_mapping_conflict", "Conflicting mappings for overlapping evidence")
 			}
-			mappings[key] = row
-			compatible[key] = set.Correlation.SourceCompatible
+			v.mappings[key] = row
+			v.compatible[key] = set.Correlation.SourceCompatible
 		}
 	}
-	spans := map[string][]uniqueObservation{}
-	selected := map[string]uniqueObservation{}
-	for _, r := range rows {
-		if !slices.Contains(metrics.Input.ExecutionIDs, r.Record.ExecutionID) || controlRecord(r.Record) {
-			continue
-		}
-		if r.Record.Type == "span" {
-			k := r.Record.TraceID + "/" + r.Record.SpanID
-			spans[k] = append(spans[k], r)
-		}
-		selected[r.Key] = r
-		row := mappings[observationIdentity(r.Context)+"/"+r.Record.ID]
-		if row.Basis == "" || row.Basis == "unresolved" || !compatible[observationIdentity(r.Context)+"/"+r.Record.ID] {
-			out.Gaps = append(out.Gaps, "unresolved mapping: "+r.Record.ID)
-			row.Selectors = []bm.DiagramScopeSelector{}
-			row.Basis = "unresolved"
-		}
-		out.Elements = append(out.Elements, ObservedElement{ID: digest([]byte(r.Key)), RecordID: r.Record.ID, ExecutionID: r.Record.ExecutionID, TraceID: r.Record.TraceID, SpanID: r.Record.SpanID, Selectors: row.Selectors, Basis: row.Basis})
+	return nil
+}
+
+// addElement places one selected record on the diagram, or records it as an
+// unresolved mapping.
+func (v *overlay) addElement(r uniqueObservation) {
+	if r.Record.Type == "span" {
+		k := r.Record.TraceID + "/" + r.Record.SpanID
+		v.spans[k] = append(v.spans[k], r)
 	}
-	for _, r := range rows {
-		if _, ok := selected[r.Key]; !ok || r.Record.Type != "span" {
+	v.selected[r.Key] = r
+	key := observationIdentity(r.Context) + "/" + r.Record.ID
+	row := v.mappings[key]
+	if row.Basis == "" || row.Basis == "unresolved" || !v.compatible[key] {
+		v.out.Gaps = append(v.out.Gaps, "unresolved mapping: "+r.Record.ID)
+		row.Selectors = []bm.DiagramScopeSelector{}
+		row.Basis = "unresolved"
+	}
+	v.out.Elements = append(v.out.Elements, ObservedElement{ID: digest([]byte(r.Key)), RecordID: r.Record.ID, ExecutionID: r.Record.ExecutionID, TraceID: r.Record.TraceID, SpanID: r.Record.SpanID, Selectors: row.Selectors, Basis: row.Basis})
+}
+
+// addRelations relates a selected span to its unique parent (containment)
+// and to each unique link peer.
+func (v *overlay) addRelations(r uniqueObservation) {
+	out := v.out
+	id := digest([]byte(r.Key))
+	if r.Record.ParentSpanID != "" {
+		peers := v.spans[r.Record.TraceID+"/"+r.Record.ParentSpanID]
+		if len(peers) == 1 {
+			out.Relations = append(out.Relations, ObservedRelation{From: digest([]byte(peers[0].Key)), To: id, Kind: "containment"})
+		} else {
+			out.Gaps = append(out.Gaps, "missing or ambiguous parent: "+r.Record.ID)
+		}
+	}
+	if r.Record.Links == nil {
+		return
+	}
+	for _, link := range *r.Record.Links {
+		peers := v.spans[link.TraceID+"/"+link.SpanID]
+		if len(peers) != 1 {
+			out.Gaps = append(out.Gaps, "missing or ambiguous link peer: "+r.Record.ID)
 			continue
 		}
-		id := digest([]byte(r.Key))
-		if r.Record.ParentSpanID != "" {
-			peers := spans[r.Record.TraceID+"/"+r.Record.ParentSpanID]
-			if len(peers) == 1 {
-				out.Relations = append(out.Relations, ObservedRelation{From: digest([]byte(peers[0].Key)), To: id, Kind: "containment"})
+		peer := peers[0]
+		from := digest([]byte(peer.Key))
+		relation := ObservedRelation{From: from, To: id, Kind: "association"}
+		if link.Relation == "follows_from" {
+			if v.causalWitness(peer, r, link.Proof) {
+				relation = ObservedRelation{From: from + "/send", To: id + "/receive", Kind: "event_precedence", Proof: link.Proof}
 			} else {
-				out.Gaps = append(out.Gaps, "missing or ambiguous parent: "+r.Record.ID)
+				out.Gaps = append(out.Gaps, "unsupported or mismatched causal witness: "+r.Record.ID)
 			}
 		}
-		if r.Record.Links == nil {
-			continue
-		}
-		for _, link := range *r.Record.Links {
-			peers := spans[link.TraceID+"/"+link.SpanID]
-			if len(peers) != 1 {
-				out.Gaps = append(out.Gaps, "missing or ambiguous link peer: "+r.Record.ID)
-				continue
-			}
-			peer := peers[0]
-			from := digest([]byte(peer.Key))
-			relation := ObservedRelation{From: from, To: id, Kind: "association"}
-			if link.Relation == "follows_from" {
-				a, b := peer.Record.Attrs, r.Record.Attrs
-				proof := link.Proof
-				builds := peer.Context.Source.Status == "known" && r.Context.Source.Status == "known" && (peer.Context.Source.ServiceID != r.Context.Source.ServiceID || peer.Context.Source.BuildID == r.Context.Source.BuildID && peer.Context.Source.SourceFilesHash == r.Context.Source.SourceFilesHash)
-				if proof != nil && proof.Profile == "orders-message-causal-v1" && proof.PredecessorEvent == "send" && proof.SuccessorEvent == "receive" && causalProfile(peer.Context) && causalProfile(r.Context) && a != nil && b != nil && a.MessageRole == "send" && b.MessageRole == "receive" && a.MessageIDHash == proof.MessageIDHash && b.MessageIDHash == proof.MessageIDHash && builds && sourceCompatibility[observationIdentity(peer.Context)] && sourceCompatibility[observationIdentity(r.Context)] && reflect.DeepEqual(peer.Context.Environment, r.Context.Environment) {
-					relation = ObservedRelation{From: from + "/send", To: id + "/receive", Kind: "event_precedence", Proof: proof}
-				} else {
-					out.Gaps = append(out.Gaps, "unsupported or mismatched causal witness: "+r.Record.ID)
-				}
-			}
-			out.Relations = append(out.Relations, relation)
-		}
+		out.Relations = append(out.Relations, relation)
 	}
-	// Cycles among instrumented spans are invalid witnesses. Drop their asserted
-	// event order conservatively; associations/containment remain visible.
+}
+
+// causalWitness admits a follows_from link as event precedence only for the
+// causal message profile: the send and receive of the very message the proof
+// names, from compatible, comparable builds in the same environment.
+func (v *overlay) causalWitness(peer, r uniqueObservation, proof *o.LinkProof) bool {
+	if proof == nil || proof.Profile != "orders-message-causal-v1" || proof.PredecessorEvent != "send" || proof.SuccessorEvent != "receive" || !causalProfile(peer.Context) || !causalProfile(r.Context) {
+		return false
+	}
+	a, b := peer.Record.Attrs, r.Record.Attrs
+	if a == nil || b == nil || a.MessageRole != "send" || b.MessageRole != "receive" || a.MessageIDHash != proof.MessageIDHash || b.MessageIDHash != proof.MessageIDHash {
+		return false
+	}
+	ps, rs := peer.Context.Source, r.Context.Source
+	builds := ps.Status == "known" && rs.Status == "known" && (ps.ServiceID != rs.ServiceID || ps.BuildID == rs.BuildID && ps.SourceFilesHash == rs.SourceFilesHash)
+	return builds && v.sourceCompatibility[observationIdentity(peer.Context)] && v.sourceCompatibility[observationIdentity(r.Context)] && reflect.DeepEqual(peer.Context.Environment, r.Context.Environment)
+}
+
+// dropCausalCycles: cycles among instrumented spans are invalid witnesses.
+// Drop their asserted event order conservatively; associations/containment
+// remain visible.
+func (v *overlay) dropCausalCycles() {
+	out := v.out
 	adjacency := map[string][]string{}
 	indegree := map[string]int{}
 	for _, edge := range out.Relations {
@@ -162,13 +219,4 @@ func ObserveDiagram(ctx context.Context, scope bm.DiagramScope, data PinnedMeasu
 		}
 		return false
 	})
-	slices.SortFunc(out.Relations, func(a, b ObservedRelation) int {
-		x, _ := canonical(a)
-		y, _ := canonical(b)
-		return strings.Compare(string(x), string(y))
-	})
-	out.Relations = slices.CompactFunc(out.Relations, func(a, b ObservedRelation) bool { return reflect.DeepEqual(a, b) })
-	slices.Sort(out.Gaps)
-	out.Gaps = slices.Compact(out.Gaps)
-	return out, nil
 }

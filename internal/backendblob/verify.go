@@ -226,7 +226,7 @@ func walkMembers(ctx context.Context, q Reader, o Owner, fn func(string, string,
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var id, version, typ, mid, key, project string
 		var meta []byte
@@ -266,9 +266,9 @@ func physicalRow(ctx context.Context, q Queryer, o Owner, values []any) ([]any, 
 func checkCanonicalCoverage(ctx context.Context, q Reader, o Owner) error {
 	rows, err := q.QueryContext(ctx, "SELECT "+strings.Join(o.PK, ",")+" FROM "+o.Table)
 	if err != nil {
-		return fmt.Errorf("%w: missing physical owner %s: %v", ErrDerived, o.Table, err)
+		return fmt.Errorf("%w: missing physical owner %s: %w", ErrDerived, o.Table, err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		values := make([]any, len(o.PK))
 		ptrs := make([]any, len(values))

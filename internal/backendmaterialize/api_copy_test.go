@@ -19,8 +19,8 @@ func copyFixture(t *testing.T) (*Service, string, PreviewInput, []bm.NamespacedA
 	s, pid, in := fixture(t)
 	installation, err := s.models.InstallationID(t.Context())
 	must(t, err)
-	pins := []bm.NamespacedArtifactPin{}
-	commands := []bm.ChangeProposalCommand{}
+	pins := make([]bm.NamespacedArtifactPin, 0, 2)
+	commands := make([]bm.ChangeProposalCommand, 0, 2)
 	for range 2 {
 		api, err := s.apis.Create(t.Context(), apidesign.CreateInput{Name: "Copy source", Document: apiDoc, Source: "ui"})
 		must(t, err)

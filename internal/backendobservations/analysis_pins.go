@@ -91,82 +91,120 @@ func (s *Service) ResolveAnalysisPins(ctx context.Context, pid string, in PinReq
 		return nil, invalid()
 	}
 	out := &PinnedObservations{Sets: []PinnedSet{}}
-	records, bytes := 0, 0
+	b := &pinBudget{}
 	for _, pin := range pins {
-		target, ok := in.Targets[pin.Side]
-		if !ok || !p.ValidID(target.RevisionID) || !p.ValidHash(target.SemanticHash) || !p.ValidHash(target.TargetGraphHash) {
-			return nil, fault(422, "analysis_target_mismatch")
-		}
-		ver, e := s.Repo.Version(ctx, pid, pin.ObservationSetID, pin.Version)
-		if e != nil {
-			return nil, analysisReadError(e)
-		}
-		if ver.ContentHash != pin.ContentHash {
-			return nil, fault(422, "analysis_pin_mismatch")
-		}
-		if ver.RecordCount > in.MaxRecords-records || ver.LogicalBytes > int64(in.MaxBytes-bytes) {
-			return nil, fault(413, "analysis_input_limit")
-		}
-		var correlationBytes int
-		if e := s.Repo.db.R.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_observation_correlations_documents WHERE project_id=? AND set_id=? AND version=?`, pid, pin.ObservationSetID, pin.CorrelationVersion).Scan(&correlationBytes); e != nil {
-			if errors.Is(e, sql.ErrNoRows) {
-				return nil, fault(422, "analysis_pin_missing")
-			}
-			return nil, e
-		}
-		if correlationBytes > in.MaxBytes-bytes {
-			return nil, fault(413, "analysis_input_limit")
-		}
-		corr, e := s.Repo.Correlation(ctx, pid, pin.ObservationSetID, pin.CorrelationVersion)
-		if e != nil {
-			return nil, analysisReadError(e)
-		}
-		if corr.ContentHash != pin.CorrelationHash || corr.Input.Observation != ver.VersionReceipt || corr.Input.RevisionID != target.RevisionID || corr.Input.SourceHash != target.SemanticHash || corr.Input.TargetGraphHash != target.TargetGraphHash || corr.Input.Policy != CorrelationPolicy || corr.Input.ServiceID != ver.Context.Source.ServiceID {
-			return nil, fault(422, "analysis_pin_mismatch")
-		}
-		if in.RequireCompatible && !corr.SourceCompatible {
-			return nil, fault(422, "analysis_source_incompatible")
-		}
-		if in.DiagramScope != nil && (corr.DiagramScope == nil || !reflect.DeepEqual(corr.DiagramScope, in.DiagramScope)) {
-			return nil, fault(422, "analysis_diagram_mismatch")
-		}
-		set := PinnedSet{Pin: pin, Version: *ver, Correlation: *corr, Records: []Record{}}
-		raw, e := canonical(set)
+		set, e := s.pinSet(ctx, pid, in, pin, b)
 		if e != nil {
 			return nil, e
-		}
-		bytes += len(raw)
-		if bytes > in.MaxBytes {
-			return nil, fault(413, "analysis_input_limit")
-		}
-		for cursor := ""; ; {
-			page, e := s.Repo.Records(ctx, pid, pin.ObservationSetID, pin.Version, 500, cursor)
-			if e != nil {
-				return nil, e
-			}
-			for _, rec := range page.Items {
-				if err := ctx.Err(); err != nil {
-					return nil, err
-				}
-				raw, e := canonical(rec)
-				if e != nil {
-					return nil, e
-				}
-				bytes += len(raw) + 1
-				records++
-				if records > in.MaxRecords || bytes > in.MaxBytes {
-					return nil, fault(413, "analysis_input_limit")
-				}
-				set.Records = append(set.Records, rec)
-			}
-			if page.NextCursor == "" {
-				break
-			}
-			cursor = page.NextCursor
 		}
 		out.Sets = append(out.Sets, set)
 	}
 	return out, nil
+}
+
+// pinBudget is what the pinned sets have used of the request's limits so far.
+type pinBudget struct{ records, bytes int }
+
+// pinSet resolves one pin to its exact version, correlation and records,
+// charging them to the budget.
+func (s *Service) pinSet(ctx context.Context, pid string, in PinRequest, pin AnalysisPin, b *pinBudget) (PinnedSet, error) {
+	target, ok := in.Targets[pin.Side]
+	if !ok || !p.ValidID(target.RevisionID) || !p.ValidHash(target.SemanticHash) || !p.ValidHash(target.TargetGraphHash) {
+		return PinnedSet{}, fault(422, "analysis_target_mismatch")
+	}
+	ver, e := s.Repo.Version(ctx, pid, pin.ObservationSetID, pin.Version)
+	if e != nil {
+		return PinnedSet{}, analysisReadError(e)
+	}
+	if ver.ContentHash != pin.ContentHash {
+		return PinnedSet{}, fault(422, "analysis_pin_mismatch")
+	}
+	if ver.RecordCount > in.MaxRecords-b.records || ver.LogicalBytes > int64(in.MaxBytes-b.bytes) {
+		return PinnedSet{}, fault(413, "analysis_input_limit")
+	}
+	corr, e := s.pinnedCorrelation(ctx, pid, in, pin, ver, target, b)
+	if e != nil {
+		return PinnedSet{}, e
+	}
+	set := PinnedSet{Pin: pin, Version: *ver, Correlation: *corr, Records: []Record{}}
+	raw, e := canonical(set)
+	if e != nil {
+		return PinnedSet{}, e
+	}
+	b.bytes += len(raw)
+	if b.bytes > in.MaxBytes {
+		return PinnedSet{}, fault(413, "analysis_input_limit")
+	}
+	if e = s.pinRecords(ctx, pid, in, &set, b); e != nil {
+		return PinnedSet{}, e
+	}
+	return set, nil
+}
+
+// pinnedCorrelation reads the pinned correlation, sized before it is decoded,
+// and requires it to correlate exactly this version against this target.
+func (s *Service) pinnedCorrelation(ctx context.Context, pid string, in PinRequest, pin AnalysisPin, ver *Version, target SourcePin, b *pinBudget) (*CorrelationSnapshot, error) {
+	var correlationBytes int
+	if e := s.Repo.db.R.QueryRowContext(ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_observation_correlations_documents WHERE project_id=? AND set_id=? AND version=?`, pid, pin.ObservationSetID, pin.CorrelationVersion).Scan(&correlationBytes); e != nil {
+		if errors.Is(e, sql.ErrNoRows) {
+			return nil, fault(422, "analysis_pin_missing")
+		}
+		return nil, e
+	}
+	if correlationBytes > in.MaxBytes-b.bytes {
+		return nil, fault(413, "analysis_input_limit")
+	}
+	corr, e := s.Repo.Correlation(ctx, pid, pin.ObservationSetID, pin.CorrelationVersion)
+	if e != nil {
+		return nil, analysisReadError(e)
+	}
+	if !correlationMatches(corr, pin, ver, target) {
+		return nil, fault(422, "analysis_pin_mismatch")
+	}
+	if in.RequireCompatible && !corr.SourceCompatible {
+		return nil, fault(422, "analysis_source_incompatible")
+	}
+	if in.DiagramScope != nil && (corr.DiagramScope == nil || !reflect.DeepEqual(corr.DiagramScope, in.DiagramScope)) {
+		return nil, fault(422, "analysis_diagram_mismatch")
+	}
+	return corr, nil
+}
+
+// correlationMatches: the correlation is the pinned one, of exactly this
+// version, against exactly this target, under the current policy.
+func correlationMatches(corr *CorrelationSnapshot, pin AnalysisPin, ver *Version, target SourcePin) bool {
+	ci := corr.Input
+	return corr.ContentHash == pin.CorrelationHash && ci.Observation == ver.VersionReceipt && ci.RevisionID == target.RevisionID && ci.SourceHash == target.SemanticHash && ci.TargetGraphHash == target.TargetGraphHash && ci.Policy == CorrelationPolicy && ci.ServiceID == ver.Context.Source.ServiceID
+}
+
+// pinRecords pages through the pinned version's records into the set.
+func (s *Service) pinRecords(ctx context.Context, pid string, in PinRequest, set *PinnedSet, b *pinBudget) error {
+	pin := set.Pin
+	for cursor := ""; ; {
+		page, e := s.Repo.Records(ctx, pid, pin.ObservationSetID, pin.Version, 500, cursor)
+		if e != nil {
+			return e
+		}
+		for _, rec := range page.Items {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			raw, e := canonical(rec)
+			if e != nil {
+				return e
+			}
+			b.bytes += len(raw) + 1
+			b.records++
+			if b.records > in.MaxRecords || b.bytes > in.MaxBytes {
+				return fault(413, "analysis_input_limit")
+			}
+			set.Records = append(set.Records, rec)
+		}
+		if page.NextCursor == "" {
+			return nil
+		}
+		cursor = page.NextCursor
+	}
 }
 func analysisReadError(err error) error {
 	var f *bm.FaultError

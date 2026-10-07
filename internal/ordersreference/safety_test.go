@@ -2,6 +2,7 @@ package ordersreference
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net/http/httptest"
 	"path/filepath"
@@ -258,7 +259,7 @@ func TestConsentAndEpochCAS(t *testing.T) {
 		wg.Go(func() {
 			status, _, e := h.s.mutate(t.Context(), p.ResetEndpoint, r.Fence, r)
 			if e != nil {
-				if pe, ok := e.(*protocolError); ok {
+				if pe, ok := errors.AsType[*protocolError](e); ok {
 					status = pe.status
 				}
 			}

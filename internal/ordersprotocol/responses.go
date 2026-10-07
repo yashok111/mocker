@@ -13,9 +13,22 @@ func (v Receipt) Validate() error {
 		return fmt.Errorf("invalid receipt")
 	}
 	epoch := v.Epoch
+	if v.Endpoint == ResetEndpoint {
+		epoch++
+	}
+	if e := v.validateOutcome(); e != nil {
+		return e
+	}
+	if v.ResultEpoch != epoch || epoch < 1 {
+		return fmt.Errorf("invalid receipt epoch")
+	}
+	return nil
+}
+
+// validateOutcome checks the outcome and status each endpoint may answer.
+func (v Receipt) validateOutcome() error {
 	switch v.Endpoint {
 	case ResetEndpoint:
-		epoch++
 		if v.Outcome != "reset" || v.HTTPStatus != 200 || v.Counters != (Counters{}) {
 			return fmt.Errorf("invalid reset receipt")
 		}
@@ -24,28 +37,32 @@ func (v Receipt) Validate() error {
 			return fmt.Errorf("invalid arm receipt")
 		}
 	case OrderEndpoint:
-		if !ValidID(v.BusinessKey) || (v.Attempt != 1 && v.Attempt != 2) || !ValidID(v.ChargeID) {
-			return fmt.Errorf("invalid order receipt")
-		}
-		if v.Outcome == "persistence_failed" {
-			if v.HTTPStatus != 503 || v.OrderID != "" {
-				return fmt.Errorf("invalid failure receipt")
-			}
-		} else if v.Outcome == "persisted" {
-			if v.HTTPStatus != 201 || !ValidID(v.OrderID) {
-				return fmt.Errorf("invalid persisted receipt")
-			}
-		} else {
-			return fmt.Errorf("unknown order outcome")
-		}
+		return v.validateOrderOutcome()
 	default:
 		return fmt.Errorf("unknown receipt endpoint")
 	}
-	if v.ResultEpoch != epoch || epoch < 1 {
-		return fmt.Errorf("invalid receipt epoch")
+	return nil
+}
+
+func (v Receipt) validateOrderOutcome() error {
+	if !ValidID(v.BusinessKey) || (v.Attempt != 1 && v.Attempt != 2) || !ValidID(v.ChargeID) {
+		return fmt.Errorf("invalid order receipt")
+	}
+	switch v.Outcome {
+	case "persistence_failed":
+		if v.HTTPStatus != 503 || v.OrderID != "" {
+			return fmt.Errorf("invalid failure receipt")
+		}
+	case "persisted":
+		if v.HTTPStatus != 201 || !ValidID(v.OrderID) {
+			return fmt.Errorf("invalid persisted receipt")
+		}
+	default:
+		return fmt.Errorf("unknown order outcome")
 	}
 	return nil
 }
+
 func (v ErrorResponse) Validate() error {
 	if v.Protocol != Version || v.Message == "" || !slices.Contains([]string{"invalid_request", "unauthorized", "forbidden", "identity_mismatch", "epoch_mismatch", "idempotency_conflict", "run_conflict", "not_found", "in_progress", "journal_limit", "internal_error"}, v.Code) {
 		return fmt.Errorf("invalid error response")
@@ -60,8 +77,26 @@ func (v Journal) Validate() error {
 	if h != v.IdentityHash || !ValidID(v.RunID) || v.Epoch < 1 || v.CurrentEpoch < v.Epoch || v.FixtureHash != FixtureHash() || v.HighWater < 1 {
 		return fmt.Errorf("invalid journal identity")
 	}
+	if e = v.validateKeys(); e != nil {
+		return e
+	}
+	lastByKey, e := v.validateEvents()
+	if e != nil {
+		return e
+	}
+	for _, r := range v.Receipts {
+		event, ok := lastByKey[r.RequestKey]
+		if !ok || event.Sequence != r.Sequence || event.StepID != r.StepID {
+			return fmt.Errorf("receipt event witness mismatch")
+		}
+	}
+	return v.validateRecords()
+}
+
+// validateKeys checks every receipt against the journal and that no request
+// key is both answered and pending, or answered twice.
+func (v Journal) validateKeys() error {
 	keys := map[string]bool{}
-	seq := map[int64]bool{}
 	for _, r := range v.Receipts {
 		if e := r.Validate(); e != nil {
 			return e
@@ -77,25 +112,32 @@ func (v Journal) Validate() error {
 		}
 		keys[k] = true
 	}
+	return nil
+}
+
+// validateEvents checks the events run gap-free in sequence up to the high
+// water mark and returns each request key's last event, its receipt witness.
+func (v Journal) validateEvents() (map[string]Event, error) {
+	seq := map[int64]bool{}
 	last := int64(0)
 	lastByKey := map[string]Event{}
 	for _, e := range v.Events {
 		if e.Sequence <= last || e.Sequence > v.HighWater || seq[e.Sequence] || !ValidID(e.StepID) || !ValidID(e.RequestKey) || !slices.Contains([]string{"reset", "armed", "attempt", "payment_charged", "payment_reused", "failure_triggered", "order_persisted"}, e.Kind) {
-			return fmt.Errorf("invalid journal event")
+			return nil, fmt.Errorf("invalid journal event")
 		}
 		seq[e.Sequence] = true
 		last = e.Sequence
 		lastByKey[e.RequestKey] = e
 	}
 	if last != v.HighWater {
-		return fmt.Errorf("incomplete journal events")
+		return nil, fmt.Errorf("incomplete journal events")
 	}
-	for _, r := range v.Receipts {
-		event, ok := lastByKey[r.RequestKey]
-		if !ok || event.Sequence != r.Sequence || event.StepID != r.StepID {
-			return fmt.Errorf("receipt event witness mismatch")
-		}
-	}
+	return lastByKey, nil
+}
+
+// validateRecords checks the stored orders and charges are the fixture's,
+// each once.
+func (v Journal) validateRecords() error {
 	ids := map[string]bool{}
 	business := map[string]bool{}
 	for _, r := range v.Orders {

@@ -3,6 +3,7 @@ package backendportable
 import (
 	"context"
 	"encoding/xml"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -87,7 +88,7 @@ func TestDiagramSVGExactSafeFourKinds(t *testing.T) {
 			dec := xml.NewDecoder(strings.NewReader(string(a.Body)))
 			for {
 				tok, err := dec.Token()
-				if err == io.EOF {
+				if errors.Is(err, io.EOF) {
 					break
 				}
 				if err != nil {

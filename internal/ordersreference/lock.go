@@ -15,8 +15,8 @@ func lockDB(path string) (*os.File, error) {
 	}
 	f := os.NewFile(uintptr(fd), path+".lock")
 	if err = unix.Flock(fd, unix.LOCK_EX|unix.LOCK_NB); err != nil {
-		f.Close()
-		return nil, fmt.Errorf("Orders database already in use")
+		_ = f.Close()
+		return nil, fmt.Errorf("orders database already in use")
 	}
 	return f, nil
 }

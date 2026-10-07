@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -23,31 +24,20 @@ func Exec(ctx context.Context, tx *sql.Tx, query string, args ...any) (sql.Resul
 	if err != nil {
 		return nil, err
 	}
-	var columns []Column
-	var supplied []string
-	for name := range strings.SplitSeq(match[3], ",") {
-		name = strings.TrimSpace(name)
-		c, ok := o.column(name)
-		if !ok {
-			return nil, fmt.Errorf("unregistered %s column %s", o.Table, name)
-		}
-		columns = append(columns, c)
-		supplied = append(supplied, name)
+	columns, supplied, err := suppliedColumns(o, match[3])
+	if err != nil {
+		return nil, err
 	}
-	body := strings.TrimSpace(match[4])
-	suffix := ""
-	if i := strings.Index(strings.ToUpper(body), " ON CONFLICT"); i >= 0 {
-		suffix = body[i:]
-		body = body[:i]
-	}
-	if !strings.HasPrefix(strings.ToUpper(body), "VALUES") && !strings.HasPrefix(strings.ToUpper(body), "SELECT") {
-		return nil, fmt.Errorf("unsupported immutable row source")
+	body, suffix, err := splitRowSource(match[4])
+	if err != nil {
+		return nil, err
 	}
 	rows, err := tx.QueryContext(ctx, body, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
+	ins := ownerInsert{o: o, columns: columns, supplied: supplied, orIgnore: match[1] != "", suffix: suffix}
 	var affected int64
 	for rows.Next() {
 		v := make([]any, len(columns))
@@ -58,103 +48,174 @@ func Exec(ctx context.Context, tx *sql.Tx, query string, args ...any) (sql.Resul
 		if err = rows.Scan(ptrs...); err != nil {
 			return nil, err
 		}
-		values := make([]any, len(o.Columns))
-		for i, c := range o.Columns {
-			found := false
-			for j, sup := range columns {
-				if sup.Name == c.Name {
-					values[i] = v[j]
-					found = true
-					break
-				}
-			}
-			if !found && c.Default != "" {
-				if err = tx.QueryRowContext(ctx, "SELECT "+c.Default).Scan(&values[i]); err != nil {
-					return nil, err
-				}
-			}
-			if c.Payload && values[i] == nil {
-				return nil, fmt.Errorf("missing immutable payload %s.%s", o.Table, c.Name)
-			}
-		}
-		for i, c := range o.Columns {
-			if !c.Payload {
-				continue
-			}
-			isKey := false
-			for j, sup := range columns {
-				if sup.Name == c.Name {
-					isKey = supplied[j] == c.StorageName()
-					break
-				}
-			}
-			var raw []byte
-			if isKey {
-				key, ok := values[i].(string)
-				if !ok {
-					return nil, fmt.Errorf("invalid payload key")
-				}
-				raw, err = Get(ctx, tx, key)
-			} else {
-				switch x := values[i].(type) {
-				case string:
-					raw = []byte(x)
-				case []byte:
-					raw = x
-				default:
-					return nil, fmt.Errorf("invalid payload %T", values[i])
-				}
-			}
-			if err != nil {
-				return nil, err
-			}
-			d, err := domainFor(ctx, tx, o, c, values, raw, false)
-			if err != nil {
-				return nil, err
-			}
-			if isKey {
-				if Key(d, raw) != values[i] {
-					return nil, fmt.Errorf("%w: copy domain mismatch", ErrCanonical)
-				}
-			} else {
-				values[i], err = Put(ctx, tx, d, raw)
-				if err != nil {
-					return nil, err
-				}
-			}
-		}
-		names := o.storageColumns()
-		placeholders := strings.TrimSuffix(strings.Repeat("?,", len(names)), ",")
-		command := "INSERT "
-		if match[1] != "" {
-			command += "OR IGNORE "
-		}
-		result, err := tx.ExecContext(ctx, command+"INTO "+o.Table+"("+strings.Join(names, ",")+") VALUES("+placeholders+")"+suffix, values...)
+		n, err := ins.insertRow(ctx, tx, v)
 		if err != nil {
 			return nil, err
 		}
-		n, err := result.RowsAffected()
-		if err != nil {
-			return nil, err
-		}
-		if n != 0 {
-			if o.preservesOrdinal() {
-				ordinal, e := result.LastInsertId()
-				if e != nil {
-					return nil, e
-				}
-				values = append(values, ordinal)
-			}
-			if err = saveMembership(ctx, tx, o, values); err != nil {
-				return nil, err
-			}
-			affected += n
-		}
+		affected += n
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 	return insertResult(affected), nil
+}
+
+// suppliedColumns admits only compiled column identifiers: the column list is
+// the one part of the caller's SQL that is spliced into the physical INSERT.
+func suppliedColumns(o Owner, list string) ([]Column, []string, error) {
+	var columns []Column
+	var supplied []string
+	for name := range strings.SplitSeq(list, ",") {
+		name = strings.TrimSpace(name)
+		c, ok := o.column(name)
+		if !ok {
+			return nil, nil, fmt.Errorf("unregistered %s column %s", o.Table, name)
+		}
+		columns = append(columns, c)
+		supplied = append(supplied, name)
+	}
+	return columns, supplied, nil
+}
+
+// splitRowSource separates the caller's row source from its ON CONFLICT
+// clause: the source runs as a query of its own, the clause rides on the
+// physical INSERT.
+func splitRowSource(source string) (body, suffix string, err error) {
+	body = strings.TrimSpace(source)
+	if i := strings.Index(strings.ToUpper(body), " ON CONFLICT"); i >= 0 {
+		suffix = body[i:]
+		body = body[:i]
+	}
+	if !strings.HasPrefix(strings.ToUpper(body), "VALUES") && !strings.HasPrefix(strings.ToUpper(body), "SELECT") {
+		return "", "", fmt.Errorf("unsupported immutable row source")
+	}
+	return body, suffix, nil
+}
+
+// ownerInsert is one parsed immutable INSERT, applied row by row.
+type ownerInsert struct {
+	o        Owner
+	columns  []Column
+	supplied []string
+	orIgnore bool
+	suffix   string
+}
+
+func (ins ownerInsert) insertRow(ctx context.Context, tx *sql.Tx, v []any) (int64, error) {
+	o := ins.o
+	values, err := ins.rowValues(ctx, tx, v)
+	if err != nil {
+		return 0, err
+	}
+	for i, c := range o.Columns {
+		if !c.Payload {
+			continue
+		}
+		if err = ins.storePayload(ctx, tx, i, c, values); err != nil {
+			return 0, err
+		}
+	}
+	names := o.storageColumns()
+	placeholders := strings.TrimSuffix(strings.Repeat("?,", len(names)), ",")
+	command := "INSERT "
+	if ins.orIgnore {
+		command += "OR IGNORE "
+	}
+	result, err := tx.ExecContext(ctx, command+"INTO "+o.Table+"("+strings.Join(names, ",")+") VALUES("+placeholders+")"+ins.suffix, values...)
+	if err != nil {
+		return 0, err
+	}
+	n, err := result.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+	if n == 0 {
+		return 0, nil
+	}
+	if o.preservesOrdinal() {
+		ordinal, e := result.LastInsertId()
+		if e != nil {
+			return 0, e
+		}
+		// The membership metadata carries the ordinal after the columns.
+		values = slices.Concat(values, []any{ordinal})
+	}
+	if err = saveMembership(ctx, tx, o, values); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
+// rowValues lays one source row out in registry column order, filling an
+// omitted column from its compiled default.
+func (ins ownerInsert) rowValues(ctx context.Context, tx *sql.Tx, v []any) ([]any, error) {
+	o := ins.o
+	values := make([]any, len(o.Columns))
+	for i, c := range o.Columns {
+		found := false
+		for j, sup := range ins.columns {
+			if sup.Name == c.Name {
+				values[i] = v[j]
+				found = true
+				break
+			}
+		}
+		if !found && c.Default != "" {
+			if err := tx.QueryRowContext(ctx, "SELECT "+c.Default).Scan(&values[i]); err != nil {
+				return nil, err
+			}
+		}
+		if c.Payload && values[i] == nil {
+			return nil, fmt.Errorf("missing immutable payload %s.%s", o.Table, c.Name)
+		}
+	}
+	return values, nil
+}
+
+// storePayload replaces payload column i by its blob key. A caller that
+// supplied the key column (a copy) must name a blob of the same domain; one
+// that supplied the bytes gets them stored.
+func (ins ownerInsert) storePayload(ctx context.Context, tx *sql.Tx, i int, c Column, values []any) error {
+	isKey := false
+	for j, sup := range ins.columns {
+		if sup.Name == c.Name {
+			isKey = ins.supplied[j] == c.StorageName()
+			break
+		}
+	}
+	var raw []byte
+	var err error
+	if isKey {
+		key, ok := values[i].(string)
+		if !ok {
+			return fmt.Errorf("invalid payload key")
+		}
+		raw, err = Get(ctx, tx, key)
+	} else {
+		switch x := values[i].(type) {
+		case string:
+			raw = []byte(x)
+		case []byte:
+			raw = x
+		default:
+			return fmt.Errorf("invalid payload %T", values[i])
+		}
+	}
+	if err != nil {
+		return err
+	}
+	d, err := domainFor(ctx, tx, ins.o, c, values, raw, false)
+	if err != nil {
+		return err
+	}
+	if isKey {
+		if Key(d, raw) != values[i] {
+			return fmt.Errorf("%w: copy domain mismatch", ErrCanonical)
+		}
+		return nil
+	}
+	values[i], err = Put(ctx, tx, d, raw)
+	return err
 }
 
 type insertResult int64
