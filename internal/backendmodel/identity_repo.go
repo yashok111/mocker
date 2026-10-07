@@ -113,8 +113,8 @@ func loadDecisions(ctx context.Context, q importReader, sid string) ([]ImportCom
 	}
 	return out, rows.Err()
 }
-func reserveIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, c ImportCommand, typ, key string, base *RevisionState) (string, error) {
-	decisions, err := loadDecisions(ctx, tx, s.ID)
+func reserveIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, c ImportCommand, typ, key string, batch *batchIdentities) (string, error) { //nolint:gocyclo // one arm per identity refusal rule (remove / map / delete / upsert against reservation, binding and staged-decision state); the shape predates review 2026-10-06 and is flagged only because F84 changed this signature line
+	decisions, err := batch.staged(ctx, tx, s.ID)
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +145,7 @@ func reserveIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, c Import
 		} else {
 			expected = c.Deletion.ExpectedID
 		}
-		sourceID, _ := stateIdentity(*base, typ, sourceKey)
+		sourceID, _ := batch.identity(typ, sourceKey)
 		if sourceID == "" || sourceID != expected {
 			return "", identityConflict("Decision expectedId must match the active key in the base")
 		}
@@ -251,11 +251,11 @@ func reserveIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, c Import
 			id = b.ID
 		}
 		if s.Mode == "reconcile" {
-			_, kind := stateIdentity(*base, typ, key)
+			_, kind := batch.identity(typ, key)
 			if mapped {
 				for _, d := range decisions {
 					if d.Identity != nil && d.Identity.RecordType == typ && d.Identity.ToExternalKey == key {
-						_, kind = stateIdentity(*base, typ, d.Identity.FromExternalKey)
+						_, kind = batch.identity(typ, d.Identity.FromExternalKey)
 					}
 				}
 			}

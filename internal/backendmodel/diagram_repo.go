@@ -268,32 +268,49 @@ func validateDiagramSave(previous *DiagramVersion, d DiagramDocument) error {
 	}
 	return nil
 }
+
+// diagramRowArrays are the payload arrays whose members are semantic rows
+// (diagramSemanticRows: architecture and business_map elements/links,
+// lifecycle states/transitions/rules, interaction participants/steps/
+// branches/order). Every kind stores them at $.document.payload.<array>.
+const diagramRowArrays = `'elements','links','states','transitions','rules','participants','steps','branches','order'`
+
+// rejectRetiredDiagramIDs refuses a save that reintroduces a row ID an older
+// version used and the head no longer has.
+//
+// Review 2026-10-06, F106: it decoded every stored version of the diagram
+// (strict decode, Validate, a re-marshal for the size check, two canonical
+// digests) inside the writer on every content-changing save, up to 256 MiB of
+// JSON. Only IDs the head does not already have can be a reuse, so a save
+// that adds none skips history entirely; otherwise SQLite matches the new IDs
+// against the row arrays of the stored versions by JSON path, without
+// decoding them in Go.
 func rejectRetiredDiagramIDs(ctx context.Context, tx *sql.Tx, pid, id string, current *DiagramVersion, d DiagramDocument) error {
 	existing := diagramSemanticRows(current.Document)
-	requested := diagramSemanticRows(d)
-	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=?`, pid, id)
+	fresh := []string{}
+	for rowID := range diagramSemanticRows(d) {
+		if _, active := existing[rowID]; !active {
+			fresh = append(fresh, rowID)
+		}
+	}
+	if len(fresh) == 0 {
+		return nil
+	}
+	wanted, err := json.Marshal(fresh)
 	if err != nil {
 		return err
 	}
-	defer func() { _ = rows.Close() }()
-	for rows.Next() {
-		var raw string
-		if err = rows.Scan(&raw); err != nil {
-			return err
-		}
-		old, err := decodeDiagramVersion(raw)
-		if err != nil {
-			return err
-		}
-		for oldID := range diagramSemanticRows(old.Document) {
-			if _, present := requested[oldID]; present {
-				if _, active := existing[oldID]; !active {
-					return invalid("id", "Retired semantic IDs cannot be reused")
-				}
-			}
-		}
+	var reused bool
+	err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM backend_diagram_versions_documents v, json_each(v.document,'$.document.payload') a, json_each(a.value) r
+WHERE v.project_id=? AND v.diagram_id=? AND a.type='array' AND a.key IN (`+diagramRowArrays+`)
+AND json_extract(r.value,'$.id') IN (SELECT value FROM json_each(?)))`, pid, id, string(wanted)).Scan(&reused)
+	if err != nil {
+		return err
 	}
-	return rows.Err()
+	if reused {
+		return invalid("id", "Retired semantic IDs cannot be reused")
+	}
+	return nil
 }
 
 func persistDiagramVersion(ctx context.Context, tx *sql.Tx, m diagramMutation, out *DiagramVersion) error {

@@ -366,6 +366,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 			}
 		} else {
 			seen := map[string]bool{}
+			identities := newBatchIdentities(base)
 			result.Identities = []RecordIdentity{}
 			for _, c := range in.Commands {
 				typ, key, err := commandAddress(c)
@@ -380,7 +381,10 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 				if err := validateCommand(c, s); err != nil {
 					return err
 				}
-				id, err := reserveIdentity(ctx, tx, s, c, typ, key, base)
+				if err := ctx.Err(); err != nil {
+					return err
+				}
+				id, err := reserveIdentity(ctx, tx, s, c, typ, key, identities)
 				if err != nil {
 					return err
 				}
@@ -389,6 +393,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 					if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
 						return err
 					}
+					identities.unstage(typ, key)
 					_, err = tx.ExecContext(ctx, `DELETE FROM backend_import_records WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key)
 				} else if c.Identity != nil || c.Deletion != nil {
 					b, err := json.Marshal(c)
@@ -399,6 +404,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 					if err != nil {
 						return err
 					}
+					identities.stage(c, typ, key)
 				} else {
 					b, marshalErr := json.Marshal(c)
 					if marshalErr != nil {
