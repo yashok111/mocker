@@ -52,8 +52,7 @@ func TestObsoleteB03GuideSetDoesNotSubstitutePackagedImport(t *testing.T) {
 }
 
 func TestStandaloneImportTopicDiscovery(t *testing.T) {
-	handler := newTestEndpoint(t).Handler()
-	response := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {
@@ -100,8 +99,7 @@ func TestGetGuideSelectionThroughTransport(t *testing.T) {
 
 // Advertised backend workflow capabilities must have implemented MCP tools.
 func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
-	handler := newTestEndpoint(t).Handler()
-	response := doMCP(t, handler, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {

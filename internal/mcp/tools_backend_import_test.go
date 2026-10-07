@@ -108,7 +108,7 @@ func TestBackendImportSDKInt64BoundsAndDuplicateMembers(t *testing.T) {
 }
 
 func TestBackendImportToolsPublishExactSchemasAndHints(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {
@@ -158,7 +158,7 @@ func TestBackendImportSDKRejectsNullableOptionalKeys(t *testing.T) {
 }
 
 func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {
@@ -214,7 +214,7 @@ func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
 		if !ok {
 			continue
 		}
-		// tools/list publishes repeated subtrees through $defs (review
+		// describe_tool publishes repeated subtrees through $defs (review
 		// 2026-10-06, F23); the contract comparison reads the expanded form.
 		got := inlineLocalDefs(decode(tool.InputSchema))
 		stripPaths := func(branch map[string]any) {

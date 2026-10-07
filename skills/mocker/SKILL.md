@@ -26,7 +26,7 @@ bound to it serves the spec's routes on its own host with deterministic
 generated bodies, records what it served, and remembers what it is told to
 remember. The agent talks to it through MCP (`POST /mcp`, bearer key) — the
 same admin API the human panel uses, one tool per verb — spec import included
-(`import_spec`, JSON or YAML) since A8.
+(`import_spec`, JSON or YAML) since A8. `tools/list` is a summary (one sentence and top-level argument names per tool): `describe_tool {name}` returns a tool's full description and argument schema — call it before the first use of a tool whose arguments are not obvious.
 
 Source6 supports explicit multi-provider source synchronization through sync2. Full desired graph changes use change5; annotations use project2. Read the selected owner's exact contract before any write.
 

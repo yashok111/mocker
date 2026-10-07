@@ -158,10 +158,7 @@ func TestDesignScenarioToolDoesNotDiscloseInternalFailure(t *testing.T) {
 
 func TestDesignScenarioToolsListPublishesObjectContractAndCommandUnion(t *testing.T) {
 	t.Parallel()
-	h := newTestEndpoint(t).Handler()
-	rec := doMCP(t, h, `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{
-		"Authorization": "Bearer " + testKey,
-	})
+	rec := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {

@@ -59,7 +59,7 @@ func TestListBackendAnalysisKindsMatchTheContract(t *testing.T) {
 // published the replay text (allowReset consent, queued work, mocked
 // payment) although it is a pure scope read.
 func TestResolveDiagramScopeDescribesARead(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
@@ -87,7 +87,7 @@ func TestResolveDiagramScopeDescribesARead(t *testing.T) {
 // guide.Topics() serves forty, so backend-portable, -verify, -measurements
 // and seven more were missing from the input schema an agent reads.
 func TestGetGuideAdvertisesEveryTopic(t *testing.T) {
-	response := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	response := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {

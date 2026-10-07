@@ -20,8 +20,15 @@ recipe in `design.md`. `bind_operation` reuses an existing operation;
 
 ## Orientation
 
+`tools/list` is a summary: per tool, its name, annotations, the first sentence
+of its description and a one-level argument schema (top-level names, their JSON
+type, the required set). `describe_tool {name}` returns a tool's full
+description and argument schema; call it before the first use of a tool whose
+arguments are not obvious.
+
 | tool | purpose | input | output | gotchas |
 |---|---|---|---|---|
+| `describe_tool` | One tool's full description and schemas | `name`* | name, description (full), inputSchema (complete; repeated subtrees shared through `$defs`), outputSchema (when declared), annotations, routes (admin routes it calls) | Reads the server's own tool registry; calls no admin route. An unknown name is an error naming the closest tool names. Arguments are validated against the full schema whatever `tools/list` shows. |
 | `get_guide` | Read this documentation from the server | `topic`: `overview` \| `tools` \| `shapes` \| `cookbook` \| `http` \| `design` \| `functions` (default `overview`) | `topic`, `topics[]`, `markdown` | Static text; calls no admin route. `overview` is the skill body; the others are its reference files. |
 | `get_server_config` | This server's routing facts and effective limits | — | adminHost, baseDomain, routing, reservedPrefix, limits{maxBodyBytes, maxResponseBytes, maxAssetBytes, maxAssetsTotalBytes, maxEntities, trafficMaxBodyBytes, trafficRetention, checkpointRetention, checkpointDebounceSec, streamMaxConns, streamMaxLifetimeSec, streamMaxFrameBytes, streamSendBudgetBytes, streamPingSec, streamFrameTimeoutSec, streamTrafficFrames} | Read from the process's own config; calls no route. Read once per session before sizing a document, a frame or a family — the answer to "why 413". |
 

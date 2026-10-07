@@ -124,7 +124,7 @@ func TestDataBindingToolsRequireVersionAndPreserveConflict(t *testing.T) {
 
 func TestDataFlowToolAnnotationsAndSchemas(t *testing.T) {
 	t.Parallel()
-	rec := doMCP(t, newTestEndpoint(t).Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var envelope struct {
 		Result struct {
 			Tools []struct {

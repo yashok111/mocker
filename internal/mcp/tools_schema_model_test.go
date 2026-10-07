@@ -94,8 +94,7 @@ func TestSchemaModelToolSchemasRejectMalformedInputsBeforeCall(t *testing.T) {
 
 func TestSchemaModelToolsAdvertiseAuthoritativeSchemas(t *testing.T) {
 	t.Parallel()
-	ep := newTestEndpoint(t)
-	rec := doMCP(t, ep.Handler(), `{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}`, map[string]string{"Authorization": "Bearer " + testKey})
+	rec := describedToolsList(t)
 	var env struct {
 		Result struct {
 			Tools []struct {
