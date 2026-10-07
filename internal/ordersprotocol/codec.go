@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
+	"errors"
 	"fmt"
 	"io"
 	"path"
@@ -93,7 +94,7 @@ func Decode(raw []byte, out any, limit int) error {
 	d := jsontext.NewDecoder(bytes.NewReader(raw))
 	for {
 		tok, err := d.ReadToken()
-		if err == io.EOF {
+		if errors.Is(err, io.EOF) {
 			break
 		}
 		if err != nil {

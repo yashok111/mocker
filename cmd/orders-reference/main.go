@@ -35,7 +35,7 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	defer s.Close()
+	defer func() { _ = s.Close() }()
 	if len(os.Args) == 2 && strings.HasPrefix(os.Args[1], "--measure-read=") {
 		return measureRead(s, strings.TrimPrefix(os.Args[1], "--measure-read="))
 	}

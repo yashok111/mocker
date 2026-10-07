@@ -37,7 +37,7 @@ func (s *Service) PrepareReadFixture(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	for _, ddl := range []string{"CREATE TABLE IF NOT EXISTS read_products(id INTEGER PRIMARY KEY,sku TEXT NOT NULL)", "CREATE TABLE IF NOT EXISTS read_items(order_id INTEGER NOT NULL,product_id INTEGER NOT NULL,quantity INTEGER NOT NULL,PRIMARY KEY(order_id,product_id))"} {
 		if _, err = tx.ExecContext(ctx, ddl); err != nil {
 			return err
@@ -95,7 +95,7 @@ func (s *Service) MeasureReadOrder(ctx context.Context, variant, execution strin
 	if err != nil {
 		return out, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	quantities := map[int]int{}
 	ids := []int{}
 	err = c.span("sql", "client", "orders/read-items", func() error {
@@ -103,7 +103,7 @@ func (s *Service) MeasureReadOrder(ctx context.Context, variant, execution strin
 		if e != nil {
 			return e
 		}
-		defer rows.Close()
+		defer func() { _ = rows.Close() }()
 		for rows.Next() {
 			var id, q int
 			if e = rows.Scan(&id, &q); e != nil {
@@ -134,7 +134,7 @@ func (s *Service) MeasureReadOrder(ctx context.Context, variant, execution strin
 			if e != nil {
 				return e
 			}
-			defer rows.Close()
+			defer func() { _ = rows.Close() }()
 			for rows.Next() {
 				var id int
 				var sku string
