@@ -1,10 +1,10 @@
 package backendportable
 
 import (
+	"context"
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
-	"slices"
 	"strconv"
 
 	bm "github.com/yashok111/mocker/internal/backendmodel"
@@ -330,10 +330,57 @@ func decodeModel(records []Record, manifest Manifest) (*bm.PortableModel, error)
 	}
 	return model, nil
 }
-func splitRecords(records []Record) ([][]byte, []ChunkDescriptor, error) {
+
+// uniqueRecords is the exporter's half of the cross-chunk uniqueness
+// guarantee, one linear pass over one key set. putChunk used to provide it by
+// re-decoding every earlier chunk on each insert, O(n²) under the writer
+// (review 2026-10-06, F2/F5/F33/F68); without this pass an exporter bug that
+// emitted the same record twice in different chunks would freeze a bundle
+// that only the importer's Preview refuses. It is separate from splitRecords
+// because tests use splitRecords to forge such bundles on purpose.
+func uniqueRecords(ctx context.Context, records []Record) error {
+	seen := make(map[recordKey]bool, len(records))
+	for i, record := range records {
+		if i%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+		}
+		key, err := record.key()
+		if err != nil {
+			return err
+		}
+		if seen[key] {
+			return fault(422, "Duplicate exact record")
+		}
+		seen[key] = true
+	}
+	return nil
+}
+
+// splitRecords packs records into the fewest chunks that fit MaxChunkRecords
+// and MaxChunkBytes, in order.
+//
+// The size of a pending chunk is kept as a running total (review 2026-10-06,
+// F32): the canonical form of an array is `[` + the canonical elements joined
+// by `,` + `]` (canonicalRaw re-encodes each element on its own and marshals
+// the array compactly), so a chunk of n records whose canonical sizes are
+// s₁…sₙ encodes to exactly 2 + Σsᵢ + (n−1) bytes. The previous loop
+// re-canonicalised `append(clone(pending), record)` for every record — O(n²)
+// recursive parse+marshal per chunk, ~10 GB for an export of tens of
+// thousands of records, all under the single writer. Now each record is
+// canonicalised once here and once more by EncodeChunk at flush; EncodeChunk
+// also re-checks the byte bound, so an accounting error could only turn into
+// a 413, never into an oversized chunk. TestSplitRecordsRunningSizeMatchesCanonical
+// pins the identity.
+//
+// The loop checks ctx, because Export runs it inside db.Write and a client
+// that went away must release the writer instead of finishing the bundle.
+func splitRecords(ctx context.Context, records []Record) ([][]byte, []ChunkDescriptor, error) {
 	chunks := [][]byte{}
 	descriptors := []ChunkDescriptor{}
 	pending := []Record{}
+	pendingBytes := 0 // canonical size of pending as a JSON array; 0 when empty
 	total := 0
 	flush := func() error {
 		if len(pending) == 0 {
@@ -350,27 +397,37 @@ func splitRecords(records []Record) ([][]byte, []ChunkDescriptor, error) {
 		chunks = append(chunks, body)
 		descriptors = append(descriptors, d)
 		pending = []Record{}
+		pendingBytes = 0
 		return nil
 	}
-	for _, record := range records {
-		trial := append(slices.Clone(pending), record)
-		raw, err := canonical(trial)
+	for i, record := range records {
+		if i%64 == 0 {
+			if err := ctx.Err(); err != nil {
+				return nil, nil, err
+			}
+		}
+		raw, err := canonical(record)
 		if err != nil {
 			return nil, nil, err
 		}
-		if len(trial) > MaxChunkRecords || len(raw) > MaxChunkBytes {
+		size := len(raw)
+		if 2+size > MaxChunkBytes {
+			return nil, nil, fault(413, fmt.Sprintf("Portable %s record exceeds chunk bound", record.Kind))
+		}
+		// Appending to a non-empty chunk costs the element plus its comma;
+		// the first element costs the element plus the two brackets.
+		trialBytes := 2 + size
+		if len(pending) > 0 {
+			trialBytes = pendingBytes + 1 + size
+		}
+		if len(pending)+1 > MaxChunkRecords || trialBytes > MaxChunkBytes {
 			if err := flush(); err != nil {
 				return nil, nil, err
 			}
-			raw, err = canonical([]Record{record})
-			if err != nil {
-				return nil, nil, err
-			}
-			if len(raw) > MaxChunkBytes {
-				return nil, nil, fault(413, fmt.Sprintf("Portable %s record exceeds chunk bound", record.Kind))
-			}
+			trialBytes = 2 + size
 		}
 		pending = append(pending, record)
+		pendingBytes = trialBytes
 	}
 	if err := flush(); err != nil {
 		return nil, nil, err

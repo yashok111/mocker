@@ -32,7 +32,10 @@ func (s *Service) Export(ctx context.Context, in ExportInput) (*ExportResult, er
 		if err != nil {
 			return nil, "", err
 		}
-		chunks, descriptors, err := splitRecords(records)
+		if err := uniqueRecords(ctx, records); err != nil {
+			return nil, "", err
+		}
+		chunks, descriptors, err := splitRecords(ctx, records)
 		if err != nil {
 			return nil, "", err
 		}

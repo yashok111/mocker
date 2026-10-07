@@ -1,9 +1,15 @@
 package backendportable
 
 import (
+	"context"
 	"encoding/json/jsontext"
-	"github.com/yashok111/mocker/internal/testkit"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func bundleFixture(t *testing.T) (Manifest, []byte) {
@@ -110,11 +116,102 @@ func TestPortableMemberScopesAcrossChunks(t *testing.T) {
 	if err != nil {
 		t.Fatal("different parent must succeed", err)
 	}
-	if _, err = s.Put(t.Context(), session.ID, PutInput{3, 2, string(third), "third"}); err == nil {
-		t.Fatal("same-parent duplicate across chunks accepted")
+	// A same-parent duplicate in a LATER chunk is no longer refused at Put
+	// (review 2026-10-06, F2/F5/F33/F68: that check re-decoded every earlier
+	// chunk under the writer). Preview refuses it over the whole bundle,
+	// before any domain work, and leaves the session where it was.
+	session, err = s.Put(t.Context(), session.ID, PutInput{3, 2, string(third), "third"})
+	if err != nil {
+		t.Fatal("put must not re-scan earlier chunks", err)
 	}
-	var count int
-	if err = db.R.QueryRow("SELECT count(*) FROM backend_portable_chunks WHERE session_id=?", session.ID).Scan(&count); err != nil || count != 2 {
-		t.Fatal("failed put leaked chunk", count, err)
+	service := NewService(db, bm.NewRepo(db))
+	_, err = service.Preview(t.Context(), session.ID, PreviewInput{ExpectedVersion: session.Version, ArtifactMappings: []bm.PortableArtifactMapping{}, IdempotencyKey: "preview"})
+	var f *bm.FaultError
+	if !errors.As(err, &f) || f.Status != 422 || f.Message != "Duplicate exact record" {
+		t.Fatal("same-parent duplicate across chunks must fail Preview", err)
 	}
+	var state string
+	var version int64
+	if err = db.R.QueryRow("SELECT state,version FROM backend_portable_sessions WHERE id=?", session.ID).Scan(&state, &version); err != nil || state != "staging" || version != session.Version {
+		t.Fatal("failed preview advanced the session", state, version, err)
+	}
+}
+
+// The exporter's half of the cross-chunk uniqueness guarantee: Export runs
+// uniqueRecords over the whole record list before splitting, so two copies
+// that would land in different chunks are still refused.
+func TestUniqueRecordsRejectsDuplicateAcrossChunks(t *testing.T) {
+	a := sizedRecord(t, 1, 900_000)
+	b := sizedRecord(t, 2, 900_000)
+	_, descriptors, err := splitRecords(t.Context(), []Record{a, b, a})
+	if err != nil || len(descriptors) != 3 {
+		t.Fatal("fixture must spread the copies over chunks", len(descriptors), err)
+	}
+	if err := uniqueRecords(t.Context(), []Record{a, b, a}); err == nil {
+		t.Fatal("duplicate across chunk boundary exported")
+	}
+}
+
+func TestSplitRecordsStopsOnCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, _, err := splitRecords(ctx, []Record{sizedRecord(t, 1, 10)}); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancelled export kept packing", err)
+	}
+}
+
+// review 2026-10-06, F32: splitRecords keeps a running canonical size instead
+// of re-canonicalising the pending chunk per record. This pins the identity
+// that makes it exact: each chunk equals what EncodeChunk produced from the
+// records, never exceeds the bound, and is maximal (the next record would not
+// have fit), on sizes that straddle the 1 MiB boundary several times.
+func TestSplitRecordsRunningSizeMatchesCanonical(t *testing.T) {
+	sizes := []int{300_000, 400_000, 340_000, 9, 1_048_000 - 200, 1, 700_000, 347_000, 2, 3}
+	records := make([]Record, 0, len(sizes)+1200)
+	for i, n := range sizes {
+		records = append(records, sizedRecord(t, i+1, n))
+	}
+	// Many tiny records so the record-count bound is crossed too.
+	for i := range 1200 {
+		records = append(records, sizedRecord(t, 100+i, i%7))
+	}
+	chunks, descriptors, err := splitRecords(t.Context(), records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := 0
+	for i, body := range chunks {
+		n := descriptors[i].Records
+		want, _, err := EncodeChunk(i, records[at:at+n])
+		if err != nil || string(want) != string(body) {
+			t.Fatal("chunk differs from canonical encoding", i, err)
+		}
+		if len(body) > MaxChunkBytes || n > MaxChunkRecords {
+			t.Fatal("chunk over bound", i, len(body), n)
+		}
+		if next := at + n; next < len(records) {
+			if n < MaxChunkRecords {
+				grown, err := canonical(records[at : next+1])
+				if err != nil || len(grown) <= MaxChunkBytes {
+					t.Fatal("chunk not maximal", i, len(grown), err)
+				}
+			}
+		}
+		at += n
+	}
+	if at != len(records) {
+		t.Fatal("records lost", at, len(records))
+	}
+}
+
+func sizedRecord(t *testing.T, n, pad int) Record {
+	t.Helper()
+	doc, err := canonical(map[string]string{"pad": strings.Repeat("x", pad), "u": "é <"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprintf("20000000-0000-4000-8000-%012d", n)
+	r := Record{Kind: "diagram_version", Identity: Identity{pid, pid, "diagram_version", id, "1"}, Document: jsontext.Value(doc)}
+	r.ContentHash, _ = DocumentHash(r.Document)
+	return r
 }

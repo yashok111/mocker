@@ -174,62 +174,36 @@ func (s *Staging) Put(ctx context.Context, id string, in PutInput) (*Session, er
 }
 func putChunk(ctx context.Context, tx *sql.Tx, id string, m Manifest, index int, body []byte) error {
 	c := m.Chunks[index]
+	// DecodeChunk already rejects a duplicate record key INSIDE this chunk.
 	records, err := DecodeChunk(c, body)
 	if err != nil {
 		return err
 	}
-	seen := map[recordKey]bool{}
 	for _, r := range records {
 		if r.Identity.InstallationID != m.OriginInstallationID || r.Identity.ProjectID != m.Selection.ProjectID {
 			return fault(422, "Record outside declared namespace")
 		}
-		k, err := r.key()
-		if err != nil {
-			return err
-		}
-		seen[k] = true
 	}
+	// There is deliberately no cross-chunk duplicate scan here (review
+	// 2026-10-06, F2/F5/F33/F68). It used to SELECT and decode every earlier
+	// chunk body of the session on every Put, inside the single-writer
+	// transaction: O(n²) decoding over a bundle of n chunks — about 32 GiB of
+	// JSON for a legitimate 256 MiB bundle, seconds of held writer per late
+	// Put, and hours for a manifest of tens of thousands of one-record chunks.
+	// A duplicate across chunks is still refused, exactly once and linearly:
+	// Preview's decodeModel checks the same recordKey (identity plus member
+	// parent) over the whole loaded bundle before anything else
+	// ("Duplicate exact record"), chunks are frozen once Preview leaves
+	// `staging` (the chunk insert trigger requires it), and Commit only runs
+	// on a Preview that passed. The exporter's side of the guarantee is
+	// uniqueRecords pass. TestPortableMemberScopesAcrossChunks
+	// pins it.
 	var exists int
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_portable_chunks WHERE session_id=? AND chunk_index=?`, id, index).Scan(&exists); err != nil {
 		return err
 	}
 	if exists != 0 {
 		return fault(409, "Chunk is immutable; retry original request/key")
-	}
-	rows, err := tx.QueryContext(ctx, `SELECT body FROM backend_portable_chunks WHERE session_id=?`, id)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var b []byte
-		if err = rows.Scan(&b); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		var prior []Record
-		if err = json.Unmarshal(b, &prior); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		for _, r := range prior {
-			k, err := r.key()
-			if err != nil {
-				_ = rows.Close()
-				return err
-			}
-			if seen[k] {
-				_ = rows.Close()
-				return fault(422, "Duplicate record across chunks")
-			}
-		}
-	}
-	err = rows.Err()
-	closeErr := rows.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO backend_portable_chunks(session_id,chunk_index,content_hash,record_count,byte_count,body) VALUES(?,?,?,?,?,?)`, id, index, c.SHA256, c.Records, c.Bytes, body)
 	return err
