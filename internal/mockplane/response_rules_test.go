@@ -87,7 +87,7 @@ func TestResponseRuleExecution_BranchesPreserveBytesAndSkipEnvelope(t *testing.T
 		{"first", `{ "number": 1.0, "large": 9007199254740993 }`},
 		{"second", `{"number":1e0}`},
 	} {
-		req := httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil)
+		req := httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil)
 		req.Header.Set("X-Branch", tc.header)
 		req.Header.Set("Origin", "http://client.local")
 		rec, notes := executionRequest(t, p, sink, req)
@@ -175,7 +175,7 @@ func TestResponseRuleExecution_AcceptHEADAndBodylessStatuses(t *testing.T) {
 func TestResponseRuleExecution_MaxResponseUsesLiveLimit(t *testing.T) {
 	p, sink, _ := executionTestPlane(t, executionTestRule("GET"))
 	p.cfg.MaxResponse = 2
-	rec, notes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, notes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Code != 500 || !strings.Contains(notes, "response_rule_too_large") {
 		t.Fatalf("response = %d %s notes=%q, want bounded refusal", rec.Code, rec.Body, notes)
 	}
@@ -202,7 +202,7 @@ func TestResponseRuleExecution_OverridesAndScenarioMaskSpecGraph(t *testing.T) {
 				ws.ScenarioID = new(int64(42))
 				p.SetScenarios(&fakeScenarioSource{byID: map[int64]*scenarios.Scenario{42: {Bundle: snapshotOf(ws.Settings, *tc.scenario)}}})
 			}
-			rec, notes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+			rec, notes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 			if rec.Code != tc.wantStatus || (rec.Body.String() == `{"number":1e0}`) != tc.wantRule {
 				t.Fatalf("response = %d %s; want status=%d rule=%v", rec.Code, rec.Body, tc.wantStatus, tc.wantRule)
 			}
@@ -222,7 +222,7 @@ func TestResponseRuleExecution_FailNextConsumedOnceAndRouteOffConsumesNothing(t 
 	p.SetLiveState(store)
 	row := &overrides.Row{Method: "GET", Path: "/widgets", OverrideOn: true, RouteOff: true}
 	p.SetOverrides(&fakeOverrideSource{rows: map[string]*overrides.Row{overrides.OpKey("GET", "/widgets"): row}})
-	rec, routeOffNotes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, routeOffNotes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Code != 404 {
 		t.Fatalf("routeOff = %d", rec.Code)
 	}
@@ -231,11 +231,11 @@ func TestResponseRuleExecution_FailNextConsumedOnceAndRouteOffConsumesNothing(t 
 	}
 	row.OverrideOn = false
 	ws.Revision++
-	rec, notes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, notes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Code != 503 || !strings.Contains(notes, "response_rule_shadowed_session") {
 		t.Fatalf("armed fail = %d notes=%q", rec.Code, notes)
 	}
-	rec, _ = executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, _ = executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Body.String() != `{"number":1e0}` {
 		t.Fatalf("next request missed graph: %d %s", rec.Code, rec.Body)
 	}
@@ -284,7 +284,7 @@ func TestResponseRuleExecution_HTTPInputsDoNotUseFixtureLimits(t *testing.T) {
 	rule := executionTestRule("GET")
 	rule.Nodes[1].Condition = &overrides.Condition{In: "header", Name: "X-Branch", Op: "contains", Value: "first"}
 	p, sink, _ := executionTestPlane(t, rule)
-	req := httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil)
+	req := httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil)
 	for i := range 110 {
 		req.Header.Add(fmt.Sprintf("X-Extra-%d", i), strings.Repeat("x", 5000))
 	}
@@ -309,7 +309,7 @@ func TestResponseRuleExecution_DelayAndFallback(t *testing.T) {
 			p, sink, ws := executionTestPlane(t, rule)
 			ws.Settings.DelayMs = 40
 			started := time.Now()
-			rec, notes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+			rec, notes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 			if elapsed := time.Since(started); elapsed < 75*time.Millisecond {
 				t.Fatalf("combined delay missing: %v", elapsed)
 			}

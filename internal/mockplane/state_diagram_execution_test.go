@@ -279,8 +279,9 @@ func TestStateExecutionUsesRequestBaseAndParentScopes(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var siblings []resources.Entity
-	for i, tuple := range [][2]string{{"one", "10"}, {"one", "20"}, {"two", "30"}, {"two", "40"}} {
+	tuples := [][2]string{{"one", "10"}, {"one", "20"}, {"two", "30"}, {"two", "40"}}
+	siblings := make([]resources.Entity, 0, len(tuples))
+	for i, tuple := range tuples {
 		base := resources.EncodeScope([]string{tuple[0]})
 		scope := resources.EncodeScope([]string{tuple[1]})
 		if _, _, err := repo.Set(t.Context(), parent.ID, base, "", tuple[1], parent.IDField, parent.Wrapper.IDType, map[string]any{}); err != nil {

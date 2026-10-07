@@ -43,7 +43,7 @@ func TestResponseRuleExecution_CustomRouteKeepsPrecedence(t *testing.T) {
 				ID: 44, Method: "GET", Path: "/widgets", CanonicalPath: "/widgets", OverrideOn: tc.on, RouteOff: tc.off,
 				ActiveStatus: 202, Responses: map[string]overrides.Variant{"202": {Mode: "pinned", MediaType: "application/json", Body: jsonx.RawMessage(`{"custom":true}`)}},
 			}})
-			rec, notes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+			rec, notes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 			if rec.Code != tc.wantStatus || tc.wantBody != "" && rec.Body.String() != tc.wantBody {
 				t.Fatalf("response = %d %s, want %d %s", rec.Code, rec.Body, tc.wantStatus, tc.wantBody)
 			}
@@ -81,7 +81,7 @@ func TestResponseRuleExecution_StaticPostSkipsResourceWriteButFallbackPreservesI
 				return resources.Entity{Data: jsonx.RawMessage(`{"id":17,"stored":true}`)}, nil
 			}}
 			p.SetEntities(store)
-			req := httptest.NewRequest("POST", "http://alex.mock.local/widgets", strings.NewReader(`{"name":"request"}`))
+			req := httptest.NewRequest(http.MethodPost, "http://alex.mock.local/widgets", strings.NewReader(`{"name":"request"}`))
 			req.Header.Set("Content-Type", "application/json")
 			req.Header.Set("Accept", tc.accept)
 			rec, _ := executionRequest(t, p, sink, req)
@@ -98,7 +98,7 @@ func TestResponseRuleExecution_StaticPostSkipsResourceWriteButFallbackPreservesI
 func TestResponseRuleExecution_ActiveFunctionMasksGraph(t *testing.T) {
 	p, sink, _ := executionTestPlane(t, executionTestRule("GET"))
 	p.SetOverrides(&fakeOverrideSource{rows: map[string]*overrides.Row{overrides.OpKey("GET", "/widgets"): functionRow("/widgets", `return 299, {from_function = true}`)}})
-	rec, notes := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, notes := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Code != 299 || !strings.Contains(rec.Body.String(), "from_function") || !strings.Contains(notes, "response_rule_shadowed_override") || !strings.Contains(notes, noteFunction) {
 		t.Fatalf("function layer changed: %d %s notes=%q", rec.Code, rec.Body, notes)
 	}
@@ -124,11 +124,11 @@ func TestResponseRuleExecution_PauseCancellationPrecedesResponseAndDelay(t *test
 	if _, err := store.Delete(ws.ID, target, livestate.ActionPause); err != nil {
 		t.Fatal(err)
 	}
-	rec, _ = executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, _ = executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Code != 503 {
 		t.Fatalf("pause consumed fail counter twice: %d %s", rec.Code, rec.Body)
 	}
-	rec, _ = executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil))
+	rec, _ = executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil))
 	if rec.Body.String() != `{"number":1e0}` {
 		t.Fatalf("fail counter not exhausted: %d %s", rec.Code, rec.Body)
 	}
@@ -139,7 +139,7 @@ func TestResponseRuleExecution_RevisionCacheAndBasePath(t *testing.T) {
 	ws.Settings.BasePath = "/api/{tenant}"
 	source := p.specs.(*fakeRuntimeSource)
 	req := func() *http.Request {
-		return httptest.NewRequest("GET", "http://alex.mock.local/api/acme/widgets", nil)
+		return httptest.NewRequest(http.MethodGet, "http://alex.mock.local/api/acme/widgets", nil)
 	}
 	rec, _ := executionRequest(t, p, sink, req())
 	if rec.Body.String() != `{"number":1e0}` {
@@ -165,7 +165,7 @@ func TestResponseRuleExecution_LexicalBodyAndRepeatedQueryParity(t *testing.T) {
 		rule.Nodes[1].Condition = &overrides.Condition{In: "body", Name: "number", Op: "equals", Value: lexical}
 		p, sink, _ := executionTestPlane(t, rule)
 		for _, sent := range []string{"1", "1.0", "1e0"} {
-			req := httptest.NewRequest("POST", "http://alex.mock.local/widgets", strings.NewReader(`{"number":`+sent+`}`))
+			req := httptest.NewRequest(http.MethodPost, "http://alex.mock.local/widgets", strings.NewReader(`{"number":`+sent+`}`))
 			req.Header.Set("Content-Type", "application/json")
 			rec, _ := executionRequest(t, p, sink, req)
 			if (rec.Header().Get("X-Rule") == "first") != (lexical == sent) {
@@ -176,7 +176,7 @@ func TestResponseRuleExecution_LexicalBodyAndRepeatedQueryParity(t *testing.T) {
 	rule := executionTestRule("GET")
 	rule.Nodes[1].Condition = &overrides.Condition{In: "query", Name: "tag", Op: "equals", Value: "last"}
 	p, sink, _ := executionTestPlane(t, rule)
-	rec, _ := executionRequest(t, p, sink, httptest.NewRequest("GET", "http://alex.mock.local/widgets?tag=first&tag=last", nil))
+	rec, _ := executionRequest(t, p, sink, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets?tag=first&tag=last", nil))
 	if rec.Header().Get("X-Rule") != "first" {
 		t.Fatalf("repeated query did not match any value: %s", rec.Body)
 	}
@@ -213,7 +213,7 @@ func TestResponseRuleExecution_ServeBoundaryRefusesUnsafeHeadersAndMedia(t *test
 		t.Run(tc.name, func(t *testing.T) {
 			p, _, ws := executionTestPlane(t, executionTestRule("GET"))
 			rec := httptest.NewRecorder()
-			p.writeResponseRule(rec, httptest.NewRequest("GET", "http://alex.mock.local/widgets", nil), ws, &router.Route{Method: "GET", Path: "/widgets"}, responserules.Response{Status: 200, MediaType: tc.media, Headers: tc.headers, BodyJSON: new(`{"private":true}`)})
+			p.writeResponseRule(rec, httptest.NewRequest(http.MethodGet, "http://alex.mock.local/widgets", nil), ws, &router.Route{Method: "GET", Path: "/widgets"}, responserules.Response{Status: 200, MediaType: tc.media, Headers: tc.headers, BodyJSON: new(`{"private":true}`)})
 			if rec.Code != 500 || strings.Contains(rec.Body.String(), "private") || rec.Header().Get("Connection") != "" {
 				t.Fatalf("unsafe response escaped: %d %s %v", rec.Code, rec.Body, rec.Header())
 			}
@@ -226,7 +226,7 @@ func TestResponseRuleExecution_TruncatedCaptureHasBoundedNote(t *testing.T) {
 	rule.Nodes[1].Condition = &overrides.Condition{In: "body", Name: "value", Op: "exists"}
 	p, sink, _ := executionTestPlane(t, rule)
 	p.cfg.TrafficMaxBody = 1
-	req := httptest.NewRequest("POST", "http://alex.mock.local/widgets", strings.NewReader(fmt.Sprintf(`{"value":"%s"}`, strings.Repeat("sensitive", 9000))))
+	req := httptest.NewRequest(http.MethodPost, "http://alex.mock.local/widgets", strings.NewReader(fmt.Sprintf(`{"value":"%s"}`, strings.Repeat("sensitive", 9000))))
 	req.Header.Set("Content-Type", "application/json")
 	rec, notes := executionRequest(t, p, sink, req)
 	if rec.Body.String() != `{"number":1e0}` || !strings.Contains(notes, "response_rule_body_rejected") || strings.Contains(notes, "sensitive") {
