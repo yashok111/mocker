@@ -1,6 +1,6 @@
 import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { act, render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { expect, it, vi } from "vitest";
 import { BackendReplay } from "./BackendReplay";
 const api = vi.hoisted(() => ({
@@ -8,6 +8,7 @@ const api = vi.hoisted(() => ({
   listBackendReplayProfiles: vi.fn(),
   listBackendReplayPackages: vi.fn(),
   listBackendReplayRuns: vi.fn(),
+  getBackendReplayRun: vi.fn(),
   getBackendReplayProfile: vi.fn(),
   getBackendReplayPackage: vi.fn(),
   startBackendReplay: vi.fn(),
@@ -72,4 +73,58 @@ it("reads the selected exact versions and uses the exact package for editing wit
   expect(api.startBackendReplay).not.toHaveBeenCalled();
   expect(api.connectBackendReplayProfile).not.toHaveBeenCalled();
   client.clear();
+});
+it("keeps re-reading the runs list behind a closed panel only while the selected run is active", async () => {
+  // Fake from before the mount so the intervals React Query schedules are
+  // fake ones; shouldAdvanceTime keeps findBy*'s own polling alive.
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  try {
+    let status = "running";
+    api.listBackendReplayTargets.mockResolvedValue({ status: 200, data: [] });
+    api.listBackendReplayProfiles.mockResolvedValue({ status: 200, data: [] });
+    api.listBackendReplayPackages.mockResolvedValue({ status: 200, data: [] });
+    api.listBackendReplayRuns.mockImplementation(async () => ({
+      status: 200,
+      data: [{ id: "run-1", status }],
+    }));
+    api.getBackendReplayRun.mockImplementation(async () => ({
+      status: 200,
+      data: { id: "run-1", status },
+    }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <MantineProvider>
+        <QueryClientProvider client={client}>
+          <BackendReplay projectId="p" open={false} />
+        </QueryClientProvider>
+      </MantineProvider>,
+    );
+    const elapse = (ms: number) =>
+      act(async () => {
+        await vi.advanceTimersByTimeAsync(ms);
+      });
+    await screen.findAllByText("running · run-1");
+    await elapse(2000 * 3);
+    // Closed and nothing awaited: the mount's one read, no poll.
+    expect(api.listBackendReplayRuns).toHaveBeenCalledTimes(1);
+
+    fireEvent.change(screen.getByLabelText("Run и неизменяемый отчёт"), {
+      target: { value: "run-1" },
+    });
+    await screen.findByText("Статус: running");
+    await elapse(2000 * 3);
+    const whileActive = api.listBackendReplayRuns.mock.calls.length;
+    expect(whileActive).toBeGreaterThanOrEqual(3);
+
+    // The run reaches its verdict through its own poll, and the list stops.
+    status = "succeeded";
+    await elapse(2000);
+    await screen.findByText("Статус: succeeded");
+    const settled = api.listBackendReplayRuns.mock.calls.length;
+    await elapse(2000 * 3);
+    expect(api.listBackendReplayRuns).toHaveBeenCalledTimes(settled);
+    client.clear();
+  } finally {
+    vi.useRealTimers();
+  }
 });
