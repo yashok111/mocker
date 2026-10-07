@@ -431,3 +431,71 @@ func TestSummarizeDescription(t *testing.T) {
 		}
 	}
 }
+
+// TestToolsListSummariesAreUnique: the light listing is what a model picks a
+// tool from, so two tools with the same summary are indistinguishable there
+// until describe_tool is called for each. Before this test every backend
+// family registered its tools in a loop over one shared Description, and
+// F23's first-sentence cut turned that into one identical summary per
+// family (all analysis tools read "Static, project-owned analysis of exact
+// immutable targets."). Each family row now carries its own summary
+// sentence; this is the guard for the next family.
+func TestToolsListSummariesAreUnique(t *testing.T) {
+	tools, _ := lightToolsList(t)
+	byText := map[string][]string{}
+	for _, tool := range tools {
+		byText[tool.Description] = append(byText[tool.Description], tool.Name)
+	}
+	texts := make([]string, 0, len(byText))
+	for text, names := range byText {
+		if len(names) > 1 {
+			texts = append(texts, text)
+		}
+	}
+	sort.Strings(texts)
+	dup := 0
+	for _, text := range texts {
+		dup += len(byText[text])
+		t.Errorf("%d tools share the summary %q: %v", len(byText[text]), text, byText[text])
+	}
+	if dup > 0 {
+		t.Logf("%d of %d tools have a non-unique summary", dup, len(tools))
+	}
+}
+
+// TestFamilySummaryIsTheWholeFirstSentence: a family tool's description is
+// its own summary sentence followed by the shared family text, and the light
+// listing must cut it exactly between the two. An abbreviation or a ". "
+// inside a summary would make firstSentenceEnd cut early (half a summary in
+// tools/list); a summary without its closing period would run the family's
+// first sentence into it. Either way light+" "+family stops equalling the
+// registered description.
+func TestFamilySummaryIsTheWholeFirstSentence(t *testing.T) {
+	families := []string{
+		backendAnalysisFamily, backendMaterializationFamily, backendObservationFamily,
+		backendReplayFamily, backendDiagramFamily, backendPortableFamily, backendChangeProposalFamily,
+	}
+	tools, _ := lightToolsList(t)
+	oracle := oracleTools(t)
+	seen := map[string]int{}
+	for _, tool := range tools {
+		full, _ := oracle[tool.Name]["description"].(string)
+		for _, family := range families {
+			if !strings.HasSuffix(full, " "+family) {
+				continue
+			}
+			seen[family]++
+			if tool.Description+" "+family != full {
+				t.Errorf("%s: light summary %q is not the whole sentence before the family text in %q", tool.Name, tool.Description, full)
+			}
+			if !strings.HasSuffix(tool.Description, ".") || utf8.RuneCountInString(tool.Description) > 150 {
+				t.Errorf("%s: summary %q must be one sentence of at most 150 runes", tool.Name, tool.Description)
+			}
+		}
+	}
+	for _, family := range families {
+		if seen[family] == 0 {
+			t.Errorf("no listed tool carries the family text %.60q", family)
+		}
+	}
+}
