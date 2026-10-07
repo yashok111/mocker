@@ -84,6 +84,17 @@ func TestLinkedContractEqualityKeepsNumberLexemes(t *testing.T) {
 	}
 }
 
+// review 2026-10-06, F127: a destination without the leading slash is not a
+// JSON pointer; it was written as if it were /paths/... .
+func TestMaterializationCopyRejectsRelativeDestination(t *testing.T) {
+	t.Parallel()
+	s, pid, in, pins := copyFixture(t)
+	in.Targets[0].Commands = []Command{{Type: "copy_api_object", CopyFrom: &pins[0], Selector: &bm.APIArtifactSelector{ObjectKey: "orders-get"}, Destination: "x/paths/~1orders/get", APIDocument: `{"openapi":"3.1.0","info":{"title":"Copy","version":"1"},"paths":{}}`}}
+	if _, err := s.Preview(t.Context(), pid, in); err == nil {
+		t.Fatal("relative destination accepted")
+	}
+}
+
 // review 2026-10-06, F125: splicing one object into the destination must leave
 // every other number lexeme exact; a float64 round trip turned
 // 9223372036854775807 into 9223372036854775808 and 1.0 into 1.

@@ -37,6 +37,11 @@ func (s *Service) copyAPIObject(ctx context.Context, tx *sql.Tx, installation st
 	// Copy only authored operations or component schemas. Broader owner edits use
 	// an explicit typed replacement and the owner's normal validators.
 	segments := strings.Split(c.Destination, "/")
+	// segments[0] must be empty: "x/paths/~1orders/get" is not a JSON pointer
+	// and was written to /paths/~1orders/get (review 2026-10-06, F127).
+	if segments[0] != "" {
+		return invalid("Copy destination must be an operation or component schema")
+	}
 	operation := selector.ObjectKey != "" && len(segments) == 4 && segments[1] == "paths" && slices.Contains([]string{"get", "post", "put", "patch", "delete", "options", "head", "trace"}, segments[3])
 	schema := selector.JSONPointer != "" && len(segments) == 4 && segments[1] == "components" && segments[2] == "schemas" && segments[3] != ""
 	if !operation && !schema {
