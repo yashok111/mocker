@@ -7,7 +7,7 @@ import (
 
 func (r *Repo) portableDiagramContext(ctx context.Context, tx *sql.Tx) context.Context {
 	request := r.portableArtifactRequest(ctx, tx)
-	return (&ArtifactService{repo: r, api: request.api, scenarios: request.scenario}).DiagramContext(ctx)
+	return (&ArtifactService{repo: r, api: request.api, scenarios: request.scenario, diagramTx: tx}).DiagramContext(ctx)
 }
 func namespacedLocalProjection(g *EffectiveGraphSnapshot, group *ArtifactNamespaceGroup) *EffectiveGraphSnapshot {
 	graph := *g

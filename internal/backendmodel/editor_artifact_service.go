@@ -2,6 +2,7 @@ package backendmodel
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 
 	"github.com/yashok111/mocker/internal/designscenario"
@@ -25,6 +26,11 @@ type ArtifactService struct {
 	scenarios          ScenarioArtifactReader
 	maxApplyBodyBytes  int64
 	globalMaxBodyBytes *int64
+	// diagramTx is set only on the service a portable diagram import builds
+	// inside the single writer: the diagram resolver then reads the
+	// installation id on it instead of the reader pool (review 2026-10-06,
+	// F3/F183). Its api/scenarios already read on the same transaction.
+	diagramTx *sql.Tx
 }
 
 func NewArtifactService(repo *Repo, api APIArtifactReader, scenarios ScenarioArtifactReader) *ArtifactService {

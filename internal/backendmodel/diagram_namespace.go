@@ -75,7 +75,13 @@ func (r *diagramArtifactResolver) resolveNamespaced(ref DiagramRef) (bool, error
 	return resolveDiagramArtifact(graph, request, DiagramRef{Kind: "artifact", Locator: &loc.Locator, RowID: ref.RowID})
 }
 func (s *ArtifactService) diagramInstallationID(ctx context.Context) string {
-	id, err := s.repo.InstallationID(ctx)
+	var q importReader = s.repo.db.R
+	if s.diagramTx != nil {
+		// Inside the portable import's writer: a pool read here waited on
+		// readers whose holders waited for this writer (review 2026-10-06, F183).
+		q = s.diagramTx
+	}
+	id, err := installationID(ctx, q)
 	if err != nil {
 		return ""
 	}

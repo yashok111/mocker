@@ -44,8 +44,34 @@ func (r *Repo) ArtifactSnapshot(ctx context.Context, designID, revisionID int64)
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
+	out, err := r.artifactSnapshotOn(ctx, tx, designID, revisionID)
+	if err != nil {
+		return nil, err
+	}
+	if err = tx.Commit(); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// ArtifactSnapshotTx is ArtifactSnapshot on the caller's transaction, with the
+// same size, guard and digest checks. A caller that already holds a reader or
+// the single writer must use it: ArtifactSnapshot opens a second reader-pool
+// connection, so pool-width concurrent callers each waited for one, and a
+// writer holder waited on readers whose holders waited for the writer (review
+// 2026-10-06, F3/F183). Until that review this name skipped the size bound and
+// the artifact guard, so the portable import admitted owners the live read
+// refuses; both now answer the same.
+func (r *Repo) ArtifactSnapshotTx(ctx context.Context, tx *sql.Tx, designID, revisionID int64) (*ArtifactSnapshot, error) {
+	if designID <= 0 || revisionID <= 0 {
+		return nil, invalidField("", "Укажите положительные ID API и ревизии")
+	}
+	return r.artifactSnapshotOn(ctx, tx, designID, revisionID)
+}
+
+func (r *Repo) artifactSnapshotOn(ctx context.Context, tx *sql.Tx, designID, revisionID int64) (*ArtifactSnapshot, error) {
 	out := &ArtifactSnapshot{DesignID: designID, RevisionID: revisionID}
-	err = tx.QueryRowContext(ctx, `SELECT d.name,r.hash,r.version FROM api_designs d JOIN api_design_revisions r ON r.design_id=d.id WHERE d.id=? AND r.id=?`, designID, revisionID).Scan(&out.DesignName, &out.ContentHash, &out.Version)
+	err := tx.QueryRowContext(ctx, `SELECT d.name,r.hash,r.version FROM api_designs d JOIN api_design_revisions r ON r.design_id=d.id WHERE d.id=? AND r.id=?`, designID, revisionID).Scan(&out.DesignName, &out.ContentHash, &out.Version)
 	if err != nil {
 		return nil, notFound(err)
 	}
@@ -68,9 +94,6 @@ func (r *Repo) ArtifactSnapshot(ctx context.Context, designID, revisionID int64)
 		return nil, err
 	}
 	if err = ctx.Err(); err != nil {
-		return nil, err
-	}
-	if err = tx.Commit(); err != nil {
 		return nil, err
 	}
 	return out, nil
