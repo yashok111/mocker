@@ -9,13 +9,11 @@ import type { BackendDiagramScopeInput, BackendDiagramVersion } from "@/api/gene
 import type { ReplayPreparation } from "./backendDiagramReplay";
 describe("diagram selection replay admission", () => {
   it("opening and changing selection never invokes preparation; explicit click only reads", async () => {
-    const prepare = vi
-      .fn()
-      .mockResolvedValue({
-        projectId: "project",
-        package: { diagramBindings: [], excludedIds: ["member"] },
-        excluded: [],
-      } as unknown as ReplayPreparation);
+    const prepare = vi.fn().mockResolvedValue({
+      projectId: "project",
+      package: { diagramBindings: [], excludedIds: ["member"] },
+      excluded: [],
+    } as unknown as ReplayPreparation);
     const diagram = {
       projectId: "project",
       pin: { id: "diagram", version: 2, contentHash: "hash" },
