@@ -2,9 +2,11 @@ package admin
 
 import (
 	"encoding/json/v2"
+	"slices"
 	"strings"
 	"testing"
 
+	"github.com/yashok111/mocker/internal/backendanalysis"
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	ob "github.com/yashok111/mocker/internal/backendobservations"
 )
@@ -24,6 +26,88 @@ func decodeBackendFailure(t *testing.T, raw []byte) backendFailure {
 		t.Fatalf("%v: %s", err, raw)
 	}
 	return f
+}
+
+// TestCapabilitiesAdvertiseEveryAnalysisKindAndMode pins review 2026-10-06,
+// F11/F27: capabilities.analysisSupport listed six kinds and
+// observationModes ["none"], so an agent negotiating by it (as the analysis
+// guides tell it to) concluded measurements and pinned observed impact were
+// unsupported while start_backend_analysis accepted them.
+func TestCapabilitiesAdvertiseEveryAnalysisKindAndMode(t *testing.T) {
+	s := loopbackTestServer(t, nil)
+	status, raw, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "GET", "/api/backend-projects/capabilities", nil)
+	if err != nil || status != 200 {
+		t.Fatal(status, string(raw), err)
+	}
+	var caps struct {
+		AnalysisSupport struct {
+			Kinds            []string `json:"kinds"`
+			ObservationModes []string `json:"observationModes"`
+		} `json:"analysisSupport"`
+	}
+	if err := json.Unmarshal(raw, &caps); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(caps.AnalysisSupport.Kinds, "scenario_measurement") || !slices.Contains(caps.AnalysisSupport.Kinds, "scenario_comparison") || !slices.Contains(caps.AnalysisSupport.ObservationModes, "pinned") {
+		t.Errorf("analysisSupport = %+v", caps.AnalysisSupport)
+	}
+}
+
+// TestProjectCapabilitiesMatchTheServer pins review 2026-10-06, F90: every
+// project resource carried the original seven features while
+// get_backend_capabilities advertised sixty-odd, so a client checking
+// project.capabilities concluded that annotations, relational import or sync
+// were unsupported.
+func TestProjectCapabilitiesMatchTheServer(t *testing.T) {
+	s := loopbackTestServer(t, nil)
+	var p bm.Project
+	b41Call(t, s, "POST", "/api/backend-projects", bm.CreateInput{Name: "Caps", IdempotencyKey: "caps"}, 201, &p)
+	status, raw, err := s.CallAsMCP(t.Context(), loopbackTestSrc(), "GET", "/api/backend-projects/capabilities", nil)
+	if err != nil || status != 200 {
+		t.Fatal(status, string(raw), err)
+	}
+	var caps struct {
+		Features []string `json:"features"`
+	}
+	if err := json.Unmarshal(raw, &caps); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(p.Capabilities, caps.Features) {
+		t.Errorf("project capabilities %v, server features %v", p.Capabilities, caps.Features)
+	}
+}
+
+// TestComposedRevisionCompareMatchesTheContract pins review 2026-10-06, F16:
+// comparing two composed (schema 6) revisions emits sourceBefore/sourceAfter
+// and per-item sourceClaimBefore/sourceClaimAfter, which api/openapi.json did
+// not declare on two additionalProperties:false schemas, so a strict client
+// rejected the real response. b41Call validates the 200 against the contract.
+func TestComposedRevisionCompareMatchesTheContract(t *testing.T) {
+	s := loopbackTestServer(t, nil)
+	p, err := s.backendRepo.Create(t.Context(), bm.CreateInput{Name: "Compare", IdempotencyKey: "compare"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	first := b42Source(t, s, *p, "", "first", "System")
+	graph, err := s.backendRepo.ResolveEffectiveGraph(t.Context(), p.ID, bm.BackendReadTarget{RevisionID: first.Revision.ID})
+	if err != nil {
+		t.Fatal(err)
+	}
+	second := b42Source(t, s, first.Project, graph.Source.SourceVector.Partitions[0].RepositoryID, "second", "Renamed System")
+	raw := b41Call(t, s, "POST", "/api/backend-projects/"+p.ID+"/revisions/compare", bm.CompareRevisionsInput{FromRevisionID: first.Revision.ID, ToRevisionID: second.Revision.ID}, 200, nil)
+	if !strings.Contains(string(raw), `"sourceBefore"`) {
+		t.Fatalf("fixture did not exercise the composed members: %s", raw)
+	}
+}
+
+// TestAnalysisListUnknownProjectIs404 pins review 2026-10-06, F13: the list
+// never looked the project up, so a mistyped or deleted projectId answered
+// 200 with an empty page, while every sibling read answers 404.
+func TestAnalysisListUnknownProjectIs404(t *testing.T) {
+	s := loopbackTestServer(t, nil)
+	jobs := backendanalysis.NewRepo(s.db)
+	s.SetBackendAnalysis(backendanalysis.NewService(jobs, s.backendRepo, backendanalysis.NewEngine(s.backendRepo, nil)), jobs)
+	b41Call(t, s, "GET", "/api/backend-projects/01900000-0000-7000-8000-00000000000a/analyses", nil, 404, nil)
 }
 
 // TestBackendBodyKeepsTypedDecoderFaults pins review 2026-10-06, F173:

@@ -50,15 +50,33 @@ func addGuideTools(s *sdk.Server) {
 			"For database inspection and typed draft proposals select \"backend-database\" and load \"backend-database-reference\" as needed. For source3 flow or imported data accesses select \"backend-inspect\", with \"backend-flow-reference\" and \"backend-analysis\" owned by inspect. Runtime import requires runtime-flow-v1/schema3 and every declared capability. Model/recovery/profile topics belong to import. Verify each actual owner's advertised identity, all required schemas/capabilities and topic hash in the same guideSetId/manifestHash. For saved authored editor content select inspect10 with backend-editor-projections/backend-editor-artifacts-v1 and read \"backend-editor-projections\" for full rosters, exact linked/copy provenance, budgets and retry. For source5 event routes/jobs/service calls select inspect10 with backend-events-query and read \"backend-events\"; import8 owns events-service-v1/schema5 and explicit4→5 extension. Pure inspection writes nothing; an authorized resolvable source gap uses the full compatible whole-scope import and audit procedure. " +
 			"For composed source6 synchronization select sync2 and read \"backend-sync\" for selected-partition extension, qualified claims, conflicts, incremental scopes and exact request recovery. For full desired edits select change4 and read \"backend-change-proposals\" for immutable baselines, typed intent, preview/apply/history and permanent command IDs. Read \"backend-change-rebase\" for reasoned B/O/N conflicts and exact preview/apply; read \"backend-analysis-jobs\" for start/poll/frozen pages, explicit retry/cancel and exact report-to-ready. Static reports do not verify runtime. Project2 owns \"backend-annotations\" for metadata notes, CAS, cursor conflicts and orphans. Import8 retains legacy extraction procedures and owns schema6 representation import; inspect10/database7 describe their exact source/legacy/full targets and SavedView-v2. Current READY candidates expose basic graph/node/evidence/coverage/assertions only. " +
 			"For exact C4 architecture mappings, aggregate members and diagram-view-v1 read backend-architecture under inspect10. Architecture and static interactions are supported; read backend-interactions before the read-only candidate builder; source assertions, authored intent and gaps remain distinct. " +
+			"For verification and transfer read backend-verify, backend-diagnostics, backend-observations, backend-correlation, backend-measurements, backend-benchmarks, backend-replay and backend-portable; backend-lifecycle and backend-business-map cover the other diagram kinds. " +
 			"Static text: calls no admin route, reads no workspace, changes nothing.",
+		InputSchema: getGuideInputSchema(),
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, handleGetGuide)
+}
+
+// getGuideInputSchema is GetGuideInput's schema with the topic list taken
+// from guide.Topics(). Review 2026-10-06, F134: the list was a hand copy in
+// the struct tag that stopped at backend-replay while the guide served forty
+// topics, so ten (backend-portable, -verify, -measurements among them) were
+// invisible to an agent reading the input schema.
+func getGuideInputSchema() map[string]any {
+	return map[string]any{
+		"type":                 "object",
+		"additionalProperties": false,
+		"properties": map[string]any{
+			"guideSetId": map[string]any{"type": "string", "description": "optional immutable guide set selector; unknown selectors fail explicitly"},
+			"topic":      map[string]any{"type": "string", "description": "one of " + strings.Join(guide.Topics(), ", ") + "; omitted means overview"},
+		},
+	}
 }
 
 // GetGuideInput is get_guide's input.
 type GetGuideInput struct {
 	GuideSetID string `json:"guideSetId,omitempty" jsonschema:"optional immutable guide set selector; unknown selectors fail explicitly"`
-	Topic      string `json:"topic,omitempty" jsonschema:"one of overview, tools, shapes, cookbook, http, design, functions, backend-overview, backend-import, backend-model, backend-import-protocol, backend-recovery, backend-examples, backend-database, backend-database-reference, backend-profile-go-sql, backend-inspect, backend-flow-reference, backend-analysis, backend-editor-projections, backend-events, backend-sync, backend-change-proposals, backend-annotations, backend-change-rebase, backend-analysis-jobs, backend-change-handoff, backend-endpoint-review, backend-architecture, backend-replay; omitted means overview"`
+	Topic      string `json:"topic,omitempty"` // published schema: getGuideInputSchema
 }
 
 // GetGuideOutput is get_guide's declared output.

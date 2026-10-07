@@ -105,6 +105,6 @@ func addBackendAPIArtifactTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, rout
 		if status < 200 || status >= 300 {
 			return fail(backendStatusError(status, response))
 		}
-		return &sdk.CallToolResult{StructuredContent: jsonx.RawMessage(response), Content: []sdk.Content{&sdk.TextContent{Text: string(response)}}}, nil
+		return backendToolResult(response), nil
 	})
 }

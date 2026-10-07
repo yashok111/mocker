@@ -14862,7 +14862,8 @@
                 "items": {
                   "type": "string",
                   "enum": [
-                    "none"
+                    "none",
+                    "pinned"
                   ]
                 },
                 "uniqueItems": true
@@ -24055,6 +24056,12 @@
           },
           "artifactGroupAfter": {
             "$ref": "#/components/schemas/ArtifactGroupSide"
+          },
+          "sourceClaimBefore": {
+            "$ref": "#/components/schemas/BackendSourceClaimComparisonSide"
+          },
+          "sourceClaimAfter": {
+            "$ref": "#/components/schemas/BackendSourceClaimComparisonSide"
           }
         }
       },
@@ -24113,6 +24120,14 @@
           },
           "nextCursor": {
             "type": "string"
+          },
+          "sourceBefore": {
+            "$ref": "#/components/schemas/BackendSourceReadContext",
+            "description": "Present when the from revision is composed (schema 6)."
+          },
+          "sourceAfter": {
+            "$ref": "#/components/schemas/BackendSourceReadContext",
+            "description": "Present when the to revision is composed (schema 6)."
           }
         }
       },
@@ -36759,10 +36774,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "revisionId": {
                 "type": "string",
@@ -36824,10 +36843,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -36884,10 +36907,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -36944,10 +36971,14 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "search": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "At most 1024 UTF-8 bytes, no NUL."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -37005,7 +37036,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37072,7 +37105,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37134,7 +37169,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37196,7 +37233,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37258,7 +37297,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37325,7 +37366,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37387,7 +37430,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37449,7 +37494,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "flowId": {
                 "type": "string",
@@ -37511,7 +37558,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37586,7 +37635,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37656,7 +37707,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37726,7 +37779,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "entrypointId": {
                 "type": "string",
@@ -37796,7 +37851,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -37871,7 +37928,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -37941,7 +38000,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -38011,7 +38072,9 @@
                 "default": 100
               },
               "cursor": {
-                "type": "string"
+                "type": "string",
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view and selectors, not the limit."
               },
               "dataNodeId": {
                 "type": "string",
@@ -46566,7 +46629,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "revisionId": {
                 "type": "string",
@@ -46637,7 +46701,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -46703,7 +46768,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -46769,7 +46835,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -46835,7 +46902,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "revisionId": {
                 "type": "string",
@@ -46906,7 +46974,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -46972,7 +47041,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -47038,7 +47108,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -47104,7 +47175,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "revisionId": {
                 "type": "string",
@@ -47175,7 +47247,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "proposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -47241,7 +47314,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "changeProposal": {
                 "$ref": "#/components/schemas/BackendProposalReadTarget"
@@ -47307,7 +47381,8 @@
               },
               "cursor": {
                 "type": "string",
-                "maxLength": 4096
+                "maxLength": 1024,
+                "description": "Opaque nextCursor of the previous page, at most 1024 bytes. It binds the view, selectors and the effective limit: request the next page with the same limit, or the cursor is refused."
               },
               "importCandidate": {
                 "$ref": "#/components/schemas/BackendImportCandidateReadTarget"
@@ -81369,7 +81444,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           }
         },
         "required": [
@@ -81393,7 +81469,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           }
         },
         "required": [
@@ -81420,7 +81497,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           },
           "architecture": {
             "$ref": "#/components/schemas/BackendDiagramPin"
@@ -81910,7 +81988,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           }
         },
         "required": [
@@ -81934,7 +82013,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 128
+            "maxLength": 128,
+            "pattern": "^[!-~]+$"
           },
           "expectedVersion": {
             "type": "integer",
@@ -83534,7 +83614,8 @@
           "idempotencyKey": {
             "type": "string",
             "minLength": 1,
-            "maxLength": 256
+            "maxLength": 128,
+            "description": "At most 128 UTF-8 bytes; the server counts bytes, so a non-ASCII key reaches the limit sooner."
           },
           "resolutionAnalysis": {
             "$ref": "#/components/schemas/BackendFindingAnalysisRef"
@@ -88483,6 +88564,43 @@
           "method",
           "limitations"
         ]
+      },
+      "BackendSourceClaimComparisonSide": {
+        "type": "object",
+        "additionalProperties": false,
+        "description": "One side of a composed (schema 6) source claim delta: the claimed assertion, its addressed property and value when the claim is a property, its currentness, selections and dependency claims.",
+        "required": [
+          "assertion",
+          "currentness",
+          "selections",
+          "dependencyClaims"
+        ],
+        "properties": {
+          "assertion": {
+            "$ref": "#/components/schemas/BackendBaseAssertionRef"
+          },
+          "property": {
+            "$ref": "#/components/schemas/BackendSourcePropertySelector"
+          },
+          "value": {
+            "$ref": "#/components/schemas/BackendSourcePropertyValue"
+          },
+          "currentness": {
+            "$ref": "#/components/schemas/BackendSourceClaimCurrentness"
+          },
+          "selections": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendSourceAssertionResolution"
+            }
+          },
+          "dependencyClaims": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/BackendSourceDependencyBinding"
+            }
+          }
+        }
       }
     }
   },
@@ -108676,7 +108794,8 @@
               "type": "string",
               "minLength": 0,
               "maxLength": 1024
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds every selector and the limit: request the next page with the same limit, or the cursor is refused (400 backend_analysis_invalid)."
           },
           {
             "name": "limit",
@@ -109293,7 +109412,8 @@
               "type": "string",
               "minLength": 0,
               "maxLength": 1024
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds every selector and the limit: request the next page with the same limit, or the cursor is refused (400 backend_analysis_invalid)."
           },
           {
             "name": "service",
@@ -110068,7 +110188,8 @@
             "schema": {
               "type": "string",
               "maxLength": 4096
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds the filters and the limit: changing the limit between pages answers 409 backend_diagram_cursor_mismatch."
           }
         ],
         "responses": {
@@ -111014,7 +111135,8 @@
             "schema": {
               "type": "string",
               "maxLength": 4096
-            }
+            },
+            "description": "Opaque nextCursor of the previous page. It binds the filters and the limit: changing the limit between pages answers 409 backend_diagram_cursor_mismatch."
           }
         ],
         "responses": {

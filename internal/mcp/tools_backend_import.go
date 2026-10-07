@@ -206,7 +206,7 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 		if status < 200 || status >= 300 {
 			return designScenarioToolErrorResult(backendStatusError(status, response)), nil
 		}
-		return &sdk.CallToolResult{StructuredContent: jsonx.RawMessage(response), Content: []sdk.Content{&sdk.TextContent{Text: string(response)}}}, nil
+		return backendToolResult(response), nil
 	})
 }
 

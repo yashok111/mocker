@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/yashok111/mocker/internal/backendanalysis"
 	"github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/guide"
@@ -224,7 +225,7 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		"workflowVersions":         guide.BackendWorkflows(),
 		"features":                 backendCapabilityFeatures(),
 		"diagramSupport":           map[string]any{"documentVersion": "backend-diagram-v1", "viewDocumentVersion": "diagram-view-v1", "kinds": []string{"architecture", "interactions", "lifecycle", "business_map"}, "targets": []string{"revisionId", "changeProposal"}, "projectionPolicy": "architecture-v1", "levels": []string{"context", "containers", "components"}},
-		"analysisSupport":          map[string]any{"documentVersion": "backend-analysis-context-v1", "documentVersions": []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}, "inputDocumentVersions": []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}, "ruleSetVersions": []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}, "kinds": []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"}, "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": []string{"none"}, "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
+		"analysisSupport":          map[string]any{"documentVersion": "backend-analysis-context-v1", "documentVersions": []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}, "inputDocumentVersions": []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}, "ruleSetVersions": []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}, "kinds": backendanalysis.Kinds(), "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": backendanalysis.ObservationModes(), "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
 		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile},
 		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
 		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),

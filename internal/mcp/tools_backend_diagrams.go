@@ -48,7 +48,7 @@ func addBackendDiagramTools(s *sdk.Server, lb *loopback) {
 			if strings.HasPrefix(spec.name, "list_") {
 				props["kind"] = map[string]any{"type": "string", "enum": []string{"architecture", "interactions", "lifecycle", "business_map"}}
 				props["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 500}
-				props["cursor"] = map[string]any{"type": "string", "maxLength": 4096}
+				props["cursor"] = map[string]any{"type": "string", "maxLength": 4096, "description": "nextCursor of the previous page; it binds the filters and the limit, so keep the same limit"}
 			} else {
 				field := "diagramId"
 				if spec.name == "get_backend_diagram_view" {

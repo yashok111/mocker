@@ -385,7 +385,7 @@ func matches(raw []byte, in ResultQuery) bool {
 	if json.Unmarshal(raw, &record, json.MatchCaseInsensitiveNames(true)) != nil {
 		return false
 	}
-	return (in.Service == "" || in.Service == record.Service) && (in.Kind == "" || in.Kind == record.Kind) && (in.Certainty == "" || in.Certainty == record.Certainty) && (in.Direction == "" || in.Direction == record.Direction) && (in.Depth == 0 || record.Depth <= in.Depth)
+	return (in.Service == "" || in.Service == record.Service) && (in.Kind == "" || in.Kind == record.Kind) && (in.Certainty == "" || in.Certainty == record.Certainty) && (in.Direction == "" || in.Direction == record.Direction) && (in.Depth == 0 && !in.DepthSet || record.Depth <= in.Depth)
 }
 func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, error) {
 	if in.Limit < 0 || in.Limit > 500 {

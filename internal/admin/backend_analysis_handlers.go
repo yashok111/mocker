@@ -66,12 +66,19 @@ func backendAnalysisOptionalSelector(q url.Values, key string, values []string) 
 func backendAnalysisSelectionQuery(q url.Values, mode string) bool {
 	switch mode {
 	case "list":
-		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics", "scenario_measurement", "scenario_comparison"})
+		return backendAnalysisOptionalSelector(q, "status", []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}) && backendAnalysisOptionalSelector(q, "kind", backendanalysis.Kinds())
 	case "results":
 		return q.Has("resultVersion") && slices.Contains([]string{"changes", "findings", "witnesses", "checks", "gaps"}, q.Get("section")) && backendAnalysisOptionalSelector(q, "certainty", []string{"confirmed", "possible", "unknown"}) && backendAnalysisOptionalSelector(q, "direction", []string{"upstream", "downstream", "both"})
 	default:
 		return true
 	}
+}
+
+// backendAnalysisResultQuery maps an admitted results query. DepthSet keeps
+// an explicit depth=0 (review 2026-10-06, F25): analysisQueryNumber returns
+// 0 for "0" and for an absent depth alike, and the filter read both as unset.
+func backendAnalysisResultQuery(q url.Values) backendanalysis.ResultQuery {
+	return backendanalysis.ResultQuery{ResultVersion: analysisQueryNumber(q, "resultVersion"), Section: q.Get("section"), Cursor: q.Get("cursor"), Service: q.Get("service"), Kind: q.Get("kind"), Certainty: q.Get("certainty"), Direction: q.Get("direction"), Depth: int(analysisQueryNumber(q, "depth")), DepthSet: q.Has("depth"), Limit: int(analysisQueryNumber(q, "limit"))}
 }
 func analysisQueryNumber(q url.Values, k string) int64 {
 	if !q.Has(k) {
@@ -113,6 +120,13 @@ func (s *Server) handleListBackendAnalysis(w http.ResponseWriter, r *http.Reques
 	}
 	q, err := backendAnalysisQuery(r, "list")
 	if err != nil {
+		s.backendError(w, err)
+		return
+	}
+	// Review 2026-10-06, F13: List reads backend_analysis_jobs alone, so an
+	// unknown project was a 200 with an empty page; every sibling read
+	// (replay, observations, a job by id) answers 404 first.
+	if _, err = s.backendRepo.Get(r.Context(), r.PathValue("id")); err != nil {
 		s.backendError(w, err)
 		return
 	}
@@ -177,7 +191,7 @@ func (s *Server) handleGetBackendAnalysisResults(w http.ResponseWriter, r *http.
 		s.backendError(w, err)
 		return
 	}
-	out, err := s.backendAnalysisRepo.Results(r.Context(), r.PathValue("id"), r.PathValue("aid"), backendanalysis.ResultQuery{ResultVersion: analysisQueryNumber(q, "resultVersion"), Section: q.Get("section"), Cursor: q.Get("cursor"), Service: q.Get("service"), Kind: q.Get("kind"), Certainty: q.Get("certainty"), Direction: q.Get("direction"), Depth: int(analysisQueryNumber(q, "depth")), Limit: int(analysisQueryNumber(q, "limit"))})
+	out, err := s.backendAnalysisRepo.Results(r.Context(), r.PathValue("id"), r.PathValue("aid"), backendAnalysisResultQuery(q))
 	if err != nil {
 		s.backendError(w, err)
 		return

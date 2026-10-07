@@ -6,6 +6,8 @@ import (
 	"io"
 	"log/slog"
 	"net/http/httptest"
+	"net/url"
+	"strings"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/apidesign"
@@ -52,6 +54,31 @@ func TestMaterializationOwnerSentinelsUseBackendEnvelope(t *testing.T) {
 				t.Errorf("envelope without retryable: %v", body.Error)
 			}
 		})
+	}
+}
+
+// TestAnalysisResultQueryKeepsExplicitDepthZero pins review 2026-10-06, F25
+// at the route: depth=0 and an absent depth must not map to the same query.
+func TestAnalysisResultQueryKeepsExplicitDepthZero(t *testing.T) {
+	zero := backendAnalysisResultQuery(url.Values{"depth": {"0"}})
+	absent := backendAnalysisResultQuery(url.Values{})
+	if !zero.DepthSet || absent.DepthSet || zero.Depth != 0 {
+		t.Fatalf("depth=0 -> %+v, absent -> %+v", zero, absent)
+	}
+}
+
+// TestNoMutatingRouteClaimsCpRead pins review 2026-10-06, F30 on its own:
+// TestAutoCheckpointPolicy_pinsEveryMutatingRoute holds the same rule, but its
+// hard-coded route counts went stale and it stops at a t.Fatalf before the
+// rule runs, so three POST reads (diagram resolve-scope, observation adapt,
+// replay compare) carried cpRead unnoticed. A POST that writes nothing says
+// cpNeverTouchesLayer, like events/query and graph/query.
+func TestNoMutatingRouteClaimsCpRead(t *testing.T) {
+	for pattern, policy := range checkpointPolicyByPattern(t) {
+		method, _, _ := strings.Cut(pattern, " ")
+		if method != "GET" && policy.group == cpGroupRead {
+			t.Errorf("mutating route %q claims cpRead", pattern)
+		}
 	}
 }
 
