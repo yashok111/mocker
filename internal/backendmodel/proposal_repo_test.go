@@ -7,9 +7,8 @@ import (
 	"fmt"
 	"github.com/yashok111/mocker/internal/testkit"
 	"log/slog"
-	"os"
-	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"uuid"
@@ -25,6 +24,14 @@ func proposalCreateInput(out *ImportCommitResult, ids map[string]string, key str
 // Capture raw persisted bytes, including old receipts and provider identities.
 func proposalSourceBytes(t *testing.T, r *Repo) map[string][]string {
 	t.Helper()
+	return proposalSourceBytesFrom(t, r.db.R, true)
+}
+
+// proposalSourceBytesFrom reads the same rows from any querier. store27 false
+// reads a pre-Store27 shape (a rewound fixture inside its transaction), where
+// the payload still sits in the owner table instead of behind a _documents view.
+func proposalSourceBytesFrom(t *testing.T, q rowQuerier, store27 bool) map[string][]string {
+	t.Helper()
 	queries := map[string]string{
 		"project":      `SELECT id,name,version,current_revision_id,created_at,updated_at FROM backend_projects ORDER BY id`,
 		"revisions":    `SELECT id,project_id,document FROM backend_revisions_documents ORDER BY id`,
@@ -36,7 +43,10 @@ func proposalSourceBytes(t *testing.T, r *Repo) map[string][]string {
 	}
 	result := map[string][]string{}
 	for name, query := range queries {
-		rows, err := r.db.R.QueryContext(t.Context(), query)
+		if !store27 {
+			query = strings.ReplaceAll(query, "_documents ", " ")
+		}
+		rows, err := q.QueryContext(t.Context(), query)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -418,48 +428,34 @@ func TestProposalCreateStrictInput(t *testing.T) {
 func TestProposalCreateB11StoreUpgrade(t *testing.T) {
 	for _, dialect := range []string{"postgresql", "sqlite"} {
 		t.Run(dialect, func(t *testing.T) {
-			// These are the unchanged, committed B1.1 migrations, stopped at 15.
-			// Import via the source APIs before the proposal tables exist.
-			db, err := store.Open(t.Context(), filepath.Join(t.TempDir(), "b11.db"))
+			// The store is rewound to the unchanged, committed B1.1 migrations
+			// (stopped at 15) and upgraded by the production migrations. Since
+			// Store27 (48dce80, B6.3) the current source APIs write through
+			// backend_payload_blobs and can no longer fill a v15 store directly,
+			// so the import runs at head first and rewindStoreFixture drops every
+			// object a v15 store does not have (the proposal tables among them).
+			// The bytes are captured inside the rewind, at v15.
+			r, db := testRepo(t)
+			out, ids := commitRelationalFixture(t, r, dialect, "v1")
+			createProject(t, r, "schema1-project")
+			var before map[string][]string
+			rewindStoreFixture(t, db, 15, func(tx *sql.Tx) error {
+				before = proposalSourceBytesFrom(t, tx, false)
+				return nil
+			})
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+			db, err := store.Open(t.Context(), db.Path())
 			if err != nil {
 				t.Fatal(err)
 			}
 			t.Cleanup(func() { _ = db.Close() })
-			entries, err := os.ReadDir("../store/migrations")
-			if err != nil {
-				t.Fatal(err)
-			}
-			for _, entry := range entries {
-				if entry.Name() >= "0016" {
-					continue
-				}
-				b, err := os.ReadFile(filepath.Join("../store/migrations", entry.Name()))
-				if err != nil {
-					t.Fatal(err)
-				}
-				if _, err := db.W.ExecContext(t.Context(), string(b)); err != nil {
-					t.Fatal(err)
-				}
-			}
-			if _, err := db.W.ExecContext(t.Context(), "PRAGMA user_version=15"); err != nil {
-				t.Fatal(err)
-			}
-			r := NewRepo(db)
-			out, ids := commitRelationalFixture(t, r, dialect, "v1")
-			createProject(t, r, "schema1-project")
-			before := proposalSourceBytes(t, r)
-			if err := db.Close(); err != nil {
-				t.Fatal(err)
-			}
-			db, err = store.Open(t.Context(), db.Path())
-			if err != nil {
-				t.Fatal(err)
-			}
 			if err := db.Migrate(t.Context(), slog.Default()); err != nil {
 				t.Fatal(err)
 			}
 			version, err := db.SchemaVersion(t.Context())
-			if err != nil || version != 22 {
+			if err != nil || version != storeSchemaHead {
 				t.Fatalf("upgrade: %d %v", version, err)
 			}
 			r = NewRepo(db)
