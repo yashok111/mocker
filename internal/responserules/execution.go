@@ -16,7 +16,8 @@ const ExecutionExtension = "x-mocker-response-rules-execution"
 
 // CheckResponse applies the shared structural and header/media safety checks
 // again at the serving boundary without parsing or re-encoding the static body.
-func CheckResponse(response Response) error { return checkResponse(context.Background(), response) }
+// ctx is the serving request's: the body-source walk inside stops when it ends.
+func CheckResponse(ctx context.Context, response Response) error { return checkResponse(ctx, response) }
 
 // DecodeExecution admits the separate explicit execution copies. Decode owns
 // the returned graph data, even when the caller supplied typed Go structures.

@@ -119,7 +119,13 @@ func (p *Plane) writeResponseRule(w http.ResponseWriter, r *http.Request, ws *wo
 	// Compilation already admitted the immutable payload. Keep the same
 	// shared admission at the serve boundary so a future response source
 	// cannot bypass managed-header or browser-executable media protections.
-	if err := responserules.CheckResponse(response); err != nil || dangerousResolvedMediaType(response.MediaType) || response.Status < 200 || response.Status > 599 {
+	if err := responserules.CheckResponse(r.Context(), response); err != nil || dangerousResolvedMediaType(response.MediaType) || response.Status < 200 || response.Status > 599 {
+		if r.Context().Err() != nil {
+			// The check stopped because the client left, not because the
+			// response is unsafe: nothing to write and no failure to record,
+			// as in writeResponseRuleEvalError.
+			return
+		}
 		markResponseRule(r, "", "response_rule_failed", false)
 		httpx.Err(w, http.StatusInternalServerError, "response_rule_failed", "response rule contains an unsafe response")
 		return
