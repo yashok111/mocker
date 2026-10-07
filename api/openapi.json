@@ -76530,6 +76530,7 @@
       },
       "BackendAnalysisScope": {
         "type": "object",
+        "description": "Copied into every result manifest. On start the normalized scope must serialize to at most 16 KiB, otherwise 413 backend_analysis_scope_limit.",
         "additionalProperties": false,
         "properties": {
           "changedIds": {

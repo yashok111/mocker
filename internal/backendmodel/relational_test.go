@@ -113,7 +113,7 @@ func TestRelationalStrictFacetsAtomic(t *testing.T) {
 	}
 }
 func TestRelationalNestedGraphReferences(t *testing.T) {
-	for _, name := range []string{"missing column", "wrong kind", "wrong parent", "fk ordering", "pair wrong parent", "dialect disagreement", "duplicate column name", "duplicate ordinal", "duplicate index name", "migration cycle", "historical foreign", "hierarchy bypass", "persisted property path"} {
+	for _, name := range []string{"missing column", "wrong kind", "wrong parent", "fk ordering", "pair wrong parent", "dialect disagreement", "duplicate column name", "duplicate ordinal", "duplicate index name", "migration cycle", "migration non-migration parent", "historical foreign", "hierarchy bypass", "persisted property path"} {
 		t.Run(name, func(t *testing.T) {
 			r, p, s, cs := relationalTestSession(t)
 			switch name {
@@ -147,6 +147,14 @@ func TestRelationalNestedGraphReferences(t *testing.T) {
 				relationalCommand(cs, "index:orders:legacy_note_idx").Node.Name = relationalCommand(cs, "index:orders:state_idx").Node.Name
 			case "migration cycle":
 				mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) { m["parentKeys"] = jsontext.Value(`["migration:002_unsupported"]`) })
+			case "migration non-migration parent":
+				// A complete derivation whose parent is a table that carries a
+				// same-key facet: the wrong kind is a diagnostic, never a nil
+				// Order dereference (review 2026-10-06, F76).
+				mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) {
+					m["derivationStatus"] = jsontext.Value(`"complete"`)
+					m["parentKeys"] = jsontext.Value(`["table:orders"]`)
+				})
 			case "historical foreign":
 				other := createProject(t, r, "other")
 				mutateRelationalFacet(t, cs, "migration:001_initial", "migration", func(m map[string]jsontext.Value) {

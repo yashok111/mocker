@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[\"1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-project-metadata\",\"backend-revisions\",\"backend-annotations\"]"
-  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
-  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  guideSetId: "sha256:311c0b8d1d39c2525346c2e628165ff4a763b7f3e6e7ba54d98b7592d1def677"
+  manifestHash: "sha256:311c0b8d1d39c2525346c2e628165ff4a763b7f3e6e7ba54d98b7592d1def677"
 ---
 
 # Backend project preparation

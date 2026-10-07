@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\",\"proposal-graph-v1\",\"saved-view-v2\",\"import-candidate-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-interactions\",\"backend-lifecycle\",\"backend-business-map\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
-  manifestHash: "sha256:f25648e4c5cfffe7d621b112a8e26d47d58d3838385b18d201ca68507aac2981"
+  guideSetId: "sha256:311c0b8d1d39c2525346c2e628165ff4a763b7f3e6e7ba54d98b7592d1def677"
+  manifestHash: "sha256:311c0b8d1d39c2525346c2e628165ff4a763b7f3e6e7ba54d98b7592d1def677"
 ---
 # Pinned source flow and data-access inspection
 

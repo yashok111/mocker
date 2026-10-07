@@ -122,6 +122,11 @@ func (s *Service) Start(ctx context.Context, pid string, in StartInput) (*Job, e
 	} else if rec != nil {
 		return replay(rec, hash)
 	}
+	// After the receipt lookup, so a request admitted before the bound still
+	// replays its stored receipt.
+	if err = checkScopeSize(in.Scope); err != nil {
+		return nil, err
+	}
 	if s.graphs == nil {
 		return nil, errors.New("analysis graph reader missing")
 	}
@@ -304,12 +309,31 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 	} else {
 		terminal.Snapshot = bind(terminal.Snapshot)
 	}
-	err = retryPublication(persist, func() error {
-		_, e := s.repo.Finalize(persist, claim.Job.ProjectID, claim.Job.ID, claim.Token, *terminal)
-		return e
-	})
-	var f *backendmodel.FaultError
-	if errors.As(err, &f) && f.Code == "backend_analysis_lost_claim" {
+	finalize := func(t TerminalSnapshot) error {
+		return retryPublication(persist, func() error {
+			_, e := s.repo.Finalize(persist, claim.Job.ProjectID, claim.Job.ID, claim.Token, t)
+			return e
+		})
+	}
+	err = finalize(*terminal)
+	if f, ok := errors.AsType[*backendmodel.FaultError](err); ok && f.Code != "backend_analysis_lost_claim" {
+		// A FaultError is deterministic: retryPublication already refused to
+		// repeat it, and a later worker would build the same terminal and get
+		// the same answer. Returning it cancelled the whole service and stopped
+		// the server over one job -- a diagnostics run whose unknown-check gaps,
+		// diagram scope or coverage gaps outgrew the 64 KiB manifest did that on
+		// every attempt (review 2026-10-06, F135/F189/F190). Close the job as
+		// failed on its accepted prefix instead; only an error that is not a
+		// verdict about this job (the store itself failing) still stops the
+		// service.
+		cause := f.Code
+		_, prefix, e := s.repo.acceptedPrefix(persist, claim.Job.ProjectID, claim.Job.ID, "result_unpersistable")
+		if e != nil {
+			return e
+		}
+		err = finalize(TerminalSnapshot{Status: "failed", Snapshot: prefix, Diagnostic: &Diagnostic{ID: "result_unpersistable", Code: "result_unpersistable", Message: "Analysis result could not be stored: " + cause}})
+	}
+	if f, ok := errors.AsType[*backendmodel.FaultError](err); ok && f.Code == "backend_analysis_lost_claim" {
 		return nil
 	}
 	return err

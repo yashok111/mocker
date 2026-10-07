@@ -570,7 +570,15 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 				parents[id] = append(parents[id], f.ParentIDs...)
 				if f.DerivationStatus == "complete" {
 					for _, parentID := range f.ParentIDs {
-						p := nodes[parentID]
+						p, ok := nodes[parentID]
+						// A missing or non-migration parent is already a
+						// diagnostic of the nested-reference pass above, which
+						// does not stop this loop. Only a migration facet
+						// carries Order, so reading a table's same-key facet
+						// here dereferenced a nil Order (review 2026-10-06, F76).
+						if !ok || p.Kind != "migration" {
+							continue
+						}
 						pfs, _, err := relationalFacetObject(p.Kind, p.Attributes)
 						if err != nil {
 							continue

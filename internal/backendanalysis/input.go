@@ -17,6 +17,10 @@ const maxInputBytes = 2 << 20
 const maxResultBytes = 32 << 20
 const terminalHeadroom = 128 << 10
 const maxManifestBytes = 64 << 10
+
+// A quarter of the manifest: diff manifests reserve half for changedIds and
+// coveredChangedIds (diff.go), which leaves the scope and fixed fields the rest.
+const maxScopeBytes = 16 << 10
 const maxProjectBytes = 256 << 20
 
 func fault(status int, code, message string) error {
@@ -234,6 +238,21 @@ func (s *Scope) UnmarshalJSON(raw []byte) error {
 	})
 	next.ChangedIDs = slices.Compact(next.ChangedIDs)
 	*s = normalizedScope(Scope(next))
+	return nil
+}
+
+// checkScopeSize runs at admission only, never on decode: a stored input
+// admitted before the bound must still decode so its job can be closed. The
+// scope is copied into every result manifest, including the prefix manifest an
+// interrupted or cancelled job is closed with, and a manifest is capped at
+// maxManifestBytes. Each id was bounded but their number and service/kind were
+// not, so ~1000 short changedIds passed the 2 MiB input cap and made every
+// terminal write of the job answer manifest_limit (review 2026-10-06, F149).
+func checkScopeSize(s Scope) error {
+	type plain Scope
+	if raw, err := json.Marshal(plain(normalizedScope(s))); err != nil || len(raw) > maxScopeBytes {
+		return fault(413, "scope_limit", "Scope exceeds 16 KiB")
+	}
 	return nil
 }
 func normalizedScope(s Scope) Scope {
