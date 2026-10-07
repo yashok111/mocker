@@ -19,6 +19,11 @@ type DiagnosticReport struct {
 	Checks   []backendmodel.FindingCheck `json:"checks"`
 	Gaps     []string                    `json:"gaps"`
 	Complete bool                        `json:"complete"`
+	// certainties keeps each check's own certainty by fingerprint. FindingCheck
+	// has no certainty field, and a hard-coded "unknown" made every
+	// scope.certainty filter drop all checks and then all findings
+	// (review 2026-10-06, F137).
+	certainties map[string]string
 }
 type diagnosticEvaluator struct {
 	proofCache map[ObjectAddress]bool
@@ -42,7 +47,7 @@ func EvaluateDiagnostics(ctx context.Context, g *backendmodel.EffectiveGraphSnap
 	if in.DiagramScope != nil && (in.Diagram == nil || in.DiagramScope.TargetHash != g.Pins.TargetHash || in.Diagram.Pin != in.DiagramScope.Pin) {
 		return nil, fault(422, "scope_mismatch", "Diagram scope differs from analysis target")
 	}
-	d := &diagnosticEvaluator{ctx: ctx, graph: g, input: in, proofCache: map[ObjectAddress]bool{}, nodes: map[string]backendmodel.Node{}, out: map[string][]backendmodel.Edge{}, report: DiagnosticReport{Findings: []backendmodel.Finding{}, Checks: []backendmodel.FindingCheck{}, Gaps: []string{}, Complete: true}}
+	d := &diagnosticEvaluator{ctx: ctx, graph: g, input: in, proofCache: map[ObjectAddress]bool{}, nodes: map[string]backendmodel.Node{}, out: map[string][]backendmodel.Edge{}, report: DiagnosticReport{Findings: []backendmodel.Finding{}, Checks: []backendmodel.FindingCheck{}, Gaps: []string{}, Complete: true, certainties: map[string]string{}}}
 	limitsRaw, _ := json.Marshal(in.Limits)
 	_ = json.Unmarshal(limitsRaw, &d.input.Limits)
 	if len(g.State.Nodes)+len(g.State.Edges) > 250000 {
@@ -177,6 +182,7 @@ func (d *diagnosticEvaluator) check(rule, identity, status, certainty, message s
 		return
 	}
 	d.report.Checks = append(d.report.Checks, backendmodel.FindingCheck{Fingerprint: fp, Status: status, ScopeKey: d.scopeKey})
+	d.report.certainties[fp] = certainty
 	if status == "absent" {
 		return
 	}
@@ -234,7 +240,13 @@ func diagnosticSnapshot(ctx context.Context, in *ImmutableInput, g *backendmodel
 	r.services = objectServices(g, g)
 	accepted := map[string]bool{}
 	for _, c := range report.Checks {
-		if r.add("checks", ObjectAddress{RecordType: "diagnostic", ID: c.Fingerprint}, "diagnostic_check", "unknown", 0, c) {
+		// The check carries the same certainty as its finding, so one filter
+		// accepts or omits both together (review 2026-10-06, F137).
+		certainty := report.certainties[c.Fingerprint]
+		if certainty == "" {
+			certainty = "unknown"
+		}
+		if r.add("checks", ObjectAddress{RecordType: "diagnostic", ID: c.Fingerprint}, "diagnostic_check", certainty, 0, c) {
 			accepted[c.Fingerprint] = true
 		}
 	}

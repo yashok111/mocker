@@ -116,19 +116,31 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 				return nil, e
 			}
 			row := CorrelationRow{RecordID: rec.ID, Outcome: "unresolved", Candidates: []bm.DiagramRef{}, Reasons: []string{}, Method: "none"}
+			// row.Method names only a strategy that actually produced candidates;
+			// a requested strategy that matched nothing leaves "none". It used
+			// to be set whenever the input was present, so an unmatched
+			// identityRef said instrumentation_id and a fingerprint pass
+			// overwrote a real source_locator match (review 2026-10-06, F157).
 			if rec.BackendRef != nil {
 				ok, e := bm.ResolveObservationRef(ctx, g, *rec.BackendRef)
 				if e != nil {
 					return nil, e
 				}
-				if !ok {
-					return nil, fault(422, "foreign_ref")
-				}
-				addCandidate(&row, *rec.BackendRef)
-				row.Method = "instrumentation_id"
-				if out.SourceCompatible {
-					row.Outcome = "explicit"
-					row.Selected = rec.BackendRef
+				if ok {
+					addCandidate(&row, *rec.BackendRef)
+					row.Method = "instrumentation_id"
+					if out.SourceCompatible {
+						row.Outcome = "explicit"
+						row.Selected = rec.BackendRef
+					}
+				} else {
+					// A record's ref is producer data, not a human decision:
+					// evidence captured against an older revision must stay
+					// inspectable against a newer one that dropped the object.
+					// One stale ref aborted the whole correlation with 422
+					// foreign_ref (review 2026-10-06, F187). Override refs keep
+					// the hard 422 above.
+					row.Reasons = append(row.Reasons, "stale_backend_ref")
 				}
 			}
 			if len(row.Candidates) == 0 && rec.IdentityRef != nil && g.Source != nil {
@@ -138,7 +150,9 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 						addCandidate(&row, bm.DiagramRef{Kind: "record", RecordType: id.RecordType, ID: candidate.ID})
 					}
 				}
-				row.Method = "instrumentation_id"
+				if len(row.Candidates) > 0 {
+					row.Method = "instrumentation_id"
+				}
 				if len(row.Candidates) == 1 && out.SourceCompatible {
 					row.Selected = &row.Candidates[0]
 					row.Outcome = "explicit"
@@ -156,16 +170,18 @@ func (s *Service) Correlate(ctx context.Context, pid, sid string, in CorrelateIn
 							addCandidate(&row, ref)
 						}
 					}
-					row.Method = "source_locator"
-				}
-				if in.Settings.InferFingerprint && a.Fingerprint != "" {
-					for _, n := range g.State.Nodes {
-						var fp string
-						if json.Unmarshal(n.Attributes["queryFingerprint"], &fp) == nil && fp == a.Fingerprint {
-							addCandidate(&row, bm.DiagramRef{Kind: "record", RecordType: "node", ID: n.ID})
-						}
+					if len(row.Candidates) > 0 {
+						row.Method = "source_locator"
 					}
-					row.Method = "query_fingerprint"
+				}
+				// No node kind may carry a query fingerprint attribute
+				// (validateAttributes rejects any unknown key), so fingerprint
+				// inference can never match. Say so on the row instead of
+				// scanning for an attribute that cannot exist; removing the
+				// inferFingerprint setting is a contract change left to the
+				// owner (review 2026-10-06, F157).
+				if in.Settings.InferFingerprint && a.Fingerprint != "" && len(row.Candidates) == 0 {
+					row.Reasons = append(row.Reasons, "query_fingerprint_unsupported")
 				}
 			}
 			slices.SortFunc(row.Candidates, func(a, b bm.DiagramRef) int {

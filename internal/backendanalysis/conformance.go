@@ -243,9 +243,13 @@ func outsideIntentChanges(ctx context.Context, base, draft, result *backendmodel
 	if err != nil {
 		return nil, err
 	}
+	// The operation is part of the key: an intended removal has path "", which
+	// would otherwise cover any actual modification of the same object
+	// (review 2026-10-06, F141).
 	type intentKey struct {
-		object ObjectAddress
-		facet  string
+		object    ObjectAddress
+		facet     string
+		operation string
 	}
 	intent := map[intentKey][]string{}
 	for _, change := range intended {
@@ -257,7 +261,8 @@ func outsideIntentChanges(ctx context.Context, base, draft, result *backendmodel
 		if change.Operation == "added" {
 			paths = propertyLeafPaths(change.After, "")
 		}
-		intent[intentKey{object, change.Facet}] = append(intent[intentKey{object, change.Facet}], paths...)
+		key := intentKey{object, change.Facet, change.Operation}
+		intent[key] = append(intent[key], paths...)
 	}
 	outside := []DiffChange{}
 	for _, change := range actual {
@@ -267,7 +272,7 @@ func outsideIntentChanges(ctx context.Context, base, draft, result *backendmodel
 			actualPaths = propertyLeafPaths(change.After, "")
 		}
 		for _, path := range actualPaths {
-			covered := slices.ContainsFunc(intent[intentKey{change.Object, change.Facet}], func(p string) bool { return p == path || p == "" || strings.HasPrefix(path, p+"/") })
+			covered := slices.ContainsFunc(intent[intentKey{change.Object, change.Facet, change.Operation}], func(p string) bool { return p == path || p == "" || strings.HasPrefix(path, p+"/") })
 			if !covered {
 				paths = append(paths, path)
 			}
@@ -312,6 +317,13 @@ func addCreatedEdgeCorrespondence(base, draft, result *backendmodel.EffectiveGra
 		}
 		matches := []backendmodel.Edge{}
 		for _, actual := range result.State.Edges {
+			// A created edge needs a new source edge: a parallel edge retained
+			// from the base already existed, so binding to it would satisfy
+			// an edge_exists criterion with no implementation at all
+			// (review 2026-10-06, F148).
+			if retainedEdges[actual.ID] {
+				continue
+			}
 			if actual.Kind == edge.Kind && actual.From == from && actual.To == to {
 				matches = append(matches, actual)
 			}
