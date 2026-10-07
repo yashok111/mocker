@@ -119,3 +119,38 @@ func TestObservationCandidatesBoundedDeterministic(t *testing.T) {
 		t.Fatal(a, b)
 	}
 }
+
+// Review 2026-10-06, F164: the quota now sums byte_length from the blob store
+// instead of reading every document through the _documents views. The two
+// must agree byte for byte, or the 512 MiB project cap silently moves.
+func TestObservationProjectBytesMatchesStoredDocuments(t *testing.T) {
+	db := testkit.NewDB(t)
+	project, e := bm.NewRepo(db).Create(t.Context(), bm.CreateInput{Name: "bytes", IdempotencyKey: "bytes"})
+	if e != nil {
+		t.Fatal(e)
+	}
+	repo := NewRepo(db)
+	c := testContext()
+	first, e := repo.Import(t.Context(), project.ID, ImportInput{Mode: "create", Context: &c, Name: "bytes", BatchID: "a", IdempotencyKey: "a", Records: []Record{testSpan()}})
+	if e != nil {
+		t.Fatal(e)
+	}
+	graph := &bm.EffectiveGraphSnapshot{Pins: bm.EffectiveGraphPins{TargetHash: strings.Repeat("a", 64), BaseSemanticHash: strings.Repeat("b", 64)}}
+	service := &Service{Repo: repo, Graphs: correlationGraphs{graph: graph}}
+	in := CorrelateInput{Observation: *first, RevisionID: project.CurrentRevisionID, SourceHash: graph.Pins.BaseSemanticHash, TargetGraphHash: graph.Pins.TargetHash, ServiceID: c.Source.ServiceID, Policy: CorrelationPolicy, Overrides: []Override{}, IdempotencyKey: "correlation"}
+	if _, e = service.Correlate(t.Context(), project.ID, first.SetID, in); e != nil {
+		t.Fatal(e)
+	}
+	var viaViews, documents int64
+	e = db.R.QueryRowContext(t.Context(), `SELECT COALESCE((SELECT sum(logical_bytes) FROM backend_observation_sets WHERE project_id=?1),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_correlations_documents WHERE project_id=?1),0)+COALESCE((SELECT sum(length(CAST(document AS BLOB))) FROM backend_observation_versions_documents WHERE project_id=?1),0), (SELECT count(*) FROM backend_observation_correlations_documents WHERE project_id=?1)+(SELECT count(*) FROM backend_observation_versions_documents WHERE project_id=?1)`, project.ID).Scan(&viaViews, &documents)
+	if e != nil {
+		t.Fatal(e)
+	}
+	got, e := projectBytes(t.Context(), db.R, project.ID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if documents < 2 || got != viaViews {
+		t.Fatalf("projectBytes = %d, views = %d over %d documents", got, viaViews, documents)
+	}
+}
