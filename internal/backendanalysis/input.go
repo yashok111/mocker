@@ -283,12 +283,17 @@ func (l *Limits) UnmarshalJSON(raw []byte) error {
 	}
 	d := defaultLimits()
 	checks := []struct {
-		k      string
-		n, max int64
-	}{{"states", int64(next.States), int64(d.States)}, {"dependencyVisits", int64(next.DependencyVisits), int64(d.DependencyVisits)}, {"depth", int64(next.Depth), 32}, {"findings", int64(next.Findings), 10000}, {"records", int64(next.Records), 20000}, {"witnessesPerObject", int64(next.WitnessesPerObject), 8}, {"resultBytes", next.ResultBytes, maxResultBytes}}
+		k           string
+		n, min, max int64
+	}{{"states", int64(next.States), 1, int64(d.States)}, {"dependencyVisits", int64(next.DependencyVisits), 1, int64(d.DependencyVisits)}, {"depth", int64(next.Depth), 1, 32}, {"findings", int64(next.Findings), 1, 10000}, {"records", int64(next.Records), 1, 20000}, {"witnessesPerObject", int64(next.WitnessesPerObject), 1, 8},
+		// Admission reserves terminalHeadroom out of resultBytes, so a smaller
+		// value decoded fine and failed only after the graphs were resolved,
+		// with an "Invalid output reservation" that named no field (review
+		// 2026-10-06, F155). A stored input never holds one: admission refused it.
+		{"resultBytes", next.ResultBytes, terminalHeadroom, maxResultBytes}}
 	for _, c := range checks {
-		if _, ok := m[c.k]; ok && (c.n < 1 || c.n > c.max) {
-			return malformed("Invalid limit: " + c.k)
+		if _, ok := m[c.k]; ok && (c.n < c.min || c.n > c.max) {
+			return malformed(fmt.Sprintf("Invalid limit: %s must be %d..%d", c.k, c.min, c.max))
 		}
 	}
 	*l = Limits(next)

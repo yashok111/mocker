@@ -8,6 +8,7 @@ import (
 	"errors"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/yashok111/mocker/internal/backendmodel"
 )
@@ -311,7 +312,15 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 		if e != nil {
 			return e
 		}
-		terminal = &TerminalSnapshot{Status: status, Snapshot: prefix, Diagnostic: &Diagnostic{ID: code, Code: code, Message: "Analysis did not complete"}}
+		diagnostic := &Diagnostic{ID: code, Code: code, Message: "Analysis did not complete"}
+		if f, ok := errors.AsType[*backendmodel.FaultError](err); ok && app.Err() == nil {
+			// The engine's typed reason is the caller's next step: a stale-input
+			// conflict asks for a new analysis, an overload for a retry. Storing
+			// only "failed" lost it (review 2026-10-06, F150). Raw errors keep the
+			// generic text: they can carry internals a client should not read.
+			diagnostic = &Diagnostic{ID: f.Code, Code: f.Code, Message: truncateRunes(f.Message, 1024)}
+		}
+		terminal = &TerminalSnapshot{Status: status, Snapshot: prefix, Diagnostic: diagnostic}
 	} else {
 		terminal.Snapshot = bind(terminal.Snapshot)
 	}
@@ -343,6 +352,18 @@ func (s *Service) execute(app context.Context, claim *ClaimedJob) error {
 		return nil
 	}
 	return err
+}
+
+// truncateRunes keeps a stored diagnostic inside Finalize's 4096-byte bound.
+func truncateRunes(s string, maxBytes int) string {
+	if len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut]
 }
 
 func (s *Service) prefix(app context.Context, claim *ClaimedJob, code string) (PreparedSnapshot, error) {
