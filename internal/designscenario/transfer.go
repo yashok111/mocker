@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"maps"
 	"time"
 
 	"github.com/yashok111/mocker/internal/jsonx"
@@ -70,6 +71,7 @@ func (r *Repo) ExportTransfer(ctx context.Context, ids []int64, history bool) (T
 		}
 		seen[id] = true
 	}
+	var size int64
 	err := r.db.Read(ctx, func(tx *sql.Tx) error {
 		for _, id := range ids {
 			scenario, err := getScenario(ctx, tx, id)
@@ -103,10 +105,20 @@ func (r *Repo) ExportTransfer(ctx context.Context, ids []int64, history bool) (T
 					if len(item.Revisions) > MaxTransferRevisions {
 						return ErrTooLarge
 					}
-					// Check incrementally, before reading the next potentially large snapshot.
-					probe := TransferBundle{Kind: bundle.Kind, FormatVersion: 1, Scenarios: append(append([]TransferScenario{}, bundle.Scenarios...), item)}
-					if err := transferSize(probe); err != nil {
+					// Check incrementally, before reading the next potentially
+					// large snapshot. The bundle's encoding contains every
+					// revision's encoding, so a running sum of them is a lower
+					// bound: past the cap here means past it in the bundle, and
+					// the exact check runs once at the end. Review 2026-10-06,
+					// F182: this used to copy and marshal the whole accumulated
+					// bundle after every revision, quadratic in the revisions
+					// (up to 4000 marshals of a growing ~2 MB bundle).
+					raw, err := jsonx.Marshal(item.Revisions[len(item.Revisions)-1])
+					if err != nil {
 						return err
+					}
+					if size += int64(len(raw)); size > MaxTransferBytes {
+						return ErrTooLarge
 					}
 				}
 				return rows.Err()
@@ -116,37 +128,54 @@ func (r *Repo) ExportTransfer(ctx context.Context, ids []int64, history bool) (T
 			}
 			bundle.Scenarios = append(bundle.Scenarios, item)
 		}
-		return nil
+		return transferSize(bundle)
 	})
 	return bundle, err
 }
 
 // API matching ignores foreign IDs and only accepts one distinct local design.
 // Multiple equal revisions of the same design pin the newest matching revision.
-func (r *Repo) transferAPIIndex(ctx context.Context, tx *sql.Tx, needed map[string]bool) (map[string]*ContractSource, error) {
-	if len(needed) == 0 {
-		return map[string]*ContractSource{}, nil
+//
+// The scan covers revisions with id > after and extends index, so a caller can
+// index the catalog in a read transaction and then, under the writer, scan
+// only the revisions committed since. Review 2026-10-06, F181: the whole
+// catalog (one RevisionTx hydration, decode and canonical marshal per row)
+// was scanned inside the single db.Write of ImportTransfer. That split is
+// exact because API revisions are immutable and never deleted, ids are
+// AUTOINCREMENT assigned under the single writer (so a revision a read
+// snapshot missed has a higher id than every one it saw), and within one
+// design version order is id order, so the newest-revision rule holds.
+func (r *Repo) transferAPIIndex(ctx context.Context, tx *sql.Tx, needed map[string]bool, after int64, index map[string]*ContractSource) (map[string]*ContractSource, int64, error) {
+	if index == nil {
+		index = map[string]*ContractSource{}
 	}
-	rows, err := tx.QueryContext(ctx, "SELECT design_id,id FROM api_design_revisions ORDER BY version ASC")
+	if len(needed) == 0 {
+		return index, after, nil
+	}
+	rows, err := tx.QueryContext(ctx, "SELECT design_id,id FROM api_design_revisions WHERE id>? ORDER BY version ASC", after)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	defer rows.Close()
-	index := map[string]*ContractSource{}
+	last := after
 	for rows.Next() {
+		if err := ctx.Err(); err != nil {
+			return nil, 0, err
+		}
 		var source ContractSource
 		if err := rows.Scan(&source.DesignID, &source.RevisionID); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
+		last = max(last, source.RevisionID)
 		// Public revisions hydrate operation keys missing in legacy storage.
 		revision, err := r.designs.RevisionTx(ctx, tx, source.DesignID, source.RevisionID)
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		source.Version = revision.Version
 		key, err := transferJSONKey([]byte(revision.Document))
 		if err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		if !needed[key] {
 			continue
@@ -158,7 +187,7 @@ func (r *Repo) transferAPIIndex(ctx context.Context, tx *sql.Tx, needed map[stri
 		}
 		index[key] = &source
 	}
-	return index, rows.Err()
+	return index, last, rows.Err()
 }
 func transferJSONKey(raw []byte) (string, error) {
 	value, err := decodeJSONValue(raw)
@@ -196,24 +225,38 @@ func (r *Repo) ImportTransfer(ctx context.Context, bundle TransferBundle, relink
 	if err := transferSize(bundle); err != nil {
 		return result, err
 	}
-	err := r.db.Write(ctx, func(tx *sql.Tx) error {
-		var matches map[string]*ContractSource
-		if relink {
-			// Retain only keys from the bounded package, not the entire API catalog.
-			needed := map[string]bool{}
-			for _, item := range bundle.Scenarios {
-				for _, revision := range item.Revisions {
-					for _, contract := range revision.Document.Contracts {
-						key, err := transferJSONKey(contract.Document)
-						if err != nil {
-							return err
-						}
-						needed[key] = true
+	var matches map[string]*ContractSource
+	var needed map[string]bool
+	var indexed int64
+	if relink {
+		// Retain only keys from the bounded package, not the entire API catalog.
+		needed = map[string]bool{}
+		for _, item := range bundle.Scenarios {
+			for _, revision := range item.Revisions {
+				for _, contract := range revision.Document.Contracts {
+					key, err := transferJSONKey(contract.Document)
+					if err != nil {
+						return result, err
 					}
+					needed[key] = true
 				}
 			}
+		}
+		// The catalog scan runs on a reader; the writer below only catches
+		// up on revisions committed since (review 2026-10-06, F181).
+		err := r.db.Read(ctx, func(tx *sql.Tx) error {
 			var err error
-			matches, err = r.transferAPIIndex(ctx, tx, needed)
+			matches, indexed, err = r.transferAPIIndex(ctx, tx, needed, 0, nil)
+			return err
+		})
+		if err != nil {
+			return result, err
+		}
+	}
+	err := r.db.Write(ctx, func(tx *sql.Tx) error {
+		if relink {
+			var err error
+			matches, _, err = r.transferAPIIndex(ctx, tx, needed, indexed, maps.Clone(matches))
 			if err != nil {
 				return err
 			}
