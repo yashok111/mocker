@@ -59,21 +59,8 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 	now := time.Now()
 	_ = controller.SetWriteDeadline(now.Add(2*timeout + proxyResponseWriteBudget))
 	_ = controller.SetReadDeadline(now.Add(timeout))
-	var body []byte
-	if r.Body != nil {
-		body, err = io.ReadAll(io.LimitReader(r.Body, s.policy.MaxBody+1))
-		if err != nil {
-			var limitError *http.MaxBytesError
-			if errors.As(err, &limitError) {
-				httpx.Err(w, 413, "proxy_request_too_large", "Тело запроса превышает лимит")
-				return true
-			}
-			httpx.Err(w, http.StatusBadRequest, "proxy_request_failed", "Не удалось прочитать тело запроса")
-			return true
-		}
-	}
-	if int64(len(body)) > s.policy.MaxBody {
-		httpx.Err(w, http.StatusRequestEntityTooLarge, "proxy_request_too_large", "Тело запроса превышает лимит")
+	body, ok := s.readProxyBody(w, r)
+	if !ok {
 		return true
 	}
 	// A malformed query must not alias a valid request after URL.Query drops
@@ -92,17 +79,8 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 		cookiePath = "/w/" + ws.Slug + "/"
 	}
 	response, err := probe.ProxyExchange(r.Context(), c.Upstream, r, body, probe.ProxyOptions{Allowlist: s.policy.ProxyAllowlist, CAPEM: s.policy.ProxyCAPEM, Timeout: timeout, MaxResponse: s.policy.MaxResponse, ForwardAuth: c.ForwardAuth, ForwardCookies: c.ForwardCookies, CookiePath: cookiePath})
-	if errors.Is(err, probe.ErrProxyPathDotSegment) {
-		httpx.Err(w, http.StatusBadRequest, "proxy_path_invalid", "Путь запроса содержит сегменты . или ..")
-		return true
-	}
 	if err != nil {
-		code := 502
-		var nerr net.Error
-		if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &nerr) && nerr.Timeout()) {
-			code = 504
-		}
-		httpx.Err(w, code, "proxy_upstream_failed", "Не удалось получить ответ upstream: проверьте адрес, доступ, сертификат и лимиты")
+		writeProxyExchangeError(w, err)
 		return true
 	}
 	servedType, ok := servableType(response.Header.Get("Content-Type"), response.Header.Get("Content-Encoding"), response.Body)
@@ -126,6 +104,45 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 	w.WriteHeader(response.Status)
 	_, _ = w.Write(response.Body)
 	return true
+}
+
+// readProxyBody reads the request body up to the policy's MaxBody, answering
+// 413 past it and 400 on a failed read; ok is false once it has answered.
+func (s *Service) readProxyBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+	var body []byte
+	if r.Body != nil {
+		var err error
+		body, err = io.ReadAll(io.LimitReader(r.Body, s.policy.MaxBody+1))
+		if err != nil {
+			var limitError *http.MaxBytesError
+			if errors.As(err, &limitError) {
+				httpx.Err(w, http.StatusRequestEntityTooLarge, "proxy_request_too_large", "Тело запроса превышает лимит")
+				return nil, false
+			}
+			httpx.Err(w, http.StatusBadRequest, "proxy_request_failed", "Не удалось прочитать тело запроса")
+			return nil, false
+		}
+	}
+	if int64(len(body)) > s.policy.MaxBody {
+		httpx.Err(w, http.StatusRequestEntityTooLarge, "proxy_request_too_large", "Тело запроса превышает лимит")
+		return nil, false
+	}
+	return body, true
+}
+
+// writeProxyExchangeError answers a failed upstream exchange: 400 for a dot
+// segment the exchange refused to forward, 504 for a timeout, 502 otherwise.
+func writeProxyExchangeError(w http.ResponseWriter, err error) {
+	if errors.Is(err, probe.ErrProxyPathDotSegment) {
+		httpx.Err(w, http.StatusBadRequest, "proxy_path_invalid", "Путь запроса содержит сегменты . или ..")
+		return
+	}
+	code := http.StatusBadGateway
+	var nerr net.Error
+	if errors.Is(err, context.DeadlineExceeded) || (errors.As(err, &nerr) && nerr.Timeout()) {
+		code = http.StatusGatewayTimeout
+	}
+	httpx.Err(w, code, "proxy_upstream_failed", "Не удалось получить ответ upstream: проверьте адрес, доступ, сертификат и лимиты")
 }
 func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, c Config, key string, response probe.ProxyResponse, auth bool, capture func([]byte) (int, error)) {
 	status := "skipped"

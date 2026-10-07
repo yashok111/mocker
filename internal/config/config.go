@@ -311,21 +311,7 @@ func Load() (*Config, error) {
 		fail("MOCKER_LOG_LEVEL: want debug, info, warn or error, got %q", c.LogLevel)
 	}
 
-	if c.AdminHost == "" {
-		fail("MOCKER_ADMIN_HOST is required")
-	}
-	if c.Routing == RoutingHost {
-		switch {
-		case c.BaseDomain == "":
-			fail("MOCKER_BASE_DOMAIN is required when MOCKER_ROUTING=host")
-		case c.AdminHost == c.BaseDomain:
-			fail("MOCKER_ADMIN_HOST must differ from MOCKER_BASE_DOMAIN")
-		case strings.HasSuffix(c.AdminHost, "."+c.BaseDomain):
-			// Otherwise the admin host looks like a workspace slug and the
-			// mock plane swallows the admin UI.
-			fail("MOCKER_ADMIN_HOST (%s) must not sit under MOCKER_BASE_DOMAIN (%s)", c.AdminHost, c.BaseDomain)
-		}
-	}
+	checkAdminHost(c, fail)
 
 	// Trim FIRST, then validate: "//" used to pass the check below ("has
 	// the / prefix and is not /") and then trim to "", and an empty prefix
@@ -346,6 +332,37 @@ func Load() (*Config, error) {
 		fail("MOCKER_AUTH_MODE: unsupported mode %q", c.AuthMode)
 	}
 
+	checkMCP(c, fail)
+
+	if c.DataDir == "" {
+		fail("MOCKER_DATA_DIR must not be empty")
+	}
+
+	return c, errors.Join(errs...)
+}
+
+// checkAdminHost validates the admin host against the routing mode; its own
+// function, like loadStreamWS, so that Load stays under the cyclomatic ceiling.
+func checkAdminHost(c *Config, fail func(format string, args ...any)) {
+	if c.AdminHost == "" {
+		fail("MOCKER_ADMIN_HOST is required")
+	}
+	if c.Routing == RoutingHost {
+		switch {
+		case c.BaseDomain == "":
+			fail("MOCKER_BASE_DOMAIN is required when MOCKER_ROUTING=host")
+		case c.AdminHost == c.BaseDomain:
+			fail("MOCKER_ADMIN_HOST must differ from MOCKER_BASE_DOMAIN")
+		case strings.HasSuffix(c.AdminHost, "."+c.BaseDomain):
+			// Otherwise the admin host looks like a workspace slug and the
+			// mock plane swallows the admin UI.
+			fail("MOCKER_ADMIN_HOST (%s) must not sit under MOCKER_BASE_DOMAIN (%s)", c.AdminHost, c.BaseDomain)
+		}
+	}
+}
+
+// checkMCP validates the MCP key and the user its calls act as.
+func checkMCP(c *Config, fail func(format string, args ...any)) {
 	// A non-empty key shorter than minMCPKeyLen is a misconfiguration, not a
 	// weak-but-usable credential: this project fails on the ground rather
 	// than degrading (see the package doc comment), and a one-character key
@@ -357,12 +374,6 @@ func Load() (*Config, error) {
 	if c.MCPUser == "" || utf8.RuneCountInString(c.MCPUser) > 64 || strings.ContainsFunc(c.MCPUser, unicode.IsControl) {
 		fail("MOCKER_MCP_USER: want a login name of 1..64 characters without control characters")
 	}
-
-	if c.DataDir == "" {
-		fail("MOCKER_DATA_DIR must not be empty")
-	}
-
-	return c, errors.Join(errs...)
 }
 
 // IsWorkspaceHost reports whether host addresses a workspace and returns its
