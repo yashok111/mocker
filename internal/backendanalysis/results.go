@@ -320,6 +320,42 @@ func decodeCursor(raw, binding string) (int, error) {
 	}
 	return c.Offset, nil
 }
+
+// jobKey is the job list's keyset position: the last row a page returned.
+type jobKey struct {
+	CreatedAt string `json:"createdAt"`
+	ID        string `json:"id"`
+}
+
+// jobCursor binds a keyset position to its query exactly as pageCursor binds
+// an offset; the checksum makes a hand-edited position a malformed cursor.
+type jobCursor struct {
+	Binding  string `json:"binding"`
+	After    jobKey `json:"after"`
+	Checksum string `json:"checksum"`
+}
+
+func jobCursorChecksum(binding string, after jobKey) string {
+	return digest([]byte(binding + "\x00" + after.CreatedAt + "\x00" + after.ID))
+}
+func encodeJobCursor(binding string, after jobKey) string {
+	raw, _ := canonical(jobCursor{Binding: binding, After: after, Checksum: jobCursorChecksum(binding, after)})
+	return base64.RawURLEncoding.EncodeToString(raw)
+}
+func decodeJobCursor(raw, binding string) (jobKey, error) {
+	if raw == "" {
+		return jobKey{}, nil
+	}
+	b, err := base64.RawURLEncoding.DecodeString(raw)
+	if err != nil {
+		return jobKey{}, malformed("Invalid cursor")
+	}
+	var c jobCursor
+	if json.Unmarshal(b, &c, json.RejectUnknownMembers(true)) != nil || c.Binding != binding || c.After.ID == "" || c.Checksum != jobCursorChecksum(binding, c.After) {
+		return jobKey{}, malformed("Cursor does not match pinned query")
+	}
+	return c.After, nil
+}
 func (r *Repo) Results(ctx context.Context, pid, id string, in ResultQuery) (*ResultPage, error) {
 	if in.ResultVersion < 1 || !slices.Contains(sections, in.Section) || in.Limit < 0 || in.Limit > 500 || in.Depth < 0 {
 		return nil, malformed("Invalid result query")
@@ -403,7 +439,7 @@ func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, er
 	if err != nil {
 		return nil, err
 	}
-	offset, err := decodeCursor(in.Cursor, binding)
+	after, err := decodeJobCursor(in.Cursor, binding)
 	if err != nil {
 		return nil, err
 	}
@@ -412,18 +448,24 @@ func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, er
 		return nil, err
 	}
 	defer func() { _ = tx.Rollback() }()
-	rows, err := tx.QueryContext(ctx, `SELECT id FROM backend_analysis_jobs WHERE project_id=? AND (?='' OR status=?) AND (?='' OR kind=?) ORDER BY created_at,id LIMIT ? OFFSET ?`, pid, in.Status, in.Status, in.Kind, in.Kind, in.Limit+1, offset)
+	// Keyset, not OFFSET (review 2026-10-06, F142): status is a live column,
+	// so a job that completed, was cancelled or was retained away between
+	// pages shifted every later row and an offset skipped one. Resuming
+	// strictly after the last (created_at, id) returned cannot skip or repeat.
+	rows, err := tx.QueryContext(ctx, `SELECT id,created_at FROM backend_analysis_jobs WHERE project_id=? AND (?='' OR status=?) AND (?='' OR kind=?) AND (?=0 OR created_at>? OR (created_at=? AND id>?)) ORDER BY created_at,id LIMIT ?`, pid, in.Status, in.Status, in.Kind, in.Kind, len(after.ID), after.CreatedAt, after.CreatedAt, after.ID, in.Limit+1)
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = rows.Close() }()
 	ids := []string{}
+	created := []string{}
 	for rows.Next() {
-		var id string
-		if err = rows.Scan(&id); err != nil {
+		var id, at string
+		if err = rows.Scan(&id, &at); err != nil {
 			return nil, err
 		}
 		ids = append(ids, id)
+		created = append(created, at)
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err
@@ -433,7 +475,7 @@ func (r *Repo) List(ctx context.Context, pid string, in ListQuery) (*JobPage, er
 	}
 	page := &JobPage{Items: []Job{}}
 	if len(ids) > in.Limit {
-		page.NextCursor = encodeCursor(binding, offset+in.Limit)
+		page.NextCursor = encodeJobCursor(binding, jobKey{CreatedAt: created[in.Limit-1], ID: ids[in.Limit-1]})
 		ids = ids[:in.Limit]
 	}
 	for _, id := range ids {

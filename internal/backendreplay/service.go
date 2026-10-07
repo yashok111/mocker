@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"errors"
 	"github.com/yashok111/mocker/internal/backendblob"
 	"math"
 	"reflect"
 	"slices"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -157,45 +159,74 @@ func (s *Service) GetProfile(ctx context.Context, pid, id string, version int64)
 func (s *Service) GetPackage(ctx context.Context, pid, id string, version int64) (*SavedPackage, error) {
 	return readPackage(ctx, s.repo.db.R, pid, id, version)
 }
-func (s *Service) Profiles(ctx context.Context, pid string) ([]Profile, error) {
-	out := []Profile{}
-	if err := s.project(ctx, pid); err != nil {
-		return nil, err
-	}
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT document_json FROM backend_replay_profiles_documents WHERE project_id=? ORDER BY created_at,id,version LIMIT 1001`, pid)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	for rows.Next() {
-		var raw []byte
-		var v Profile
-		if err = rows.Scan(&raw); err != nil {
-			return nil, err
-		}
-		if err = json.Unmarshal(raw, &v); err != nil {
-			return nil, err
-		}
-		out = append(out, v)
-	}
-	if len(out) > 1000 {
-		return nil, conflictReplay("Profile list exceeds limit; use exact pin reads")
-	}
-	return out, rows.Err()
+
+// Page sizes of the profile and package lists (vars only so tests can page
+// small). A package document may be stored up to 4 MiB, so its page is the
+// smaller one: 25 bounds a page's decoded documents near 100 MiB on the
+// 7.8 GB box.
+var (
+	profilePageSize = 100
+	packagePageSize = 25
+)
+
+// Profiles lists a project's profile versions oldest first, one page at a
+// time. The list used to decode up to 1001 full documents in one request and
+// then answer 409 for good past 1000 (review 2026-10-06, F124); it is now a
+// keyset page. cursor is "<id>:<version>" of the last item of the previous
+// page ("" for the first); a page shorter than profilePageSize (100) is the last.
+func (s *Service) Profiles(ctx context.Context, pid, cursor string) ([]Profile, error) {
+	return listVersioned[Profile](ctx, s, pid, cursor, profileList, profilePageSize)
 }
-func (s *Service) Packages(ctx context.Context, pid string) ([]SavedPackage, error) {
-	out := []SavedPackage{}
+
+// Packages is Profiles for saved package versions (packagePageSize, 25).
+func (s *Service) Packages(ctx context.Context, pid, cursor string) ([]SavedPackage, error) {
+	return listVersioned[SavedPackage](ctx, s, pid, cursor, packageList, packagePageSize)
+}
+
+// versionedList names one versioned list's two queries as constants, so no
+// SQL is assembled at run time.
+type versionedList struct{ position, page string }
+
+var (
+	profileList = versionedList{
+		position: `SELECT created_at,id,version FROM backend_replay_profiles_documents WHERE project_id=? AND id=? AND version=?`,
+		page:     `SELECT document_json FROM backend_replay_profiles_documents WHERE project_id=? AND (?='' OR created_at>? OR (created_at=? AND (id>? OR (id=? AND version>?)))) ORDER BY created_at,id,version LIMIT ?`,
+	}
+	packageList = versionedList{
+		position: `SELECT created_at,id,version FROM backend_replay_packages_documents WHERE project_id=? AND id=? AND version=?`,
+		page:     `SELECT document_json FROM backend_replay_packages_documents WHERE project_id=? AND (?='' OR created_at>? OR (created_at=? AND (id>? OR (id=? AND version>?)))) ORDER BY created_at,id,version LIMIT ?`,
+	}
+)
+
+func listVersioned[T any](ctx context.Context, s *Service, pid, cursor string, list versionedList, pageSize int) ([]T, error) {
+	out := []T{}
 	if err := s.project(ctx, pid); err != nil {
 		return nil, err
 	}
-	rows, err := s.repo.db.R.QueryContext(ctx, `SELECT document_json FROM backend_replay_packages_documents WHERE project_id=? ORDER BY created_at,id,version LIMIT 1001`, pid)
+	var afterCreated, afterID string
+	var afterVersion int64
+	if cursor != "" {
+		id, version, ok := strings.Cut(cursor, ":")
+		n, err := strconv.ParseInt(version, 10, 64)
+		if !ok || err != nil || n < 1 || !p.ValidID(id) {
+			return nil, invalidReplay()
+		}
+		err = s.repo.db.R.QueryRowContext(ctx, list.position, pid, id, n).Scan(&afterCreated, &afterID, &afterVersion)
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, invalidReplay()
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	rows, err := s.repo.db.R.QueryContext(ctx, list.page, pid, afterID, afterCreated, afterCreated, afterID, afterID, afterVersion, pageSize)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var raw []byte
-		var v SavedPackage
+		var v T
 		if err = rows.Scan(&raw); err != nil {
 			return nil, err
 		}
@@ -203,9 +234,6 @@ func (s *Service) Packages(ctx context.Context, pid string) ([]SavedPackage, err
 			return nil, err
 		}
 		out = append(out, v)
-	}
-	if len(out) > 1000 {
-		return nil, conflictReplay("Package list exceeds limit; use exact pin reads")
 	}
 	return out, rows.Err()
 }

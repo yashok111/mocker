@@ -112943,7 +112943,7 @@
         ],
         "operationId": "listBackendReplayProfiles",
         "summary": "ListBackendReplayProfiles",
-        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source. One page of profile versions, oldest first, at most 100. Pass \"id:version\" of the last item of a page as cursor to read the next one; a shorter page is the last. Without cursor the first page is returned (this list used to answer 409 past 1000 versions).",
         "security": [
           {
             "sessionCookie": []
@@ -112957,6 +112957,17 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "\"id:version\" of the last item of the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             }
           }
         ],
@@ -113335,7 +113346,7 @@
         ],
         "operationId": "listBackendReplayPackages",
         "summary": "ListBackendReplayPackages",
-        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source. One page of saved package versions, oldest first, at most 25 (documents may be up to 4 MiB). Pass \"id:version\" of the last item of a page as cursor to read the next one; a shorter page is the last. Without cursor the first page is returned (this list used to answer 409 past 1000 versions).",
         "security": [
           {
             "sessionCookie": []
@@ -113349,6 +113360,17 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "\"id:version\" of the last item of the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             }
           }
         ],
@@ -113878,7 +113900,7 @@
         ],
         "operationId": "listBackendReplayRuns",
         "summary": "ListBackendReplayRuns",
-        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source.",
+        "description": "Project-owned immutable replay pins. Only explicit connect grants reset consent; only explicit start queues trusted Orders execution. Selecting or saving never executes imported source. One page of runs, newest first, at most 100. Pass the id of the last run of a page as cursor to read the next one; a shorter page is the last. Without cursor the first page is returned (this list used to answer 409 past 100 runs).",
         "security": [
           {
             "sessionCookie": []
@@ -113892,6 +113914,17 @@
             "schema": {
               "type": "string",
               "format": "uuid"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "description": "Id of the last run of the previous page.",
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 64
             }
           }
         ],

@@ -7,6 +7,12 @@ import (
 	"github.com/yashok111/mocker/api"
 )
 
+var replayListPages = map[string]string{
+	"list_backend_replay_runs":     "Runs list newest first, 100 per page; pass the last run id as cursor for the next page, and a shorter page is the last.",
+	"list_backend_replay_profiles": "Profiles list oldest first, 100 per page; pass the last item's \"id:version\" as cursor, and a shorter page is the last.",
+	"list_backend_replay_packages": "Packages list oldest first, 25 per page; pass the last item's \"id:version\" as cursor, and a shorter page is the last.",
+}
+
 func addBackendReplayTools(s *sdk.Server, lb *loopback) {
 	for _, spec := range []struct {
 		name, route, contract string
@@ -51,6 +57,13 @@ func addBackendReplayTools(s *sdk.Server, lb *loopback) {
 			schema["properties"].(map[string]any)["version"] = map[string]any{"type": "integer", "minimum": 1}
 			schema["required"] = append(schema["required"].([]any), "version")
 		}
-		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: "Trusted Orders replay with exact immutable package/profile/source/build pins. Connect requires explicit allowReset consent. Save/select do not execute. Start queues work; preserve complete request and idempotency key before sending. Never retry uncertain mutations with new keys. Payment is mocked; fixture order persistence is actual. Compare does not execute.", InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
+		description := "Trusted Orders replay with exact immutable package/profile/source/build pins. Connect requires explicit allowReset consent. Save/select do not execute. Start queues work; preserve complete request and idempotency key before sending. Never retry uncertain mutations with new keys. Payment is mocked; fixture order persistence is actual. Compare does not execute."
+		// The three lists page (review 2026-10-06, F123/F124); the loopback
+		// already forwards `cursor` as a query parameter on GET routes.
+		if page, paged := replayListPages[spec.name]; paged {
+			schema["properties"].(map[string]any)["cursor"] = map[string]any{"type": "string", "minLength": 1, "maxLength": 64}
+			description += " " + page
+		}
+		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: description, InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
 	}
 }
