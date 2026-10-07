@@ -20,8 +20,15 @@ recipe in `design.md`. `bind_operation` reuses an existing operation;
 
 ## Orientation
 
+`tools/list` is a summary: per tool, its name, annotations, the first sentence
+of its description and a one-level argument schema (top-level names, their JSON
+type, the required set). `describe_tool {name}` returns a tool's full
+description and argument schema; call it before the first use of a tool whose
+arguments are not obvious.
+
 | tool | purpose | input | output | gotchas |
 |---|---|---|---|---|
+| `describe_tool` | One tool's full description and schemas | `name`* | name, description (full), inputSchema (complete; repeated subtrees shared through `$defs`), outputSchema (when declared), annotations, routes (admin routes it calls) | Reads the server's own tool registry; calls no admin route. An unknown name is an error naming the closest tool names. Arguments are validated against the full schema whatever `tools/list` shows. |
 | `get_guide` | Read this documentation from the server | `topic`: `overview` \| `tools` \| `shapes` \| `cookbook` \| `http` \| `design` \| `functions` (default `overview`) | `topic`, `topics[]`, `markdown` | Static text; calls no admin route. `overview` is the skill body; the others are its reference files. |
 | `get_server_config` | This server's routing facts and effective limits | — | adminHost, baseDomain, routing, reservedPrefix, limits{maxBodyBytes, maxResponseBytes, maxAssetBytes, maxAssetsTotalBytes, maxEntities, trafficMaxBodyBytes, trafficRetention, checkpointRetention, checkpointDebounceSec, streamMaxConns, streamMaxLifetimeSec, streamMaxFrameBytes, streamSendBudgetBytes, streamPingSec, streamFrameTimeoutSec, streamTrafficFrames} | Read from the process's own config; calls no route. Read once per session before sizing a document, a frame or a family — the answer to "why 413". |
 
@@ -72,9 +79,13 @@ own session and CSRF credentials are always stripped. Only exact origins in
 `MOCKER_PROXY_ALLOWLIST` can receive network traffic. Saved responses match the
 request path, query, body and end-to-end headers, including application credentials.
 Authentication and non-JSON responses are not recorded. Replay includes status,
-Content-Type and the redacted body. Entity capture upserts successful GETs into
+Content-Type and the redacted body. A browser-executable upstream type (HTML,
+SVG, XML, unparseable) is never served or recorded: `502
+proxy_upstream_unsafe_type`. A path with a `.`/`..` segment is `400
+proxy_path_invalid`. Entity capture upserts successful GETs into
 confirmed families and can stop at existing storage limits; check the mock
-response's `X-Mocker-Entities-Imported` and `X-Mocker-Entities-Result` headers.
+response's `X-Mocker-Entities-Imported` and `X-Mocker-Entities-Result` headers
+(`skipped-redacted`: the body had redacted secret fields, nothing was captured).
 These live controls and recordings do not travel in workspace exports/forks or
 scenario snapshots and are not used by immutable scenario execution.
 

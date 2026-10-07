@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"1\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"import-candidate-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-sync\",\"backend-source-incremental-sync\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\"]"
-  guideSetId: "sha256:d0c798afb3313b1dea1b46de2dfeef5d9287df962bc66acb0d6d25f5978d7c27"
-  manifestHash: "sha256:d0c798afb3313b1dea1b46de2dfeef5d9287df962bc66acb0d6d25f5978d7c27"
+  guideSetId: "sha256:888f13728117c684f3e47ab9c7030d1242dba8370a7438f710faa622ed3bcc33"
+  manifestHash: "sha256:888f13728117c684f3e47ab9c7030d1242dba8370a7438f710faa622ed3bcc33"
 ---
 
 # Synchronize a composed source
@@ -93,7 +93,7 @@ The manifest remains the complete captured incoming file roster. ChangeManifest 
 3. Source6 record references use `{localKey}` or `{base:{repositoryId,providerNamespace,recordType,externalKey,expectedId,assertionHash}}`, exclusively. Use them in the exact typed reference fields from the API, including nested references. Evidence keys, subjectKey, opaque port keys and native text remain their own fields; never mechanically replace every `*Key` with a reference.
 4. To share an existing UUID, submit `claim_identity` before allocating the incoming external key. Its claimIdentity contains decisionId, recordType, incoming externalKey, exact offered base target, reason and incoming own evidenceKeys. Target has the same repository, record type and kind. Each proof belongs to this session's repository/snapshot and an analyzed manifest file/hash. Another provider's evidence cannot be reassigned.
 5. Explicitly call `preview_backend_import` with current expectedImportVersion and the captured baseRevisionId. `needs_resolution` has no readable READY candidate. Page `get_backend_import_changes` with the exact previewVersion; recordType is source, identity, deletion, assertion_conflict, claim_identity or migration.
-6. A conflict resolution is `resolve_assertion` with resolution `{decisionId,recordType,id,property,conflictHash,select:{repositoryId,providerNamespace,assertionHash},reason}`. Copy the offered typed property and one offered contender. There is no replacement-value field or arbitrary property path. Keep losing claims/proof visible. A new conflictHash after recomputation requires new explicit review; never retarget a prior approval automatically. An active resolution whose conflict no longer exists (the claims now agree or the record was removed) is ignored by preview and publishes no selection.
+6. A conflict resolution is `resolve_assertion` with resolution `{decisionId,recordType,id,property,conflictHash,select:{repositoryId,providerNamespace,assertionHash},reason}`. Copy the offered typed property and one offered contender. There is no replacement-value field or arbitrary property path. Keep losing claims/proof visible. A new conflictHash after recomputation requires new explicit review; never retarget a prior approval automatically.
 7. A new batch invalidates the prior preview/candidate. Obtain a fresh preview explicitly. Review source changes, retained partitions, identity/claim/migration/deletion decisions, currentness and gaps. Commit only after the import8 independent source audit passes for the final captured source, accepted bytes/receipts and ready tuple.
 8. Reread project metadata. `commit_backend_import` uses expectedVersion for project CAS, exact expectedImportVersion, candidateHash and a stable key. An annotation/rename can change project CAS without moving the source head. A changed source base cannot be hidden by updating only CAS: reconcile the intended scope on a new compatible session when the immutable base/vector no longer applies.
 

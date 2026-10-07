@@ -271,6 +271,9 @@ candidate; a stale mapping still cannot reference a nonexistent value. Changing
 port keys requires explicit repair, never name/position rebinding. Stale endpoint
 proof propagates even after mapping refresh. Compare source mapping/API nodes
 without claiming behavioral impact; old pinned revisions remain readable.
+When importing, preserve ordered inputs/exact nodeKey addresses; zero-input unknown
+is not constant. Reimport carries frozen API pins/bindings and stale/orphan labels;
+no new pin input.
 
 ## Saved editor content alongside source4
 

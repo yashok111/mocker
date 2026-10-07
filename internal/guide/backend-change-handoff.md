@@ -60,7 +60,7 @@ apply_backend_change_proposal_lifecycle({projectId,proposalId,
   idempotencyKey:originalUnarchiveKey})
 ```
 
-No report, exceptions or gap fields belong to these arms. Archive retains associations; unarchive clears active ready/implemented references. Implemented/archived drafts refuse Apply/Restore/Rebase. List proposals with status=implemented or archived to rediscover them. Existing public history lists immutable draft revisions, not every lifecycle transition. Stored lifecycle events preserve old associations internally; old reports remain readable through analysis jobs. Never claim the revision list is an event feed.
+No report, exceptions or gap fields belong to these arms. Archive retains associations; unarchive clears active ready/implemented references. Implemented/archived drafts refuse Apply/Restore/Rebase with 409 backend_change_status_conflict; unarchive first. A project holds at most 100 non-archived proposals, and archiving frees an active slot. The 1000 revisions of one proposal and the 512MiB of retained proposal history are permanent: archive does not reclaim them, so continue in a new proposal when 409 backend_change_quota_exceeded names that dimension. List proposals with status=implemented or archived to rediscover them. Existing public history lists immutable draft revisions, not every lifecycle transition. Stored lifecycle events preserve old associations internally; old reports remain readable through analysis jobs. Never claim the revision list is an event feed.
 
 ## Durable recovery and executable SDK evidence
 
