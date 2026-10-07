@@ -114,23 +114,28 @@ func readRun(ctx context.Context, q replayReader, pid, id string) (*Run, error) 
 	v.UpdatedAt, err = time.Parse(time.RFC3339Nano, updated)
 	return &v, err
 }
+
+// interruptedRuns lists the (project, run) pairs left queued or running; its
+// rows are closed before the transaction's next statement.
+func interruptedRuns(ctx context.Context, tx *sql.Tx) ([][2]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT project_id,id FROM backend_replay_runs WHERE status IN ('queued','running')`)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	ids := [][2]string{}
+	for rows.Next() {
+		var pair [2]string
+		if err = rows.Scan(&pair[0], &pair[1]); err != nil {
+			return nil, err
+		}
+		ids = append(ids, pair)
+	}
+	return ids, rows.Err()
+}
 func (r *Repo) RecoverInterrupted(ctx context.Context) error {
 	return r.db.Write(ctx, func(tx *sql.Tx) error {
-		rows, err := tx.QueryContext(ctx, `SELECT project_id,id FROM backend_replay_runs WHERE status IN ('queued','running')`)
-		if err != nil {
-			return err
-		}
-		ids := [][2]string{}
-		for rows.Next() {
-			var pair [2]string
-			if err = rows.Scan(&pair[0], &pair[1]); err != nil {
-				rows.Close()
-				return err
-			}
-			ids = append(ids, pair)
-		}
-		err = rows.Err()
-		rows.Close()
+		ids, err := interruptedRuns(ctx, tx)
 		if err != nil {
 			return err
 		}

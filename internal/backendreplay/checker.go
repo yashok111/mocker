@@ -27,31 +27,69 @@ func Check(in RunInput, provenance Provenance, j p.Journal, live p.IdentityRespo
 	if err = live.Validate(); err != nil {
 		return
 	}
-	epoch := in.Requests[0].Epoch + 1
-	if !j.Complete || len(j.PendingKeys) != 0 || j.RunID != in.RunID || j.Epoch != epoch || j.CurrentEpoch != epoch || live.Epoch != epoch || live.Identity != in.Profile.Identity || j.Identity != live.Identity || j.IdentityHash != in.Profile.IdentityHash || live.IdentityHash != in.Profile.IdentityHash || len(j.Receipts) != 4 {
+	if !journalFenceIntact(in, j, live) {
 		return report, fmt.Errorf("incomplete or changed journal fence")
 	}
+	receipts, err := reconcileReceipts(in, j, &report)
+	if err != nil {
+		return
+	}
+	chargeEvents, err := checkEventProgram(in, j, receipts)
+	if err != nil {
+		return
+	}
+	actual, err := checkRecords(in, j, receipts, chargeEvents)
+	if err != nil {
+		return
+	}
+	report.assert(in, actual)
+	return report, nil
+}
+
+// journalFenceIntact reports whether the journal is complete, belongs to this
+// run one epoch after its reset fence, and both it and the live identity still
+// name the pinned profile.
+func journalFenceIntact(in RunInput, j p.Journal, live p.IdentityResponse) bool {
+	epoch := in.Requests[0].Epoch + 1
+	if !j.Complete || len(j.PendingKeys) != 0 || j.RunID != in.RunID || len(j.Receipts) != 4 {
+		return false
+	}
+	if j.Epoch != epoch || j.CurrentEpoch != epoch || live.Epoch != epoch {
+		return false
+	}
+	return live.Identity == in.Profile.Identity && j.Identity == live.Identity && j.IdentityHash == in.Profile.IdentityHash && live.IdentityHash == in.Profile.IdentityHash
+}
+
+// reconcileReceipts finds the journal's receipt for each of the four
+// mutations, recording each on the report as it is verified.
+func reconcileReceipts(in RunInput, j p.Journal, report *Report) ([]p.Receipt, error) {
 	receipts := make([]p.Receipt, 4)
 	for i := range 4 {
 		endpoint, request := mutation(in, i)
-		hash, hashErr := p.RequestHash(endpoint, request)
-		if hashErr != nil {
-			return report, hashErr
+		hash, err := p.RequestHash(endpoint, request)
+		if err != nil {
+			return nil, err
 		}
-		r, reconcileErr := p.Reconcile(j, in.Requests[i], endpoint, hash)
-		if reconcileErr != nil {
-			return report, reconcileErr
+		r, err := p.Reconcile(j, in.Requests[i], endpoint, hash)
+		if err != nil {
+			return nil, err
 		}
 		if err = validateReceipt(in, i, r, hash); err != nil {
-			return
+			return nil, err
 		}
 		receipts[i] = r
 		report.Receipts = append(report.Receipts, r)
 	}
+	return receipts, nil
+}
+
+// checkEventProgram matches the journal's events against the closed program
+// and returns the charge ids its payment events witness.
+func checkEventProgram(in RunInput, j p.Journal, receipts []p.Receipt) (map[string]bool, error) {
 	// This closed program has exactly eight events. Both legitimate payment
 	// strategies have this shape; the charge assertion distinguishes the bug.
 	if len(j.Events) != 8 {
-		return report, fmt.Errorf("unexpected event program")
+		return nil, fmt.Errorf("unexpected event program")
 	}
 	kinds := []string{"reset", "armed", "attempt", "payment_charged", "failure_triggered", "attempt", "", "order_persisted"}
 	owners := []int{0, 1, 2, 2, 2, 3, 3, 3}
@@ -60,42 +98,63 @@ func Check(in RunInput, provenance Provenance, j p.Journal, live p.IdentityRespo
 		owner := owners[n]
 		r := receipts[owner]
 		if event.StepID != r.StepID || event.RequestKey != r.RequestKey || (n > 0 && event.Sequence != j.Events[n-1].Sequence+1) || (kinds[n] != "" && event.Kind != kinds[n]) {
-			return report, fmt.Errorf("event order or ownership mismatch")
+			return nil, fmt.Errorf("event order or ownership mismatch")
 		}
 		if owner >= 2 && event.BusinessKey != in.BusinessKey {
-			return report, fmt.Errorf("event business key mismatch")
+			return nil, fmt.Errorf("event business key mismatch")
 		}
-		switch event.Kind {
-		case "payment_charged":
-			if event.ObjectID != r.ChargeID || event.AmountMinor != p.Fixture().Order.AmountMinor || chargeEvents[event.ObjectID] {
-				return report, fmt.Errorf("charge event mismatch")
-			}
-			chargeEvents[event.ObjectID] = true
-		case "payment_reused":
-			if n != 6 || event.ObjectID != r.ChargeID || !chargeEvents[event.ObjectID] || event.AmountMinor != p.Fixture().Order.AmountMinor {
-				return report, fmt.Errorf("payment reuse mismatch")
-			}
-		case "order_persisted":
-			if event.ObjectID != r.OrderID {
-				return report, fmt.Errorf("order event mismatch")
-			}
+		if err := checkEventObject(n, event, r, chargeEvents); err != nil {
+			return nil, err
 		}
 		if n == 6 && event.Kind != "payment_charged" && event.Kind != "payment_reused" {
-			return report, fmt.Errorf("retry payment witness missing")
+			return nil, fmt.Errorf("retry payment witness missing")
 		}
 	}
+	return chargeEvents, nil
+}
+
+// checkEventObject checks the object an event names against its receipt; a
+// payment may be charged once and reused only by the retry, event 6.
+func checkEventObject(n int, event p.Event, r p.Receipt, chargeEvents map[string]bool) error {
+	switch event.Kind {
+	case "payment_charged":
+		if event.ObjectID != r.ChargeID || event.AmountMinor != p.Fixture().Order.AmountMinor || chargeEvents[event.ObjectID] {
+			return fmt.Errorf("charge event mismatch")
+		}
+		chargeEvents[event.ObjectID] = true
+	case "payment_reused":
+		if n != 6 || event.ObjectID != r.ChargeID || !chargeEvents[event.ObjectID] || event.AmountMinor != p.Fixture().Order.AmountMinor {
+			return fmt.Errorf("payment reuse mismatch")
+		}
+	case "order_persisted":
+		if event.ObjectID != r.OrderID {
+			return fmt.Errorf("order event mismatch")
+		}
+	}
+	return nil
+}
+
+// checkRecords requires the stored order and charges to be exactly what the
+// events witness, and the final receipt's counters to agree with them.
+func checkRecords(in RunInput, j p.Journal, receipts []p.Receipt, chargeEvents map[string]bool) (p.Counters, error) {
 	if len(j.Orders) != 1 || j.Orders[0].ID != receipts[3].OrderID || j.Orders[0].BusinessKey != in.BusinessKey || len(j.Charges) != len(chargeEvents) {
-		return report, fmt.Errorf("record/event mismatch")
+		return p.Counters{}, fmt.Errorf("record/event mismatch")
 	}
 	for _, charge := range j.Charges {
 		if charge.BusinessKey != in.BusinessKey || !chargeEvents[charge.ID] {
-			return report, fmt.Errorf("unwitnessed charge")
+			return p.Counters{}, fmt.Errorf("unwitnessed charge")
 		}
 	}
 	actual := p.Counters{Orders: len(j.Orders), Charges: len(j.Charges), Attempts: 2, Triggers: 1}
 	if receipts[3].Counters != actual {
-		return report, fmt.Errorf("final counters contradict records")
+		return p.Counters{}, fmt.Errorf("final counters contradict records")
 	}
+	return actual, nil
+}
+
+// assert evaluates the package's assertions against verified counters and
+// derives each diagram binding's status from the assertions it names.
+func (report *Report) assert(in RunInput, actual p.Counters) {
 	counts := map[string]int{"orders": actual.Orders, "charges": actual.Charges, "attempts": actual.Attempts, "triggers": actual.Triggers}
 	report.Status = "succeeded"
 	for _, a := range in.Package.Assertions {
@@ -124,7 +183,6 @@ func Check(in RunInput, provenance Provenance, j p.Journal, live p.IdentityRespo
 			}
 		}
 	}
-	return report, nil
 }
 
 type Comparison struct {
