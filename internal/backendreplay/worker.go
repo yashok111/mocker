@@ -149,7 +149,9 @@ func (s *Service) execute(app context.Context, actor string, run *Run) error {
 	if err == nil {
 		err = authorizeProfile(ctx, s.repo.db.R, run.ProjectID, actor, run.Input.Profile)
 	}
+	executed := false
 	if err == nil {
+		executed = true
 		report, err = (Engine{Transport: target.Transport}).Execute(ctx, run.Input, run.Provenance, Hooks{
 			BeforeMutation: func(c context.Context, e p.Endpoint, f p.Fence, h string, b []byte) error {
 				if err := s.actor(c, actor); err != nil {
@@ -169,9 +171,22 @@ func (s *Service) execute(app context.Context, actor string, run *Run) error {
 	}
 	if err != nil {
 		report.Status = "unverified"
-		report.Reason = "Replay evidence or authorization could not be verified"
+		// Engine.Execute and Check put the specific cause into the report
+		// (a rejected mutation, an incomplete journal, a changed identity).
+		// Overwriting it for every error (review 2026-10-06, F126) stored an
+		// immutable terminal report that blamed evidence or authorization
+		// whatever went wrong. The fixed text stays for failures before the
+		// engine ran (target, actor, authorization), whose raw errors are
+		// not meant for the report.
+		if !executed || report.Reason == "" {
+			report.Reason = "Replay evidence or authorization could not be verified"
+		}
 	}
-	if app.Err() != nil {
+	// Only a run the shutdown actually cut short is interrupted. A verdict the
+	// engine already returned (err == nil) is complete: rewriting it to
+	// interrupted (review 2026-10-06, F7/F129) lost a positive witness and,
+	// with steps on record, fenced the target until someone acknowledged it.
+	if app.Err() != nil && err != nil {
 		report.Status = "interrupted"
 		report.Reason = "Worker stopped; no automatic resume"
 	}

@@ -91,6 +91,14 @@ func TestReplayRestartInterruptsWithoutDispatchAndRequiresAcknowledgment(t *test
 	if err != nil {
 		t.Fatal(err)
 	}
+	// A run that persisted a step may have dispatched it, so its lease stays
+	// uncertain; one that never did is released instead (review 2026-10-06,
+	// F6, TestReplayRestartReleasesNeverDispatchedLease).
+	claimed, actor, err := s.claim(t.Context())
+	if err != nil || claimed == nil {
+		t.Fatalf("claim %v", err)
+	}
+	persistFirstStep(t, s, actor, claimed)
 	if err = s.RecoverInterrupted(t.Context()); err != nil {
 		t.Fatal(err)
 	}

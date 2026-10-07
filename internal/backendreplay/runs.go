@@ -176,12 +176,8 @@ func (s *Service) Cancel(ctx context.Context, pid, actor, id string) (*Run, erro
 		if out.Status != "queued" && out.Status != "running" {
 			return nil
 		}
-		if out.Status == "queued" {
-			_, err = tx.ExecContext(ctx, `DELETE FROM backend_replay_target_leases WHERE run_id=?`, id)
-		} else {
-			_, err = tx.ExecContext(ctx, `UPDATE backend_replay_target_leases SET state='uncertain' WHERE run_id=?`, id)
-		}
-		if err != nil {
+		// A queued run has no step row either, so one rule covers both.
+		if err = fenceIfDispatched(ctx, tx, id); err != nil {
 			return err
 		}
 		report := initialReport(out.Input, out.Provenance)
