@@ -84,7 +84,9 @@ func TestBackendB43AnalysisSupportNegotiation(t *testing.T) {
 	}
 	b41Call(t, s, "GET", "/api/backend-projects/capabilities", nil, 200, &caps)
 	v := caps.AnalysisSupport
-	if v.DocumentVersion != "backend-analysis-context-v1" || v.RuleSetVersion != "b42-rules/v1" || !slices.Equal(v.DocumentVersions, []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}) || !slices.Equal(v.InputDocumentVersions, []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}) || !slices.Equal(v.RuleSetVersions, []string{"b42-rules/v1", "b43-rules/v1"}) || !slices.Contains(v.Kinds, "endpoint_review") {
+	// diagnostics-v1 joined ruleSetVersions with a6f1139 (scoped
+	// diagnostics); the two B4.2/B4.3 rule sets stay, in the same order.
+	if v.DocumentVersion != "backend-analysis-context-v1" || v.RuleSetVersion != "b42-rules/v1" || !slices.Equal(v.DocumentVersions, []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}) || !slices.Equal(v.InputDocumentVersions, []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}) || !slices.Equal(v.RuleSetVersions, []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}) || !slices.Contains(v.Kinds, "endpoint_review") {
 		t.Fatal(v)
 	}
 }

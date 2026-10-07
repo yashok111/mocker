@@ -14,10 +14,15 @@ import (
 func TestMigration21PreservesHistoryAndForeignKeys(t *testing.T) {
 	db := migration21Fixture(t)
 	before := migration21History(t, db)
-	if err := db.Migrate(t.Context(), nil); err != nil {
+	// migration21History compares `SELECT *` rows, which only means anything
+	// while the payload columns are inline: pin to the last such schema (the
+	// literal 24 here was the head when it was written, and 0027 then turned
+	// it red). 26→27 byte preservation is TestBlobMigrationBytes' job; the
+	// end of this test still drives this fixture to the head.
+	if err := db.MigrateThrough(t.Context(), lastInlinePayloadSchema); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 24)
+	migration21Version(t, db, lastInlinePayloadSchema)
 	if after := migration21History(t, db); !slices.Equal(before, after) {
 		t.Fatalf("history bytes changed\nbefore: %v\nafter: %v", before, after)
 	}
@@ -39,13 +44,18 @@ func TestMigration21PreservesHistoryAndForeignKeys(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer reopened.Close()
-	if err := reopened.Migrate(t.Context(), nil); err != nil {
+	if err := reopened.MigrateThrough(t.Context(), lastInlinePayloadSchema); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, reopened, 24)
+	migration21Version(t, reopened, lastInlinePayloadSchema)
 	if after := migration21History(t, reopened); !slices.Equal(before, after) {
 		t.Fatal("reopen changed historical bytes")
 	}
+	migration21ForeignKeys(t, reopened)
+	if err := reopened.Migrate(t.Context(), nil); err != nil {
+		t.Fatalf("Store20 history must still reach the head: %v", err)
+	}
+	migration21Version(t, reopened, latestMigration(t))
 	migration21ForeignKeys(t, reopened)
 }
 
@@ -98,10 +108,13 @@ func TestMigration21RollbackAndConnectionState(t *testing.T) {
 
 func TestMigration21AnalysisStorageGuards(t *testing.T) {
 	db := migration21Fixture(t)
-	if err := db.Migrate(t.Context(), nil); err != nil {
+	// The raw inserts below write the analysis tables' inline `document` and
+	// `items_json` columns, which 0027 moved behind payload keys: pin to the
+	// last inline schema (was Migrate + a literal 24, the head when written).
+	if err := db.MigrateThrough(t.Context(), lastInlinePayloadSchema); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 24)
+	migration21Version(t, db, lastInlinePayloadSchema)
 	exec := func(q string) {
 		t.Helper()
 		if _, err := db.W.ExecContext(t.Context(), q); err != nil {
@@ -208,9 +221,14 @@ func migration21Fixture(t *testing.T) *DB {
 			`INSERT INTO backend_revision_sources VALUES ('source5','{ "source": "five" }')`,
 			`INSERT INTO backend_revision_sources VALUES ('source6','{ "source": "six" }')`,
 			`INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES ('p','source5','node','n','{ "id": "n" }')`,
-			`INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES ('p','source5','evidence','e','n','{ "id": "e" }')`,
+			// Evidence payloads carry their subjectId, as every real import
+			// writes them (backendmodel import_graph.go stores e.SubjectID in
+			// both). 0027 verifies the subject_id column against it, and the
+			// old `{ "id": "e" }` stood for a row no import produces, so the
+			// fixture could not reach the head.
+			`INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES ('p','source5','evidence','e','n','{ "id": "e", "subjectId": "n" }')`,
 			`INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES ('p','source6','node','n','{ "id": "n" }')`,
-			`INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES ('p','source6','evidence','e','n','{ "id": "e" }')`,
+			`INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,subject_id,document) VALUES ('p','source6','evidence','e','n','{ "id": "e", "subjectId": "n" }')`,
 			`INSERT INTO backend_revision_assertions VALUES ('p','source6','node','n','repo','provider','key','claim','{ "evidenceIds": ["e"] }')`,
 			`INSERT INTO backend_revision_assertion_resolutions VALUES ('p','source6','node','n','name','conflict','{ "select": { "repositoryId":"repo", "providerNamespace":"provider", "assertionHash":"claim" } }')`,
 			`INSERT INTO backend_revision_legacy_proof_bases VALUES ('p','source6','e','source5','basis','{ "recordType":"node", "recordId":"n" }')`,
@@ -331,8 +349,13 @@ func migration21ForeignKeys(t *testing.T, db *DB) {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := db.W.ExecContext(t.Context(), "INSERT INTO backend_revisions VALUES ('unowned','absent','{}')"); err == nil {
-		t.Fatal("foreign keys not enforced")
+	// The probe must fail on a FOREIGN KEY, not merely fail: this helper now
+	// runs at the head too, where any other error (a column shape 0027 changed)
+	// would pass it without proving enforcement. Both shapes have three
+	// columns and both reject it on a foreign key (project 'absent' up to 26,
+	// project and payload_key at 27).
+	if _, err := db.W.ExecContext(t.Context(), "INSERT INTO backend_revisions VALUES ('unowned','absent','{}')"); err == nil || !strings.Contains(err.Error(), "FOREIGN KEY") {
+		t.Fatalf("foreign keys not enforced: %v", err)
 	}
 }
 
@@ -402,7 +425,10 @@ func TestMigration21BatchActionsAndCounts(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			db := migration21Fixture(t)
-			if err := db.Migrate(t.Context(), nil); err != nil {
+			// Raw positional inserts into the change-proposal tables' inline
+			// `document` columns below: pin to the last inline schema, as
+			// TestMigration21AnalysisStorageGuards does.
+			if err := db.MigrateThrough(t.Context(), lastInlinePayloadSchema); err != nil {
 				t.Fatal(err)
 			}
 			commands := "[" + strings.TrimSuffix(strings.Repeat(`{"commandId":"repair"},`, tc.count), ",") + "]"

@@ -34,7 +34,8 @@ func TestBackendEditorCapabilityNegotiation(t *testing.T) {
 	}
 	owner, _ := guide.WorkflowForTopic("backend-editor-projections")
 	i := slices.IndexFunc(out.WorkflowVersions, func(w guide.Workflow) bool { return w.WorkflowID == owner.WorkflowID })
-	if i < 0 || out.WorkflowVersions[i].WorkflowVersion != "12" || out.WorkflowVersions[i].GuideSetID != guide.CurrentGuideSetID() {
+	// The owner (mocker-backend-inspect) is v13 since 6006fa8 (B6.2).
+	if i < 0 || out.WorkflowVersions[i].WorkflowVersion != "13" || out.WorkflowVersions[i].GuideSetID != guide.CurrentGuideSetID() {
 		t.Fatalf("editor owner unavailable: %+v", out.WorkflowVersions)
 	}
 	w := out.WorkflowVersions[i]

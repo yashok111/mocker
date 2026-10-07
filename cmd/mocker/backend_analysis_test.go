@@ -85,6 +85,16 @@ func TestAnalysisApplicationShutdownJoinsWorkers(t *testing.T) {
 				if err := a.analysisService.WaitRunning(t.Context()); err != nil {
 					t.Fatal(err)
 				}
+				// "normal" means a shutdown after startup finished. Since
+				// be06f56 (B5.3) startAndDrain starts the replay workers
+				// AFTER the analysis ones; stopping on analysis alone landed
+				// in replay's WaitRunning, so startAndDrain returned a
+				// startup cancellation ("context canceled" joined with the
+				// replay Run that lost the race to Close) — a startup abort,
+				// not the drain this mode exists to prove.
+				if err := a.replayService.WaitRunning(t.Context()); err != nil {
+					t.Fatal(err)
+				}
 				stop()
 			}
 			select {

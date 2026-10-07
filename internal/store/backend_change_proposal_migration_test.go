@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/yashok111/mocker/internal/testkit"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 func TestChangeProposalStorageOwnedBaselineAndRequiredBatch(t *testing.T) {
@@ -20,7 +20,7 @@ func TestChangeProposalStorageOwnedBaselineAndRequiredBatch(t *testing.T) {
 		{name: "missing immutable batch", baseRevision: "revision-a", wantError: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			db := testkit.NewDB(t)
+			db := store.OpenInlinePayloadSchema(t)
 			seedB41StorageParents(t, db.W)
 			err := insertStorageChangeProposal(t, db.W, tc.baseRevision, tc.includeBatch)
 			if tc.wantError {
@@ -42,7 +42,7 @@ func TestChangeProposalStorageOwnedBaselineAndRequiredBatch(t *testing.T) {
 }
 
 func TestChangeProposalStorageCommandLedgerAndImmutability(t *testing.T) {
-	db := testkit.NewDB(t)
+	db := store.OpenInlinePayloadSchema(t)
 	seedB41StorageParents(t, db.W)
 	if err := insertStorageChangeProposal(t, db.W, "revision-a", true); err != nil {
 		t.Fatal(err)

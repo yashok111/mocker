@@ -4,11 +4,11 @@ import (
 	"database/sql"
 	"testing"
 
-	"github.com/yashok111/mocker/internal/testkit"
+	"github.com/yashok111/mocker/internal/store"
 )
 
 func TestAPIArtifactContextImmutableAndIndependentOfAPIAvailability(t *testing.T) {
-	db := testkit.NewDB(t)
+	db := store.OpenInlinePayloadSchema(t)
 	err := db.Write(t.Context(), func(tx *sql.Tx) error {
 		for _, statement := range []string{
 			`INSERT INTO backend_projects(id,name,version,current_revision_id,created_at,updated_at) VALUES('p','Project',1,'r','now','now')`,

@@ -76,7 +76,10 @@ func TestBackendDiagramClosedCanonicalContract(t *testing.T) {
 			}
 		}
 	}
-	if count != 13 {
-		t.Fatalf("diagram REST operation count=%d, want13", count)
+	// 13 at f30edb2 (lifecycle build); 5579099 (B5.2) added
+	// GET .../diagram-views/{vid}/versions/{v}/svg and 41ca3c6 (B6.1) added
+	// POST .../diagrams/resolve-scope, both deliberate diagram routes.
+	if count != 15 {
+		t.Fatalf("diagram REST operation count=%d, want 15", count)
 	}
 }

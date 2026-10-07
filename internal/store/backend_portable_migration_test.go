@@ -27,7 +27,8 @@ func TestFoundationMigration23To24(t *testing.T) {
 	if err := db.Migrate(t.Context(), nil); err != nil {
 		t.Fatal(err)
 	}
-	migration21Version(t, db, 24)
+	// Was a literal 24 (the head when B5.2 landed); Migrate goes to the head.
+	migration21Version(t, db, latestMigration(t))
 	for _, name := range []string{"backend_materializations", "backend_materialization_receipts", "backend_portable_sessions", "backend_portable_chunks", "backend_portable_receipts", "backend_portable_id_maps", "backend_portable_origins"} {
 		var n int
 		if err := db.R.QueryRow("SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?", name).Scan(&n); err != nil || n != 1 {
