@@ -45,7 +45,10 @@ Retry requires explicit instrumentation; names alone prove nothing.
 Latency uses the selected complete root sample. With no selected roots, a single
 terminal passed/failed test duration may supply a sample; skipped/unknown tests
 are not successes. Percentiles use nearest rank on original duration samples,
-never averages of p95s. Samples remain in the result for independent recomputation.
+never averages of p95s. Samples remain in the result for independent recomputation;
+samples[].executionId is the selected execution ID. Value is the total over the
+sampled executions, so a comparison delta is null when before and after differ in
+sampleCount or missingSamples, and a limitation names the metric.
 Sampled failures, particularly tail/unknown sampling, are not population rates.
 
 3. Poll `get_backend_analysis` at the recommended interval; retain jobId,

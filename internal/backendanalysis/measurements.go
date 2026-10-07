@@ -75,6 +75,10 @@ func observationIdentity(c o.ObservationContext) string {
 	}{c.Producer, c.Source, c.Environment})
 	return string(raw)
 }
+func observationKey(identity, executionID, recordID string) string {
+	raw, _ := canonical([3]string{identity, executionID, recordID})
+	return string(raw)
+}
 func uniqueObservations(ctx context.Context, data PinnedMeasurementData, side string) ([]uniqueObservation, error) {
 	seen := map[string]string{}
 	spans := map[string]string{}
@@ -97,7 +101,13 @@ func uniqueObservations(ctx context.Context, data PinnedMeasurementData, side st
 				return nil, fault(422, "observation_conditions_conflict", "One execution has contradictory conditions")
 			}
 			conditions[executionKey] = string(conditionRaw)
-			key := executionKey + "/" + rec.ID
+			// Both IDs may contain "/", so a "/"-joined key let
+			// {executionId:"a", id:"b/c"} and {executionId:"a/b", id:"c"}
+			// collide into a false 422 observation_conflict and share one
+			// diagram element id. The canonical JSON tuple is unambiguous
+			// (review 2026-10-06, F37). executionKey stays "/"-joined: the
+			// identity is a JSON object, which no other JSON object extends.
+			key := observationKey(identity, rec.ExecutionID, rec.ID)
 			raw, err := canonical(rec)
 			if err != nil {
 				return nil, err
@@ -230,7 +240,10 @@ func MeasureScenario(ctx context.Context, in MeasurementInput, data PinnedMeasur
 				}
 			}
 			if r.Record.Type == "span" && r.Record.ParentSpanID == "" && slices.Contains(in.RootSpanIDs, r.Record.SpanID) {
-				known = r.Record.Status != "unknown"
+				// OR, never assign: an assignment let an unknown root span
+				// erase the "known" a passed test set, depending only on which
+				// record id sorts last (review 2026-10-06, F153).
+				known = known || r.Record.Status != "unknown"
 				failed = failed || r.Record.Status == "error"
 			}
 		}
@@ -245,6 +258,16 @@ func MeasureScenario(ctx context.Context, in MeasurementInput, data PinnedMeasur
 		default:
 			out.UnknownExecutions++
 		}
+	}
+	// Two producers/sources may report the same execution id; their groups stay
+	// separate executions, so their samples carry the same executionId and a
+	// limitation says so.
+	sharedExecutionIDs := map[string]bool{}
+	groupsPerID := map[string]int{}
+	for _, group := range groups {
+		id := group[0].Record.ExecutionID
+		groupsPerID[id]++
+		sharedExecutionIDs[id] = groupsPerID[id] > 1
 	}
 	for _, name := range []string{"sql_count", "external_call_count", "retry_count", "request_bytes", "response_bytes", "latency_ns"} {
 		m := MeasuredMetric{Unit: "count", Basis: in.Basis, Samples: []MetricSample{}, Limitations: []string{}, MissingSamples: len(in.ExecutionIDs) - len(found)}
@@ -408,7 +431,14 @@ func MeasureScenario(ctx context.Context, in MeasurementInput, data PinnedMeasur
 			if !complete {
 				m.Limitations = append(m.Limitations, "partial instrumentation: observed lower bound")
 			}
-			m.Samples = append(m.Samples, MetricSample{ExecutionID: key, Value: strconv.FormatInt(value, 10)})
+			// The caller's raw execution id, not the internal grouping key
+			// (canonical identity JSON + "/" + id), which an agent could not
+			// match to its selection or the "missing execution" gap
+			// (review 2026-10-06, F152).
+			m.Samples = append(m.Samples, MetricSample{ExecutionID: group[0].Record.ExecutionID, Value: strconv.FormatInt(value, 10)})
+			if sharedExecutionIDs[group[0].Record.ExecutionID] {
+				m.Limitations = append(m.Limitations, "an executionId is shared by several observation identities; its samples are separate executions")
+			}
 			values = append(values, value)
 			if value > math.MaxInt64-total {
 				overflow = true
