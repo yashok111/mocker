@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 	"github.com/yashok111/mocker/internal/testkit"
@@ -89,6 +90,44 @@ func TestPortableIdempotencyKeyMatchesContract(t *testing.T) {
 		if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: key}); err == nil {
 			t.Fatalf("out-of-contract key of %d characters accepted", len(key))
 		}
+	}
+}
+
+// review 2026-10-06, F8/F35: five staging or ready sessions nobody aborts
+// (lost IDs, crashed agents, downloaded exports) used to lock every Begin and
+// Export out with 413 for good. A session idle past StagingIdleTTL is now
+// aborted, and its chunks freed, by the next Begin or Export; a live one is not.
+func TestPortableIdleSessionsExpireAtNextBegin(t *testing.T) {
+	db := testkit.NewDB(t)
+	s := NewStaging(db)
+	m, body := bundleFixture(t)
+	ids := make([]string, 0, 5)
+	for i := range 5 {
+		session, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: fmt.Sprint("begin", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, session.ID)
+	}
+	if _, err := s.Put(t.Context(), ids[0], PutInput{ExpectedVersion: 1, Index: 0, Body: string(body), IdempotencyKey: "put"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: "live-quota"}); err == nil {
+		t.Fatal("live sessions were expired")
+	}
+	old := time.Now().Add(-StagingIdleTTL - time.Minute).Unix()
+	if _, err := db.W.Exec(`UPDATE backend_portable_sessions SET updated_at=?`, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: "after-expiry"}); err != nil {
+		t.Fatal("idle sessions still hold the staging quota", err)
+	}
+	var aborted, chunks int
+	if err := db.R.QueryRow(`SELECT count(*) FROM backend_portable_sessions WHERE state='aborted'`).Scan(&aborted); err != nil || aborted != 5 {
+		t.Fatal("idle sessions not aborted", aborted, err)
+	}
+	if err := db.R.QueryRow(`SELECT count(*) FROM backend_portable_chunks`).Scan(&chunks); err != nil || chunks != 0 {
+		t.Fatal("expired session kept its chunks", chunks, err)
 	}
 }
 

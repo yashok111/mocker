@@ -244,6 +244,11 @@ func (s *Service) Commit(ctx context.Context, id string, in CommitInput) (*Commi
 		if _, err := tx.ExecContext(ctx, `UPDATE backend_portable_sessions SET project_id=? WHERE id=?`, imported.Project.ID, id); err != nil {
 			return nil, "", err
 		}
+		// Nothing reads a committed session's chunks or preview again: a
+		// retry is answered from the receipt (review 2026-10-06, F71).
+		if err := releaseStaged(ctx, tx, id); err != nil {
+			return nil, "", err
+		}
 		if err := advanceSession(ctx, tx, session); err != nil {
 			return nil, "", err
 		}

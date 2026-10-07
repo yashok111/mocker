@@ -462,6 +462,32 @@ func TestPortableCommitStampsProjectAtCommitTime(t *testing.T) {
 	}
 }
 
+// review 2026-10-06, F71/F8: a committed import keeps nothing staged. The
+// chunk bodies (up to 256 MiB) and the prepared preview used to stay forever:
+// Abort refuses a committed session and nothing else reclaimed them, while
+// origins and id maps already hold the immutable copies.
+func TestPortableCommitReclaimsStagedChunksAndPreview(t *testing.T) {
+	t.Parallel()
+	f := makeRoundtripFixture(t)
+	_, session := stageRoundtrip(t, f)
+	preview, err := f.service.Preview(t.Context(), session.ID, PreviewInput{ExpectedVersion: session.Version, ArtifactMappings: []bm.PortableArtifactMapping{}, IdempotencyKey: "preview"})
+	check(t, err)
+	in := CommitInput{ExpectedVersion: preview.Session.Version, CandidateHash: preview.CandidateHash, IdempotencyKey: "commit"}
+	committed, err := f.service.Commit(t.Context(), session.ID, in)
+	check(t, err)
+	var chunks, previews int
+	check(t, f.service.db.R.QueryRow(`SELECT count(*) FROM backend_portable_chunks WHERE session_id=?`, session.ID).Scan(&chunks))
+	check(t, f.service.db.R.QueryRow(`SELECT count(*) FROM backend_portable_sessions WHERE id=? AND (preview IS NOT NULL OR candidate_hash IS NOT NULL)`, session.ID).Scan(&previews))
+	if chunks != 0 || previews != 0 {
+		t.Fatal("committed import kept staged data", chunks, previews)
+	}
+	replay, err := f.service.Commit(t.Context(), session.ID, in)
+	check(t, err)
+	if replay.Project.ID != committed.Project.ID {
+		t.Fatal("receipt replay after reclaim changed the result")
+	}
+}
+
 // review 2026-10-06, F74: the guide says to export with the resolved
 // selection unchanged, so the resolver must refuse what export refuses. A
 // duplicated view pin used to resolve with 200 and fail only at export.
