@@ -2,6 +2,7 @@ package backendmodel
 
 import (
 	"encoding/json/v2"
+	"maps"
 	"strings"
 )
 
@@ -138,7 +139,18 @@ func (m *portableMapper) proposal(p *PortableProposal, payloads map[string]Sourc
 				}
 			}
 			for _, created := range v.Delta.Created {
-				originalPayloads[created.ID] = created.Payload
+				// A struct copy is not enough: ParentID is a pointer the
+				// created-record pass below rewrites in place, so the
+				// criteria pass would see the already local parent and fail
+				// with "Missing typed mapping" on a valid bundle (review
+				// 2026-10-06, F67). Attributes are cloned for the same reason.
+				p := created.Payload
+				if p.ParentID != nil {
+					parent := *p.ParentID
+					p.ParentID = &parent
+				}
+				p.Attributes = maps.Clone(p.Attributes)
+				originalPayloads[created.ID] = p
 			}
 			// Apply cumulative property changes before extracting any remapped value.
 			for _, property := range v.Delta.Properties {

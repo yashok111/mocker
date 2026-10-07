@@ -76,3 +76,27 @@ func TestPortableMemberIdentityIsDiagramScoped(t *testing.T) {
 		t.Fatal("duplicate same-parent member")
 	}
 }
+
+// review 2026-10-06, F70: unversioned kinds are pinned to version "0". Two
+// annotation records with the same ID and versions "0" and "1" used to pass
+// every envelope check (the record key includes the version), remap to one
+// local annotation UUID and fail Preview with a raw SQLite PRIMARY KEY error,
+// a 500 instead of a 422.
+func TestPortableUnversionedKindsRequireVersionZero(t *testing.T) {
+	annotation := func(version string) Record {
+		r := Record{Kind: "annotation", Identity: Identity{pid, pid, "annotation", nid, version}, Document: jsontext.Value(`{"id":"` + nid + `"}`)}
+		r.ContentHash, _ = DocumentHash(r.Document)
+		return r
+	}
+	if err := annotation("0").Validate(); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := EncodeChunk(0, []Record{annotation("0"), annotation("1")}); err == nil {
+		t.Fatal("annotation with a second identity version accepted")
+	}
+	for _, kind := range []string{"project", "node", "edge", "evidence", "diagram", "diagram_element", "saved_view", "diagram_view"} {
+		if err := (Identity{pid, pid, kind, nid, "2"}).Validate(); err == nil {
+			t.Errorf("%s accepted a nonzero version", kind)
+		}
+	}
+}

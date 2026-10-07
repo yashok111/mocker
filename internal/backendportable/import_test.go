@@ -63,6 +63,35 @@ func TestPortableStagingDurableReplayCASAbort(t *testing.T) {
 		t.Fatal("abort cleanup", n, err)
 	}
 }
+
+// review 2026-10-06, F15: the contract states idempotencyKey as a string of
+// 1–200 characters and nothing else. The server used to count BYTES and to
+// refuse leading or trailing whitespace, so a valid key such as " abc" or
+// 150 two-byte characters got an unexplained 422.
+func TestPortableIdempotencyKeyMatchesContract(t *testing.T) {
+	db := testkit.NewDB(t)
+	s := NewStaging(db)
+	m, _ := bundleFixture(t)
+	for i, key := range []string{" leading", "trailing ", strings.Repeat("я", 200)} {
+		if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: key}); err != nil {
+			t.Fatalf("contract-valid key %d refused: %v", i, err)
+		}
+		s2 := NewService(db, bm.NewRepo(db))
+		if _, err := s2.Preview(t.Context(), "00000000-0000-4000-8000-000000000000", PreviewInput{ExpectedVersion: 1, IdempotencyKey: key}); err == nil || err.Error() == "Invalid idempotency key" {
+			t.Fatalf("contract-valid key %d refused by the service: %v", i, err)
+		}
+		// Abort each session so the five-session staging quota stays free.
+		if _, err := db.W.Exec(`UPDATE backend_portable_sessions SET state='aborted' WHERE state='staging'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, key := range []string{"", strings.Repeat("a", 201)} {
+		if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: key}); err == nil {
+			t.Fatalf("out-of-contract key of %d characters accepted", len(key))
+		}
+	}
+}
+
 func TestPortableFrozenExport(t *testing.T) {
 	db := testkit.NewDB(t)
 	s := NewStaging(db)

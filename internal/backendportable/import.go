@@ -6,7 +6,6 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"math"
-	"strings"
 	"time"
 	"uuid"
 
@@ -42,7 +41,7 @@ type PutInput struct {
 }
 
 func (s *Staging) mutation(ctx context.Context, scope, op, key string, input any, fn func(*sql.Tx) (*Session, error)) (*Session, error) {
-	if len(key) < 1 || len(key) > 200 || strings.TrimSpace(key) != key {
+	if !validIdempotencyKey(key) {
 		return nil, fault(422, "Invalid idempotency key")
 	}
 	h, err := DocumentHash(struct {

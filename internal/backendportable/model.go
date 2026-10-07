@@ -87,8 +87,17 @@ func (i Identity) Validate() error {
 	if err != nil || n < 0 || strconv.FormatInt(n, 10) != i.Version {
 		return fault(422, "Canonical lossless version required")
 	}
-	if n == 0 && !slices.Contains([]string{"project", "repository", "source_snapshot", "node", "edge", "evidence", "annotation", "diagram", "diagram_element", "diagram_link", "saved_view", "diagram_view", "artifact_owner"}, i.Kind) {
+	// The partition is two-sided (review 2026-10-06, F70): an unversioned kind
+	// carries exactly "0", the version every exporter writes for it. Accepting
+	// any version there let two records with one annotation ID and versions
+	// "0" and "1" pass as distinct keys, remap to one local UUID and fail
+	// Preview with a raw SQLite PRIMARY KEY error (500) instead of a 422.
+	unversioned := slices.Contains([]string{"project", "repository", "source_snapshot", "node", "edge", "evidence", "annotation", "diagram", "diagram_element", "diagram_link", "saved_view", "diagram_view", "artifact_owner"}, i.Kind)
+	if n == 0 && !unversioned {
 		return fault(422, "Exact version required")
+	}
+	if n != 0 && unversioned {
+		return fault(422, "Unversioned record kind requires version 0")
 	}
 	return nil
 }
