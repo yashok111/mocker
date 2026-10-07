@@ -11,7 +11,8 @@ import (
 func mutateAllRelationalFacets(t *testing.T, cs []ImportCommand, key string, fn func(map[string]jsontext.Value)) {
 	t.Helper()
 	c := relationalCommand(cs, key)
-	kind, attrs := "", map[string]jsontext.Value(nil)
+	var kind string
+	var attrs map[string]jsontext.Value
 	if c.Node != nil {
 		kind, attrs = c.Node.Kind, c.Node.Attributes
 	} else {
