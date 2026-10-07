@@ -34,7 +34,8 @@ State `value:{json:"..."}` holds exactly one lossless JSON scalar, including nul
 numeric strings must not be parsed through a floating-point representation.
 
 Transitions have exact state endpoints, triggers/writes/events refs and a guard
-`{kind:"none"}` or `{kind:"opaque",text}`. Rules have id/from/to/trigger,
+`{kind:"none"}` or `{kind:"opaque",text}` (text 1..135232 UTF-8 bytes, enough for any
+state-diagram guard). Rules have id/from/to/trigger,
 verdict allowed/forbidden and authored origin/reason. Duplicate or conflicting
 from/to/trigger rule triples reject atomically. A terminal state with an outgoing
 transition retains that transition and exposes a gap. Partial coverage never proves

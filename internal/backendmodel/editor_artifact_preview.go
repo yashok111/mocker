@@ -263,6 +263,11 @@ type artifactPreviewGroup struct {
 	remove          bool
 }
 
+// Frozen labels go through boundedArtifactLabel, as on the legacy API path:
+// owners allow names far above the 4096-byte cap Validate enforces, and one
+// long participant or source-node name failed the whole preview with a bare
+// "Invalid frozen editor binding" (review 2026-10-06, F59). A label is a
+// last-known hint, never an identity, so a truncated one loses nothing.
 func (b *artifactPreviewBuilder) resolveAPIBindings(ctx context.Context, c ArtifactPinCommand, nextPin ArtifactPin) ([]APIArtifactBinding, error) {
 	key, nodes, request := c.Artifact, b.nodes, b.request
 	nextAPI := []APIArtifactBinding{}
@@ -280,7 +285,7 @@ func (b *artifactPreviewBuilder) resolveAPIBindings(ctx context.Context, c Artif
 			b.diagnostic("backend_artifact_object_missing", key, nil, []string{n.ID}, "Selected API object is unavailable or unsupported", true)
 			continue
 		}
-		nextAPI = append(nextAPI, APIArtifactBinding{SourceNodeID: n.ID, SourceKind: n.Kind, SourceLastKnownLabel: n.Name, Ref: ArtifactRef{Kind: key.Kind, ArtifactID: key.ID, RevisionID: nextPin.RevisionID, ContentHash: nextPin.ContentHash, Selector: input.Selector, ObjectHash: object.ObjectHash, LastKnownLabel: object.Label, ResolvedPointer: object.Pointer}, Origin: "manual", Reason: c.Reason})
+		nextAPI = append(nextAPI, APIArtifactBinding{SourceNodeID: n.ID, SourceKind: n.Kind, SourceLastKnownLabel: boundedArtifactLabel(n.Name), Ref: ArtifactRef{Kind: key.Kind, ArtifactID: key.ID, RevisionID: nextPin.RevisionID, ContentHash: nextPin.ContentHash, Selector: input.Selector, ObjectHash: object.ObjectHash, LastKnownLabel: boundedArtifactLabel(object.Label), ResolvedPointer: object.Pointer}, Origin: "manual", Reason: c.Reason})
 	}
 	return nextAPI, nil
 }
@@ -300,7 +305,7 @@ func (b *artifactPreviewBuilder) resolveEditorBindings(ctx context.Context, c Ar
 				missing = true
 				b.diagnostic("backend_artifact_source_missing", key, new(input.Selector), []string{id}, "Selected source node is absent", true)
 			} else {
-				labels = append(labels, n.Name)
+				labels = append(labels, boundedArtifactLabel(n.Name))
 			}
 		}
 		if missing {
@@ -315,7 +320,7 @@ func (b *artifactPreviewBuilder) resolveEditorBindings(ctx context.Context, c Ar
 			continue
 		}
 		out.Diagnostics = append(out.Diagnostics, object.Diagnostics...)
-		nextEditor = append(nextEditor, EditorBinding{ArtifactKind: key.Kind, ArtifactID: key.ID, Selector: input.Selector, SourceNodeIDs: sourceIDs, SourceLabels: labels, ObjectHash: object.ObjectHash, LastKnownLabel: object.Label, Origin: "manual", Reason: c.Reason})
+		nextEditor = append(nextEditor, EditorBinding{ArtifactKind: key.Kind, ArtifactID: key.ID, Selector: input.Selector, SourceNodeIDs: sourceIDs, SourceLabels: labels, ObjectHash: object.ObjectHash, LastKnownLabel: boundedArtifactLabel(object.Label), Origin: "manual", Reason: c.Reason})
 	}
 	return nextEditor, nil
 }
