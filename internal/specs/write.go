@@ -101,7 +101,17 @@ type PreparedImport struct {
 	hash, name, basePath string
 }
 
+// PrepareImport is [Repo.PrepareImportContext] for a caller that has no
+// context to hand over; it validates under context.Background, so nothing can
+// cancel the execution-graph compilation it runs.
 func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
+	return r.PrepareImportContext(context.Background(), in)
+}
+
+// PrepareImportContext parses, validates and indexes a document outside any
+// transaction. ctx bounds the response-rule and state-diagram compilation, the
+// only steps here that honour cancellation.
+func (r *Repo) PrepareImportContext(ctx context.Context, in ImportInput) (*PreparedImport, error) {
 	if int64(len(in.Document)) > r.cfg.MaxBody {
 		return nil, ErrTooLarge
 	}
@@ -112,10 +122,10 @@ func (r *Repo) PrepareImport(in ImportInput) (*PreparedImport, error) {
 	// Executable copies travel with immutable specs, including bundle imports.
 	// Validate here as well as in the design editor so imports cannot bypass
 	// the graph safety gate. Passive authoring metadata remains unrestricted.
-	if _, err := responserules.CompileExecution(context.Background(), doc.Root()); err != nil {
+	if _, err := responserules.CompileExecution(ctx, doc.Root()); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNotADocument, err)
 	}
-	if _, err := statediagram.CompileExecution(context.Background(), doc.Root()); err != nil {
+	if _, err := statediagram.CompileExecution(ctx, doc.Root()); err != nil {
 		return nil, fmt.Errorf("%w: %w", ErrNotADocument, err)
 	}
 	resolver := openapi.NewResolver(doc, openapi.DefaultRefBudget)
@@ -167,7 +177,7 @@ func (r *Repo) ImportTx(ctx context.Context, tx *sql.Tx, p *PreparedImport) (*Im
 }
 
 func (r *Repo) Import(ctx context.Context, in ImportInput) (*ImportResult, error) {
-	prepared, err := r.PrepareImport(in)
+	prepared, err := r.PrepareImportContext(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -191,30 +201,41 @@ func (r *Repo) Import(ctx context.Context, in ImportInput) (*ImportResult, error
 	return result, err
 }
 
-// insertMissingOperationsTx refreshes an immutable spec's derived index. Rows
-// already present keep their IDs and response/override rows; newly discovered
-// concrete paths receive their own operation and response rows atomically.
-func (r *Repo) insertMissingOperationsTx(ctx context.Context, tx *sql.Tx, specID int64, ops []*Operation, responses map[int][]*Response) (bool, error) {
+// operationKey identifies an indexed operation within one spec.
+type operationKey struct{ method, path string }
+
+// indexedOperationIDsTx reads the spec's current operation index. It is its
+// own function so the cursor is closed (deferred) before the caller issues
+// UPDATEs and INSERTs on the same transaction, and a close error still reaches
+// the caller.
+func indexedOperationIDsTx(ctx context.Context, tx *sql.Tx, specID int64) (existing map[operationKey]int64, err error) {
 	rows, err := tx.QueryContext(ctx, `SELECT method, path, id FROM operations WHERE spec_id = ?`, specID)
 	if err != nil {
-		return false, fmt.Errorf("load indexed operations for spec %d: %w", specID, err)
+		return nil, fmt.Errorf("load indexed operations for spec %d: %w", specID, err)
 	}
-	type key struct{ method, path string }
-	existing := map[key]int64{}
+	defer func() { err = errors.Join(err, rows.Close()) }()
+	existing = map[operationKey]int64{}
 	for rows.Next() {
 		var method, path string
 		var id int64
 		if err := rows.Scan(&method, &path, &id); err != nil {
-			_ = rows.Close()
-			return false, err
+			return nil, err
 		}
-		existing[key{method, path}] = id
+		existing[operationKey{method, path}] = id
 	}
 	if err := rows.Err(); err != nil {
-		_ = rows.Close()
-		return false, err
+		return nil, err
 	}
-	if err := rows.Close(); err != nil {
+	return existing, nil
+}
+
+// insertMissingOperationsTx refreshes an immutable spec's derived index. Rows
+// already present keep their IDs and response/override rows; newly discovered
+// concrete paths receive their own operation and response rows atomically.
+func (r *Repo) insertMissingOperationsTx(ctx context.Context, tx *sql.Tx, specID int64, ops []*Operation, responses map[int][]*Response) (bool, error) {
+	type key = operationKey
+	existing, err := indexedOperationIDsTx(ctx, tx, specID)
+	if err != nil {
 		return false, err
 	}
 	added := false
