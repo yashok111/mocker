@@ -187,11 +187,22 @@ func (s *Service) Commit(ctx context.Context, id string, in CommitInput) (*Commi
 		if err != nil {
 			return nil, "", err
 		}
-		imported, err := s.models.ImportPortableModelTx(ctx, tx, prepared.Input, bm.PortableImportOptions{Remap: prepared.Remap, OriginProjectID: manifest.Selection.ProjectID, AfterStage: s.afterStage})
+		// The project is created NOW, not when it was previewed (review
+		// 2026-10-06, F75): Preview's stamp is only a placeholder that
+		// ImportPortableModelTx requires, and a session can sit in `ready`
+		// for days. The two stamps are the only owner fields Commit changes,
+		// so the preview/commit equality below compares the output with the
+		// preview's stamps put back; any other drift still fails it.
+		input := prepared.Input
+		now := time.Now().UTC()
+		input.Project.CreatedAt, input.Project.UpdatedAt = now, now
+		imported, err := s.models.ImportPortableModelTx(ctx, tx, input, bm.PortableImportOptions{Remap: prepared.Remap, OriginProjectID: manifest.Selection.ProjectID, AfterStage: s.afterStage})
 		if err != nil {
 			return nil, "", err
 		}
-		hash, err := DocumentHash(imported)
+		compared := *imported
+		compared.Project.CreatedAt, compared.Project.UpdatedAt = prepared.Input.Project.CreatedAt, prepared.Input.Project.UpdatedAt
+		hash, err := DocumentHash(compared)
 		if err != nil {
 			return nil, "", err
 		}
@@ -231,6 +242,11 @@ func (s *Service) Commit(ctx context.Context, id string, in CommitInput) (*Commi
 		}
 		session.State = "committed"
 		if _, err := tx.ExecContext(ctx, `UPDATE backend_portable_sessions SET project_id=? WHERE id=?`, imported.Project.ID, id); err != nil {
+			return nil, "", err
+		}
+		// Nothing reads a committed session's chunks or preview again: a
+		// retry is answered from the receipt (review 2026-10-06, F71).
+		if err := releaseStaged(ctx, tx, id); err != nil {
 			return nil, "", err
 		}
 		if err := advanceSession(ctx, tx, session); err != nil {

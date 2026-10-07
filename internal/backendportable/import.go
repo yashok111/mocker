@@ -6,7 +6,6 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"math"
-	"strings"
 	"time"
 	"uuid"
 
@@ -42,7 +41,7 @@ type PutInput struct {
 }
 
 func (s *Staging) mutation(ctx context.Context, scope, op, key string, input any, fn func(*sql.Tx) (*Session, error)) (*Session, error) {
-	if len(key) < 1 || len(key) > 200 || strings.TrimSpace(key) != key {
+	if !validIdempotencyKey(key) {
 		return nil, fault(422, "Invalid idempotency key")
 	}
 	h, err := DocumentHash(struct {
@@ -96,6 +95,9 @@ func insertSession(ctx context.Context, tx *sql.Tx, direction string, m Manifest
 	if err != nil {
 		return nil, err
 	}
+	if err = expireIdleSessions(ctx, tx); err != nil {
+		return nil, err
+	}
 	// Bound uncommitted reservations, including declared but not yet uploaded bytes.
 	var sessions int
 	var reserved int64
@@ -114,6 +116,56 @@ func insertSession(ctx context.Context, tx *sql.Tx, direction string, m Manifest
 	_, err = tx.ExecContext(ctx, `INSERT INTO backend_portable_sessions(id,direction,version,state,manifest_hash,manifest,byte_count,chunk_count,created_at,updated_at) VALUES(?,?,1,'staging',?,?,?,?,?,?)`, out.ID, direction, out.ManifestHash, string(b), total, len(m.Chunks), now, now)
 	return out, err
 }
+
+// StagingIdleTTL is how long a staging or ready session may sit untouched
+// before the next Begin or Export aborts it. Every Put, Preview and state
+// change bumps updated_at, so only an abandoned session reaches it.
+const StagingIdleTTL = 24 * time.Hour
+
+// expireIdleSessions aborts staging/ready sessions idle past StagingIdleTTL
+// and frees what they staged (review 2026-10-06, F8/F35). The staging quota
+// is installation-wide — five sessions, 512 MiB — and nothing else ever
+// released an unaborted session: five exports or imports whose IDs were lost
+// (there is no route that lists sessions) locked every Begin and Export out
+// with 413 for good. It runs where the quota is checked, inside the same
+// write transaction, so the slot it frees is the one the caller takes. The
+// session version is bumped like any other state change, so a stale client
+// gets the ordinary 409 rather than a silent success.
+func expireIdleSessions(ctx context.Context, tx *sql.Tx) error {
+	ids, err := idleSessionIDs(ctx, tx, time.Now().Add(-StagingIdleTTL).Unix())
+	if err != nil {
+		return err
+	}
+	for _, id := range ids {
+		if _, err := tx.ExecContext(ctx, `UPDATE backend_portable_sessions SET state='aborted',version=version+1,updated_at=? WHERE id=?`, time.Now().Unix(), id); err != nil {
+			return err
+		}
+		if err := releaseStaged(ctx, tx, id); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// idleSessionIDs reads the IDs first and closes the cursor before
+// expireIdleSessions writes, so no statement runs while rows are open.
+func idleSessionIDs(ctx context.Context, tx *sql.Tx, cutoff int64) ([]string, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT id FROM backend_portable_sessions WHERE state IN ('staging','ready') AND updated_at<?`, cutoff)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	ids := []string{}
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		ids = append(ids, id)
+	}
+	return ids, rows.Err()
+}
+
 func loadSession(ctx context.Context, tx *sql.Tx, id string) (*Session, *Manifest, error) {
 	var out Session
 	var raw string
@@ -174,62 +226,36 @@ func (s *Staging) Put(ctx context.Context, id string, in PutInput) (*Session, er
 }
 func putChunk(ctx context.Context, tx *sql.Tx, id string, m Manifest, index int, body []byte) error {
 	c := m.Chunks[index]
+	// DecodeChunk already rejects a duplicate record key INSIDE this chunk.
 	records, err := DecodeChunk(c, body)
 	if err != nil {
 		return err
 	}
-	seen := map[recordKey]bool{}
 	for _, r := range records {
 		if r.Identity.InstallationID != m.OriginInstallationID || r.Identity.ProjectID != m.Selection.ProjectID {
 			return fault(422, "Record outside declared namespace")
 		}
-		k, err := r.key()
-		if err != nil {
-			return err
-		}
-		seen[k] = true
 	}
+	// There is deliberately no cross-chunk duplicate scan here (review
+	// 2026-10-06, F2/F5/F33/F68). It used to SELECT and decode every earlier
+	// chunk body of the session on every Put, inside the single-writer
+	// transaction: O(n²) decoding over a bundle of n chunks — about 32 GiB of
+	// JSON for a legitimate 256 MiB bundle, seconds of held writer per late
+	// Put, and hours for a manifest of tens of thousands of one-record chunks.
+	// A duplicate across chunks is still refused, exactly once and linearly:
+	// Preview's decodeModel checks the same recordKey (identity plus member
+	// parent) over the whole loaded bundle before anything else
+	// ("Duplicate exact record"), chunks are frozen once Preview leaves
+	// `staging` (the chunk insert trigger requires it), and Commit only runs
+	// on a Preview that passed. The exporter's side of the guarantee is
+	// uniqueRecords pass. TestPortableMemberScopesAcrossChunks
+	// pins it.
 	var exists int
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_portable_chunks WHERE session_id=? AND chunk_index=?`, id, index).Scan(&exists); err != nil {
 		return err
 	}
 	if exists != 0 {
 		return fault(409, "Chunk is immutable; retry original request/key")
-	}
-	rows, err := tx.QueryContext(ctx, `SELECT body FROM backend_portable_chunks WHERE session_id=?`, id)
-	if err != nil {
-		return err
-	}
-	for rows.Next() {
-		var b []byte
-		if err = rows.Scan(&b); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		var prior []Record
-		if err = json.Unmarshal(b, &prior); err != nil {
-			_ = rows.Close()
-			return err
-		}
-		for _, r := range prior {
-			k, err := r.key()
-			if err != nil {
-				_ = rows.Close()
-				return err
-			}
-			if seen[k] {
-				_ = rows.Close()
-				return fault(422, "Duplicate record across chunks")
-			}
-		}
-	}
-	err = rows.Err()
-	closeErr := rows.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO backend_portable_chunks(session_id,chunk_index,content_hash,record_count,byte_count,body) VALUES(?,?,?,?,?,?)`, id, index, c.SHA256, c.Records, c.Bytes, body)
 	return err
@@ -250,12 +276,23 @@ func (s *Staging) Abort(ctx context.Context, id string, in SessionInput) (*Sessi
 		if err = advanceSession(ctx, tx, out); err != nil {
 			return nil, err
 		}
-		if _, err = tx.ExecContext(ctx, `UPDATE backend_portable_sessions SET preview=NULL,candidate_hash=NULL WHERE id=?`, id); err != nil {
-			return nil, err
-		}
-		if _, err = tx.ExecContext(ctx, `DELETE FROM backend_portable_chunks WHERE session_id=?`, id); err != nil {
+		if err = releaseStaged(ctx, tx, id); err != nil {
 			return nil, err
 		}
 		return out, nil
 	})
+}
+
+// releaseStaged drops what a session staged — chunk bodies and the prepared
+// preview — once nothing can read them again: on Abort, on Commit (the
+// origins and id maps already hold the immutable copies) and on idle expiry.
+// Before review 2026-10-06 (F8/F71) only Abort did it, and Abort refuses a
+// committed session, so every import left up to 256 MiB of chunks plus a
+// preview of similar size in the database for good.
+func releaseStaged(ctx context.Context, tx *sql.Tx, id string) error {
+	if _, err := tx.ExecContext(ctx, `UPDATE backend_portable_sessions SET preview=NULL,candidate_hash=NULL WHERE id=?`, id); err != nil {
+		return err
+	}
+	_, err := tx.ExecContext(ctx, `DELETE FROM backend_portable_chunks WHERE session_id=?`, id)
+	return err
 }

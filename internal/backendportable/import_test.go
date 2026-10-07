@@ -1,9 +1,16 @@
 package backendportable
 
 import (
+	"context"
 	"encoding/json/jsontext"
-	"github.com/yashok111/mocker/internal/testkit"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
+	"time"
+
+	bm "github.com/yashok111/mocker/internal/backendmodel"
+	"github.com/yashok111/mocker/internal/testkit"
 )
 
 func bundleFixture(t *testing.T) (Manifest, []byte) {
@@ -57,6 +64,73 @@ func TestPortableStagingDurableReplayCASAbort(t *testing.T) {
 		t.Fatal("abort cleanup", n, err)
 	}
 }
+
+// review 2026-10-06, F15: the contract states idempotencyKey as a string of
+// 1–200 characters and nothing else. The server used to count BYTES and to
+// refuse leading or trailing whitespace, so a valid key such as " abc" or
+// 150 two-byte characters got an unexplained 422.
+func TestPortableIdempotencyKeyMatchesContract(t *testing.T) {
+	db := testkit.NewDB(t)
+	s := NewStaging(db)
+	m, _ := bundleFixture(t)
+	for i, key := range []string{" leading", "trailing ", strings.Repeat("я", 200)} {
+		if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: key}); err != nil {
+			t.Fatalf("contract-valid key %d refused: %v", i, err)
+		}
+		s2 := NewService(db, bm.NewRepo(db))
+		if _, err := s2.Preview(t.Context(), "00000000-0000-4000-8000-000000000000", PreviewInput{ExpectedVersion: 1, IdempotencyKey: key}); err == nil || err.Error() == "Invalid idempotency key" {
+			t.Fatalf("contract-valid key %d refused by the service: %v", i, err)
+		}
+		// Abort each session so the five-session staging quota stays free.
+		if _, err := db.W.Exec(`UPDATE backend_portable_sessions SET state='aborted' WHERE state='staging'`); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, key := range []string{"", strings.Repeat("a", 201)} {
+		if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: key}); err == nil {
+			t.Fatalf("out-of-contract key of %d characters accepted", len(key))
+		}
+	}
+}
+
+// review 2026-10-06, F8/F35: five staging or ready sessions nobody aborts
+// (lost IDs, crashed agents, downloaded exports) used to lock every Begin and
+// Export out with 413 for good. A session idle past StagingIdleTTL is now
+// aborted, and its chunks freed, by the next Begin or Export; a live one is not.
+func TestPortableIdleSessionsExpireAtNextBegin(t *testing.T) {
+	db := testkit.NewDB(t)
+	s := NewStaging(db)
+	m, body := bundleFixture(t)
+	ids := make([]string, 0, 5)
+	for i := range 5 {
+		session, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: fmt.Sprint("begin", i)})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ids = append(ids, session.ID)
+	}
+	if _, err := s.Put(t.Context(), ids[0], PutInput{ExpectedVersion: 1, Index: 0, Body: string(body), IdempotencyKey: "put"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: "live-quota"}); err == nil {
+		t.Fatal("live sessions were expired")
+	}
+	old := time.Now().Add(-StagingIdleTTL - time.Minute).Unix()
+	if _, err := db.W.Exec(`UPDATE backend_portable_sessions SET updated_at=?`, old); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Begin(t.Context(), BeginInput{Manifest: m, IdempotencyKey: "after-expiry"}); err != nil {
+		t.Fatal("idle sessions still hold the staging quota", err)
+	}
+	var aborted, chunks int
+	if err := db.R.QueryRow(`SELECT count(*) FROM backend_portable_sessions WHERE state='aborted'`).Scan(&aborted); err != nil || aborted != 5 {
+		t.Fatal("idle sessions not aborted", aborted, err)
+	}
+	if err := db.R.QueryRow(`SELECT count(*) FROM backend_portable_chunks`).Scan(&chunks); err != nil || chunks != 0 {
+		t.Fatal("expired session kept its chunks", chunks, err)
+	}
+}
+
 func TestPortableFrozenExport(t *testing.T) {
 	db := testkit.NewDB(t)
 	s := NewStaging(db)
@@ -110,11 +184,102 @@ func TestPortableMemberScopesAcrossChunks(t *testing.T) {
 	if err != nil {
 		t.Fatal("different parent must succeed", err)
 	}
-	if _, err = s.Put(t.Context(), session.ID, PutInput{3, 2, string(third), "third"}); err == nil {
-		t.Fatal("same-parent duplicate across chunks accepted")
+	// A same-parent duplicate in a LATER chunk is no longer refused at Put
+	// (review 2026-10-06, F2/F5/F33/F68: that check re-decoded every earlier
+	// chunk under the writer). Preview refuses it over the whole bundle,
+	// before any domain work, and leaves the session where it was.
+	session, err = s.Put(t.Context(), session.ID, PutInput{3, 2, string(third), "third"})
+	if err != nil {
+		t.Fatal("put must not re-scan earlier chunks", err)
 	}
-	var count int
-	if err = db.R.QueryRow("SELECT count(*) FROM backend_portable_chunks WHERE session_id=?", session.ID).Scan(&count); err != nil || count != 2 {
-		t.Fatal("failed put leaked chunk", count, err)
+	service := NewService(db, bm.NewRepo(db))
+	_, err = service.Preview(t.Context(), session.ID, PreviewInput{ExpectedVersion: session.Version, ArtifactMappings: []bm.PortableArtifactMapping{}, IdempotencyKey: "preview"})
+	var f *bm.FaultError
+	if !errors.As(err, &f) || f.Status != 422 || f.Message != "Duplicate exact record" {
+		t.Fatal("same-parent duplicate across chunks must fail Preview", err)
 	}
+	var state string
+	var version int64
+	if err = db.R.QueryRow("SELECT state,version FROM backend_portable_sessions WHERE id=?", session.ID).Scan(&state, &version); err != nil || state != "staging" || version != session.Version {
+		t.Fatal("failed preview advanced the session", state, version, err)
+	}
+}
+
+// The exporter's half of the cross-chunk uniqueness guarantee: Export runs
+// uniqueRecords over the whole record list before splitting, so two copies
+// that would land in different chunks are still refused.
+func TestUniqueRecordsRejectsDuplicateAcrossChunks(t *testing.T) {
+	a := sizedRecord(t, 1, 900_000)
+	b := sizedRecord(t, 2, 900_000)
+	_, descriptors, err := splitRecords(t.Context(), []Record{a, b, a})
+	if err != nil || len(descriptors) != 3 {
+		t.Fatal("fixture must spread the copies over chunks", len(descriptors), err)
+	}
+	if err := uniqueRecords(t.Context(), []Record{a, b, a}); err == nil {
+		t.Fatal("duplicate across chunk boundary exported")
+	}
+}
+
+func TestSplitRecordsStopsOnCancelledContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(t.Context())
+	cancel()
+	if _, _, err := splitRecords(ctx, []Record{sizedRecord(t, 1, 10)}); !errors.Is(err, context.Canceled) {
+		t.Fatal("cancelled export kept packing", err)
+	}
+}
+
+// review 2026-10-06, F32: splitRecords keeps a running canonical size instead
+// of re-canonicalising the pending chunk per record. This pins the identity
+// that makes it exact: each chunk equals what EncodeChunk produced from the
+// records, never exceeds the bound, and is maximal (the next record would not
+// have fit), on sizes that straddle the 1 MiB boundary several times.
+func TestSplitRecordsRunningSizeMatchesCanonical(t *testing.T) {
+	sizes := []int{300_000, 400_000, 340_000, 9, 1_048_000 - 200, 1, 700_000, 347_000, 2, 3}
+	records := make([]Record, 0, len(sizes)+1200)
+	for i, n := range sizes {
+		records = append(records, sizedRecord(t, i+1, n))
+	}
+	// Many tiny records so the record-count bound is crossed too.
+	for i := range 1200 {
+		records = append(records, sizedRecord(t, 100+i, i%7))
+	}
+	chunks, descriptors, err := splitRecords(t.Context(), records)
+	if err != nil {
+		t.Fatal(err)
+	}
+	at := 0
+	for i, body := range chunks {
+		n := descriptors[i].Records
+		want, _, err := EncodeChunk(i, records[at:at+n])
+		if err != nil || string(want) != string(body) {
+			t.Fatal("chunk differs from canonical encoding", i, err)
+		}
+		if len(body) > MaxChunkBytes || n > MaxChunkRecords {
+			t.Fatal("chunk over bound", i, len(body), n)
+		}
+		if next := at + n; next < len(records) {
+			if n < MaxChunkRecords {
+				grown, err := canonical(records[at : next+1])
+				if err != nil || len(grown) <= MaxChunkBytes {
+					t.Fatal("chunk not maximal", i, len(grown), err)
+				}
+			}
+		}
+		at += n
+	}
+	if at != len(records) {
+		t.Fatal("records lost", at, len(records))
+	}
+}
+
+func sizedRecord(t *testing.T, n, pad int) Record {
+	t.Helper()
+	doc, err := canonical(map[string]string{"pad": strings.Repeat("x", pad), "u": "é <"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := fmt.Sprintf("20000000-0000-4000-8000-%012d", n)
+	r := Record{Kind: "diagram_version", Identity: Identity{pid, pid, "diagram_version", id, "1"}, Document: jsontext.Value(doc)}
+	r.ContentHash, _ = DocumentHash(r.Document)
+	return r
 }
