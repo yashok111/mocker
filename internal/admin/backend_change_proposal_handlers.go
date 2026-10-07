@@ -3,7 +3,6 @@ package admin
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"errors"
 	"net/http"
 	"net/url"
 
@@ -35,24 +34,23 @@ func (s *Server) backendChangeProposalBody(w http.ResponseWriter, r *http.Reques
 	if !s.backendNoQuery(w, r) || !s.backendBodyLimit(w, r, &raw, min(s.cfg.MaxBody, int64(backendmodel.MaxChangeProposalCommandBytes))) {
 		return false
 	}
+	// Review 2026-10-06, F21: every failure below used backendQueryError(),
+	// whose text names query parameters on a route that refuses any query;
+	// the id and hash members now name the field an agent has to correct.
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
-			s.backendError(w, fault)
-		} else {
-			s.backendError(w, backendQueryError())
-		}
+		s.backendError(w, backendBodyFault(err, "Request must match the change-proposal schema"))
 		return false
 	}
 	var fields map[string]jsontext.Value
 	if err := json.Unmarshal(raw, &fields); err != nil {
-		s.backendError(w, backendQueryError())
+		s.backendError(w, backendBodyFault(err, "Request must match the change-proposal schema"))
 		return false
 	}
 	for _, key := range []string{"baseRevisionId", "proposalRevisionId", "restoreRevisionId", "newBaseRevisionId"} {
 		if value, ok := fields[key]; ok {
 			var id string
 			if json.Unmarshal(value, &id) != nil || !backendmodel.ValidID(id) {
-				s.backendError(w, backendQueryError())
+				s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Expected a canonical UUID", Details: map[string]any{"field": key}})
 				return false
 			}
 		}
@@ -60,7 +58,7 @@ func (s *Server) backendChangeProposalBody(w http.ResponseWriter, r *http.Reques
 	if value, ok := fields["candidateHash"]; ok {
 		var hash string
 		if json.Unmarshal(value, &hash) != nil || !backendSHA256(hash) {
-			s.backendError(w, backendQueryError())
+			s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Expected a lowercase SHA-256 hex digest", Details: map[string]any{"field": "candidateHash"}})
 			return false
 		}
 	}

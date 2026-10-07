@@ -47,10 +47,20 @@ func (s *Server) backendBody(w http.ResponseWriter, r *http.Request, out any) bo
 }
 
 func (s *Server) backendBodyLimit(w http.ResponseWriter, r *http.Request, out any, maxBytes int64) bool {
+	if err := backendReadBody(w, r, out, maxBytes); err != nil {
+		s.backendError(w, err)
+		return false
+	}
+	return true
+}
+
+// backendReadBody reads one JSON object of at most maxBytes into out and
+// returns the refusal instead of writing it, so a route family with its own
+// status mapping (diagramBody) can apply it to this stage too.
+func backendReadBody(w http.ResponseWriter, r *http.Request, out any, maxBytes int64) error {
 	body, err := io.ReadAll(http.MaxBytesReader(w, r.Body, maxBytes))
 	if _, ok := errors.AsType[*http.MaxBytesError](err); ok {
-		s.backendError(w, &backendmodel.FaultError{Status: 413, Code: "backend_too_large", Message: "Request exceeds maxBodyBytes", Details: map[string]any{"maxBodyBytes": maxBytes}})
-		return false
+		return &backendmodel.FaultError{Status: 413, Code: "backend_too_large", Message: "Request exceeds maxBodyBytes", Details: map[string]any{"maxBodyBytes": maxBytes}}
 	}
 	if err == nil {
 		if trimmed := bytes.TrimSpace(body); len(trimmed) == 0 || trimmed[0] != '{' {
@@ -61,10 +71,24 @@ func (s *Server) backendBodyLimit(w http.ResponseWriter, r *http.Request, out an
 		err = json.Unmarshal(body, out, json.RejectUnknownMembers(true))
 	}
 	if err != nil {
-		s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Request must be one JSON object matching the request schema"})
-		return false
+		return backendBodyFault(err, "Request must be one JSON object matching the request schema")
 	}
-	return true
+	return nil
+}
+
+// backendBodyFault is the one answer to a request body that failed to decode.
+// Review 2026-10-06, F173: a custom UnmarshalJSON returns a FaultError on
+// purpose (AdaptInput's 413 adapter_limit, BeginImportInput's and
+// SourceScope's 422 with details.path), and the body helpers replaced it with
+// a fixed 400, so the documented 4 MiB adapter limit was unreachable as 413.
+// Otherwise the answer is a 400 that names the body: F170/F21 found body
+// failures reported with the query-parameter message on routes that refuse
+// any query.
+func backendBodyFault(err error, message string) error {
+	if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
+		return fault
+	}
+	return &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: message}
 }
 
 func backendListInput(r *http.Request) (backendmodel.ListInput, error) {

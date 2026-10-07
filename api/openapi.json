@@ -101300,7 +101300,7 @@
             }
           },
           "400": {
-            "description": "Malformed JSON, unknown or repeated selector, or malformed cursor.",
+            "description": "Malformed JSON, a selector UUID (id, parentId, from, to) that is not canonical (backend_invalid, details.path), unknown or repeated selector, or malformed cursor.",
             "content": {
               "application/json": {
                 "schema": {
@@ -101340,7 +101340,7 @@
             }
           },
           "422": {
-            "description": "Invalid semantic input; details include paths.",
+            "description": "Invalid semantic input; details include paths. A selector the recordType does not allow (parentId or search on edges, from or to on nodes) is refused by presence as backend_import_invalid.",
             "content": {
               "application/json": {
                 "schema": {
