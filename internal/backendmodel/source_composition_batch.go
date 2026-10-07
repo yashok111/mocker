@@ -154,7 +154,7 @@ func loadSourceBatchCommitments(ctx context.Context, q importReader, sid string)
 	return out, rows.Err()
 }
 
-func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, base *SourceGraphSnapshot, typ, key string) (string, error) {
+func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, base *SourceGraphSnapshot, typ, key string, remove bool) (string, error) {
 	var id string
 	err := tx.QueryRowContext(ctx, `SELECT id FROM backend_import_identities WHERE session_id=? AND record_type=? AND external_key=?`, s.ID, typ, key).Scan(&id)
 	if err == nil {
@@ -168,6 +168,12 @@ func reserveComposedIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, 
 	b, err := binding(ctx, tx, s, typ, key)
 	if err != nil {
 		return "", err
+	}
+	if remove && id == "" && b == nil {
+		// A remove of a key nothing knows changes staging only: no
+		// identity is allocated and published as reserved (review
+		// 2026-10-06, F87).
+		return "", nil
 	}
 	if b != nil {
 		if id != "" && b.ID != id {
@@ -387,7 +393,9 @@ func (b *composedBatch) putRecord(ctx context.Context, c ImportCommand) error {
 	if err != nil {
 		return err
 	}
-	b.recordIdentity(RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+	if id != "" { // "" = remove of an unknown key (F87)
+		b.recordIdentity(RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+	}
 	if c.Op == "remove" {
 		return b.removeRecord(ctx, typ, key)
 	}
@@ -412,7 +420,7 @@ func (b *composedBatch) putRecord(ctx context.Context, c ImportCommand) error {
 
 func (b *composedBatch) reserveIdentity(ctx context.Context, c ImportCommand, typ, key string) (string, error) {
 	if c.Identity == nil && c.Deletion == nil {
-		return reserveComposedIdentity(ctx, b.tx, b.session, b.base, typ, key)
+		return reserveComposedIdentity(ctx, b.tx, b.session, b.base, typ, key, c.Op == "remove")
 	}
 	selected := selectedSourceIdentityState(b.base, b.session)
 	copySession := *b.session

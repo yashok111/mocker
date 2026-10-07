@@ -365,7 +365,9 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 				if err != nil {
 					return err
 				}
-				result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+				if id != "" { // "" = remove of an unknown key (F87)
+					result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
+				}
 				if c.Op == "remove" {
 					if _, err := tx.ExecContext(ctx, `DELETE FROM backend_import_decisions WHERE session_id=? AND record_type=? AND external_key=?`, sid, typ, key); err != nil {
 						return err
