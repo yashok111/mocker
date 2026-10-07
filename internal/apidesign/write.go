@@ -41,24 +41,7 @@ func (r *Repo) Create(ctx context.Context, in CreateInput) (*Detail, error) {
 
 // CreateTx participates in the caller's transaction, including the draft mock projection.
 func (r *Repo) CreateTx(ctx context.Context, tx *sql.Tx, in CreateInput) (*Detail, error) {
-	if err := checkSource(in.Source); err != nil {
-		return nil, err
-	}
-	in.Name = strings.TrimSpace(in.Name)
-	if in.Name == "" || utf8.RuneCountInString(in.Name) > 200 {
-		return nil, invalidField("/name", "Название должно содержать от 1 до 200 символов")
-	}
-	if in.Document == "" {
-		in.Document = emptyDocument
-	}
-	if int64(len(in.Document)) > r.cfg.MaxBody {
-		return nil, specs.ErrTooLarge
-	}
-	keyed, err := withOperationKeys(in.Document, "", 0)
-	if err != nil {
-		return nil, err
-	}
-	prepared, err := r.prepare(ctx, keyed)
+	prepared, err := r.prepareCreate(ctx, &in)
 	if err != nil {
 		return nil, err
 	}
@@ -111,6 +94,29 @@ func (r *Repo) CreateTx(ctx context.Context, tx *sql.Tx, in CreateInput) (*Detai
 		return nil, err
 	}
 	return detailTx(ctx, tx, id)
+}
+
+// prepareCreate normalizes the input in place (trimmed name, the empty
+// document by default) and prepares the keyed initial revision.
+func (r *Repo) prepareCreate(ctx context.Context, in *CreateInput) (*preparedDocument, error) {
+	if err := checkSource(in.Source); err != nil {
+		return nil, err
+	}
+	in.Name = strings.TrimSpace(in.Name)
+	if in.Name == "" || utf8.RuneCountInString(in.Name) > 200 {
+		return nil, invalidField("/name", "Название должно содержать от 1 до 200 символов")
+	}
+	if in.Document == "" {
+		in.Document = emptyDocument
+	}
+	if int64(len(in.Document)) > r.cfg.MaxBody {
+		return nil, specs.ErrTooLarge
+	}
+	keyed, err := withOperationKeys(in.Document, "", 0)
+	if err != nil {
+		return nil, err
+	}
+	return r.prepare(ctx, keyed)
 }
 
 func (r *Repo) importTx(ctx context.Context, tx *sql.Tx, p *preparedDocument) (int64, error) {

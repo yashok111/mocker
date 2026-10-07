@@ -22,54 +22,8 @@ func (c *impactCollector) classifyImpact(change *ImpactChange, before, after *im
 		return
 	}
 	// HTTP address continuity is independent of editor identity continuity.
-	for _, op := range before.operations {
-		if !c.visit() {
-			return
-		}
-		if impactAddress(after, op.method, op.path) != nil {
-			continue
-		}
-		if c.operationChange(change.Pointer, op) {
-			change.Compatibility = "breaking"
-			change.ReasonCode = "operation_removed"
-			change.Explanation = "HTTP-адрес операции больше недоступен: " + op.method + " " + op.path
-			if after.uncertainPaths[op.path] {
-				change.Compatibility = "review"
-				change.ReasonCode = "operation_resolution_unknown"
-				change.Explanation = "Наличие HTTP-адреса зависит от неразрешённого Path Item"
-			}
-			return
-		}
-	}
-	for _, op := range after.operations {
-		if !c.visit() {
-			return
-		}
-		if impactAddress(before, op.method, op.path) != nil {
-			continue
-		}
-		if impactAncestor(change.Pointer, op.pointer) {
-			change.Compatibility = "compatible"
-			change.ReasonCode = "operation_added"
-			change.Explanation = "Добавлен HTTP-адрес операции: " + op.method + " " + op.path
-			if after.uncertainPaths[op.path] {
-				change.Compatibility = "review"
-				change.ReasonCode = "operation_resolution_unknown"
-				change.Explanation = "Добавленный адрес содержит неразрешённый Path Item"
-			}
-			// Overlapping templates cannot establish compatible addition.
-			for _, old := range after.operations {
-				if !c.visit() {
-					return
-				}
-				if old.pointer != op.pointer && old.method == op.method && impactPathShape(old.path) == impactPathShape(op.path) {
-					change.Compatibility = "review"
-					change.ReasonCode = "overlapping_operation"
-					change.Explanation = "Шаблон нового пути пересекается с другой операцией"
-				}
-			}
-			return
-		}
+	if c.removedOperationRule(change, before, after) || c.addedOperationRule(change, before, after) {
+		return
 	}
 	if c.parameterArrayRule(change, before, after) {
 		return
@@ -98,6 +52,71 @@ func (c *impactCollector) classifyImpact(change *ImpactChange, before, after *im
 		}
 	}
 }
+
+// removedOperationRule reports true when classification is finished: either a
+// removed HTTP address explained the change or the visit budget ran out.
+func (c *impactCollector) removedOperationRule(change *ImpactChange, before, after *impactSnapshot) bool {
+	for _, op := range before.operations {
+		if !c.visit() {
+			return true
+		}
+		if impactAddress(after, op.method, op.path) != nil {
+			continue
+		}
+		if c.operationChange(change.Pointer, op) {
+			change.Compatibility = "breaking"
+			change.ReasonCode = "operation_removed"
+			change.Explanation = "HTTP-адрес операции больше недоступен: " + op.method + " " + op.path
+			if after.uncertainPaths[op.path] {
+				change.Compatibility = "review"
+				change.ReasonCode = "operation_resolution_unknown"
+				change.Explanation = "Наличие HTTP-адреса зависит от неразрешённого Path Item"
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// addedOperationRule is removedOperationRule's mirror for a new HTTP address.
+func (c *impactCollector) addedOperationRule(change *ImpactChange, before, after *impactSnapshot) bool {
+	for _, op := range after.operations {
+		if !c.visit() {
+			return true
+		}
+		if impactAddress(before, op.method, op.path) != nil {
+			continue
+		}
+		if impactAncestor(change.Pointer, op.pointer) {
+			change.Compatibility = "compatible"
+			change.ReasonCode = "operation_added"
+			change.Explanation = "Добавлен HTTP-адрес операции: " + op.method + " " + op.path
+			if after.uncertainPaths[op.path] {
+				change.Compatibility = "review"
+				change.ReasonCode = "operation_resolution_unknown"
+				change.Explanation = "Добавленный адрес содержит неразрешённый Path Item"
+			}
+			c.overlappingAdditionRule(change, after, op)
+			return true
+		}
+	}
+	return false
+}
+
+// Overlapping templates cannot establish compatible addition.
+func (c *impactCollector) overlappingAdditionRule(change *ImpactChange, after *impactSnapshot, op *impactOperation) {
+	for _, old := range after.operations {
+		if !c.visit() {
+			return
+		}
+		if old.pointer != op.pointer && old.method == op.method && impactPathShape(old.path) == impactPathShape(op.path) {
+			change.Compatibility = "review"
+			change.ReasonCode = "overlapping_operation"
+			change.Explanation = "Шаблон нового пути пересекается с другой операцией"
+		}
+	}
+}
+
 func impactAddress(s *impactSnapshot, method, path string) *impactOperation {
 	return s.addresses[method+" "+path]
 }
@@ -156,149 +175,105 @@ func (c *impactCollector) identityChange(change *ImpactChange, parts []string, b
 	return true
 }
 
+// impactStep is one transition of the object-vocabulary walk. A non-empty
+// missing names what the pointer ends in when the step needs one more token
+// (a named-map key or an array index) that is not there; that token is consumed.
+type impactStep struct {
+	next, missing string
+}
+
+var impactInputSteps = map[string]impactStep{
+	"schema":   {next: "schema"},
+	"content":  {next: "media", missing: "named_map"},
+	"headers":  {next: "parameter", missing: "named_map"},
+	"examples": {next: "example", missing: "named_map"},
+}
+
+var impactSchemaSteps = func() map[string]impactStep {
+	out := map[string]impactStep{}
+	for _, keyword := range []string{"properties", "patternProperties", "$defs", "definitions", "dependentSchemas", "dependencies"} {
+		out[keyword] = impactStep{next: "schema", missing: "named_map"}
+	}
+	for _, keyword := range []string{"allOf", "oneOf", "anyOf", "prefixItems"} {
+		out[keyword] = impactStep{next: "schema", missing: "array"}
+	}
+	for _, keyword := range []string{"items", "additionalProperties", "unevaluatedProperties", "additionalItems", "contains", "not", "if", "then", "else", "propertyNames"} {
+		out[keyword] = impactStep{next: "schema"}
+	}
+	return out
+}()
+
+// impactContextSteps is the OpenAPI object vocabulary as a transition table;
+// a kind or token absent from it makes the rest of the pointer opaque.
+var impactContextSteps = map[string]map[string]impactStep{
+	"root": {
+		"info":       {next: "info"},
+		"components": {next: "components"},
+		"paths":      {next: "path", missing: "named_map"},
+		"webhooks":   {next: "path", missing: "named_map"},
+	},
+	"components": {
+		"schemas":         {next: "schema", missing: "named_map"},
+		"parameters":      {next: "parameter", missing: "named_map"},
+		"headers":         {next: "parameter", missing: "named_map"},
+		"requestBodies":   {next: "request", missing: "named_map"},
+		"responses":       {next: "response", missing: "named_map"},
+		"pathItems":       {next: "path", missing: "named_map"},
+		"callbacks":       {next: "callback", missing: "named_map"},
+		"securitySchemes": {next: "security", missing: "named_map"},
+		"examples":        {next: "example", missing: "named_map"},
+	},
+	"path": {
+		"parameters": {next: "parameter", missing: "array"},
+	},
+	"operation": {
+		"parameters":  {next: "parameter", missing: "array"},
+		"requestBody": {next: "request"},
+		"responses":   {next: "response", missing: "named_map"},
+		"callbacks":   {next: "callback", missing: "named_map"},
+	},
+	"request":   impactInputSteps,
+	"response":  impactInputSteps,
+	"parameter": impactInputSteps,
+	"media": {
+		"schema":   {next: "schema"},
+		"examples": {next: "example", missing: "named_map"},
+	},
+	"schema": impactSchemaSteps,
+}
+
+func impactContextStep(kind, token string) (impactStep, bool) {
+	switch {
+	case kind == "callback":
+		return impactStep{next: "path"}, true // A callback expression key names a Path Item.
+	case kind == "path" && methods[token]:
+		return impactStep{next: "operation"}, true
+	}
+	step, ok := impactContextSteps[kind][token]
+	return step, ok
+}
+
 // Resolve object vocabulary, consuming named-map keys as names. A property
 // named "description" or "example" therefore never becomes metadata.
 func impactContext(parts []string) string {
 	kind := "root"
 	for i := 0; i < len(parts); i++ {
-		token := parts[i]
-		switch kind {
-		case "root":
-			switch token {
-			case "info":
-				kind = "info"
-			case "components":
-				kind = "components"
-			case "paths", "webhooks":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "path"
-			default:
-				return "opaque"
-			}
-		case "components":
-			if i+1 >= len(parts) {
-				return "named_map"
-			}
-			i++
-			switch token {
-			case "schemas":
-				kind = "schema"
-			case "parameters", "headers":
-				kind = "parameter"
-			case "requestBodies":
-				kind = "request"
-			case "responses":
-				kind = "response"
-			case "pathItems":
-				kind = "path"
-			case "callbacks":
-				kind = "callback"
-			case "securitySchemes":
-				kind = "security"
-			case "examples":
-				kind = "example"
-			default:
-				return "opaque"
-			}
-		case "path":
-			if methods[token] {
-				kind = "operation"
-			} else if token == "parameters" {
-				if i+1 >= len(parts) {
-					return "array"
-				}
-				i++
-				kind = "parameter"
-			} else {
-				return "opaque"
-			}
-		case "operation":
-			switch token {
-			case "parameters":
-				if i+1 >= len(parts) {
-					return "array"
-				}
-				i++
-				kind = "parameter"
-			case "requestBody":
-				kind = "request"
-			case "responses":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "response"
-			case "callbacks":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "callback"
-			default:
-				return "opaque"
-			}
-		case "request", "response", "parameter":
-			switch token {
-			case "schema":
-				kind = "schema"
-			case "content":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "media"
-			case "headers":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "parameter"
-			case "examples":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "example"
-			default:
-				return "opaque"
-			}
-		case "media":
-			switch token {
-			case "schema":
-				kind = "schema"
-			case "examples":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-				kind = "example"
-			default:
-				return "opaque"
-			}
-		case "schema":
-			switch token {
-			case "properties", "patternProperties", "$defs", "definitions", "dependentSchemas", "dependencies":
-				if i+1 >= len(parts) {
-					return "named_map"
-				}
-				i++
-			case "allOf", "oneOf", "anyOf", "prefixItems":
-				if i+1 >= len(parts) {
-					return "array"
-				}
-				i++
-			case "items", "additionalProperties", "unevaluatedProperties", "additionalItems", "contains", "not", "if", "then", "else", "propertyNames":
-			default:
-				return "opaque"
-			}
-		case "callback":
-			kind = "path"
-		default:
+		// Every components group is a named map, so a pointer ending at the
+		// group is a named map even when the group itself is unknown.
+		if kind == "components" && i+1 >= len(parts) {
+			return "named_map"
+		}
+		step, ok := impactContextStep(kind, parts[i])
+		if !ok {
 			return "opaque"
 		}
+		if step.missing != "" {
+			if i+1 >= len(parts) {
+				return step.missing
+			}
+			i++
+		}
+		kind = step.next
 	}
 	return kind
 }
@@ -317,25 +292,49 @@ func impactMetadataAt(parts []string) bool {
 	if parts[0] == "x-mocker-schema-layout" {
 		return len(parts) == 4 && parts[1] == "positions" && (parts[3] == "x" || parts[3] == "y")
 	}
-	if parts[0] == "x-mocker-resource-map" {
-		if len(parts) == 4 && parts[1] == "resources" {
-			return slices.Contains([]string{"x", "y", "name", "description", "service"}, parts[3])
-		}
-		if len(parts) == 4 && parts[1] == "relations" && parts[3] == "label" {
-			return true
-		}
+	if metadata, decided := impactResourceMapMetadata(parts); decided {
+		return metadata
 	}
-	if parts[0] == "x-mocker-state-diagrams" && len(parts) >= 4 {
-		if len(parts) == 4 && parts[1] == "diagrams" && parts[3] == "name" {
-			return true
-		}
-		if len(parts) == 6 && parts[1] == "diagrams" && parts[3] == "states" {
-			return slices.Contains([]string{"x", "y", "name"}, parts[5])
-		}
-		if len(parts) == 6 && parts[3] == "transitions" && parts[5] == "name" {
-			return true
-		}
+	if metadata, decided := impactStateDiagramMetadata(parts); decided {
+		return metadata
 	}
+	return impactVocabularyMetadata(parts)
+}
+
+// impactResourceMapMetadata decides only the resource-map presentation fields;
+// any other resource-map pointer falls through to the OpenAPI vocabulary.
+func impactResourceMapMetadata(parts []string) (metadata, decided bool) {
+	if parts[0] != "x-mocker-resource-map" || len(parts) != 4 {
+		return false, false
+	}
+	if parts[1] == "resources" {
+		return slices.Contains([]string{"x", "y", "name", "description", "service"}, parts[3]), true
+	}
+	if parts[1] == "relations" && parts[3] == "label" {
+		return true, true
+	}
+	return false, false
+}
+
+// impactStateDiagramMetadata is impactResourceMapMetadata for state diagrams.
+func impactStateDiagramMetadata(parts []string) (metadata, decided bool) {
+	if parts[0] != "x-mocker-state-diagrams" || len(parts) < 4 {
+		return false, false
+	}
+	if len(parts) == 4 && parts[1] == "diagrams" && parts[3] == "name" {
+		return true, true
+	}
+	if len(parts) == 6 && parts[1] == "diagrams" && parts[3] == "states" {
+		return slices.Contains([]string{"x", "y", "name"}, parts[5]), true
+	}
+	if len(parts) == 6 && parts[3] == "transitions" && parts[5] == "name" {
+		return true, true
+	}
+	return false, false
+}
+
+// impactVocabularyMetadata classifies a leaf by the OpenAPI object it sits in.
+func impactVocabularyMetadata(parts []string) bool {
 	leaf := parts[len(parts)-1]
 	kind := impactContext(parts[:len(parts)-1])
 	if kind == "info" {
@@ -364,10 +363,21 @@ func (c *impactCollector) requiredRule(change *ImpactChange, before, after *impa
 	if location == "" {
 		return false
 	}
-	// Compare full parameter objects by identity, including inherited defaults.
+	if result, decided := c.requiredParameterRule(change, before, after); decided {
+		return result
+	}
+	if result, decided := requiredObjectRule(change, tail, before, after); decided {
+		return result
+	}
+	return c.schemaRequiredRule(change, before.root, after.root)
+}
+
+// requiredParameterRule compares full parameter objects by identity, including
+// inherited defaults. decided is false when the parameter view proves nothing.
+func (c *impactCollector) requiredParameterRule(change *ImpactChange, before, after *impactSnapshot) (result, decided bool) {
 	for _, op := range after.operations {
 		if !c.visit() {
-			return false
+			return false, true
 		}
 		old := impactAddress(before, op.method, op.path)
 		if old == nil {
@@ -375,7 +385,7 @@ func (c *impactCollector) requiredRule(change *ImpactChange, before, after *impa
 		}
 		for _, source := range op.sources {
 			if !c.visit() {
-				return false
+				return false, true
 			}
 			if source.direction != "request" || !impactOverlap(change.Pointer, source.pointer) {
 				continue
@@ -389,48 +399,65 @@ func (c *impactCollector) requiredRule(change *ImpactChange, before, after *impa
 			if name == "" || in == "" {
 				continue
 			}
-			prior := map[string]any{}
-			for _, oldSource := range old.sources {
-				if !c.visit() {
-					return false
-				}
-				oldValue, _ := impactLookup(before.root, oldSource.pointer)
-				candidate := impactResolveObject(before.root, impactObject(oldValue))
-				if oldSource.direction == "request" && impactObject(oldValue)["$ref"] != nil && candidate == nil {
-					return false
-				}
-				if impactText(candidate["name"]) == name && impactText(candidate["in"]) == in {
-					prior = candidate
-					break
-				}
+			prior, ok := c.priorParameter(before, old, name, in)
+			if !ok {
+				return false, true
 			}
 			if parameter["required"] == true && prior["required"] != true {
 				change.Compatibility = "breaking"
 				change.ReasonCode = "input_required"
 				change.Explanation = "Входной параметр стал обязательным: " + name
-				return true
+				return true, true
 			}
 		}
 	}
-	if len(tail) == 0 || (len(tail) == 1 && tail[0] == "required") {
-		objectPointer := change.Pointer
-		if len(tail) == 1 {
-			objectPointer = impactParent(objectPointer)
+	return false, false
+}
+
+// priorParameter finds the old operation's parameter with the same (name,in).
+// ok is false when the comparison cannot be trusted: the visit budget ran out
+// or an old request reference no longer resolves.
+func (c *impactCollector) priorParameter(before *impactSnapshot, old *impactOperation, name, in string) (prior map[string]any, ok bool) {
+	prior = map[string]any{}
+	for _, oldSource := range old.sources {
+		if !c.visit() {
+			return nil, false
 		}
-		a, existed := impactLookup(before.root, objectPointer)
-		b, _ := impactLookup(after.root, objectPointer)
-		am, bm := impactResolveObject(before.root, impactObject(a)), impactResolveObject(after.root, impactObject(b))
-		if existed && am == nil {
-			return false
+		oldValue, _ := impactLookup(before.root, oldSource.pointer)
+		candidate := impactResolveObject(before.root, impactObject(oldValue))
+		if oldSource.direction == "request" && impactObject(oldValue)["$ref"] != nil && candidate == nil {
+			return nil, false
 		}
-		if bm != nil && bm["$ref"] == nil && bm["required"] == true && am["required"] != true {
-			change.Compatibility = "breaking"
-			change.ReasonCode = "input_required"
-			change.Explanation = "Входные данные стали обязательными"
-			return true
+		if impactText(candidate["name"]) == name && impactText(candidate["in"]) == in {
+			return candidate, true
 		}
 	}
-	return c.schemaRequiredRule(change, before.root, after.root)
+	return prior, true
+}
+
+// requiredObjectRule looks at the changed input object itself (or its parent
+// when only its required flag changed).
+func requiredObjectRule(change *ImpactChange, tail []string, before, after *impactSnapshot) (result, decided bool) {
+	if len(tail) != 0 && (len(tail) != 1 || tail[0] != "required") {
+		return false, false
+	}
+	objectPointer := change.Pointer
+	if len(tail) == 1 {
+		objectPointer = impactParent(objectPointer)
+	}
+	a, existed := impactLookup(before.root, objectPointer)
+	b, _ := impactLookup(after.root, objectPointer)
+	am, bm := impactResolveObject(before.root, impactObject(a)), impactResolveObject(after.root, impactObject(b))
+	if existed && am == nil {
+		return false, true
+	}
+	if bm != nil && bm["$ref"] == nil && bm["required"] == true && am["required"] != true {
+		change.Compatibility = "breaking"
+		change.ReasonCode = "input_required"
+		change.Explanation = "Входные данные стали обязательными"
+		return true, true
+	}
+	return false, false
 }
 
 func (c *impactCollector) schemaRequiredRule(change *ImpactChange, beforeRoot, afterRoot map[string]any) bool {
@@ -445,15 +472,8 @@ func (c *impactCollector) schemaRequiredRule(change *ImpactChange, beforeRoot, a
 	if parts[len(parts)-1] != "required" {
 		return false
 	}
-	schemaTail := tail
-	if len(schemaTail) > 0 && schemaTail[0] == "schema" {
-		schemaTail = schemaTail[1:]
-	} else if len(schemaTail) > 2 && schemaTail[0] == "content" && schemaTail[2] == "schema" {
-		schemaTail = schemaTail[3:]
-	} else {
-		return false
-	}
-	if len(schemaTail) == 0 || !directInputSchema(schemaTail[:len(schemaTail)-1]) {
+	schemaTail, ok := impactInputSchemaTail(tail)
+	if !ok || len(schemaTail) == 0 || !directInputSchema(schemaTail[:len(schemaTail)-1]) {
 		return false
 	}
 	parent := impactParent(change.Pointer)
@@ -463,8 +483,44 @@ func (c *impactCollector) schemaRequiredRule(change *ImpactChange, beforeRoot, a
 	if impactAmbiguousSchema(am) || impactAmbiguousSchema(bm) {
 		return false
 	}
-	// A reference/composition on any containing input schema also makes a local
-	// required keyword insufficient to prove request compatibility.
+	if !c.containingSchemasPlain(beforeRoot, afterRoot, parent) {
+		return false
+	}
+	oldSet, newSet := impactStringSet(am["required"]), impactStringSet(bm["required"])
+	if oldSet == nil || newSet == nil {
+		return false
+	}
+	added, ok := c.requiredAdditions(am, bm, oldSet, newSet)
+	if !ok {
+		return false
+	}
+	change.Compatibility = "compatible"
+	change.ReasonCode = "input_required_relaxed"
+	change.Explanation = "Новые обязательные входные поля не добавлены"
+	if added {
+		change.Compatibility = "breaking"
+		change.ReasonCode = "input_required"
+		change.Explanation = "Добавлены обязательные входные поля"
+	}
+	return true
+}
+
+// impactInputSchemaTail strips the parameter "schema" or the request
+// "content/{media}/schema" prefix; ok is false for any other input shape.
+func impactInputSchemaTail(tail []string) ([]string, bool) {
+	if len(tail) > 0 && tail[0] == "schema" {
+		return tail[1:], true
+	}
+	if len(tail) > 2 && tail[0] == "content" && tail[2] == "schema" {
+		return tail[3:], true
+	}
+	return nil, false
+}
+
+// A reference/composition on any containing input schema also makes a local
+// required keyword insufficient to prove request compatibility. It also
+// reports false when the visit budget runs out mid-walk.
+func (c *impactCollector) containingSchemasPlain(beforeRoot, afterRoot map[string]any, parent string) bool {
 	at := parent
 	for at != "" {
 		if !c.visit() {
@@ -480,16 +536,18 @@ func (c *impactCollector) schemaRequiredRule(change *ImpactChange, beforeRoot, a
 		}
 		at = impactParent(at)
 	}
-	oldSet, newSet := impactStringSet(am["required"]), impactStringSet(bm["required"])
-	if oldSet == nil || newSet == nil {
-		return false
-	}
-	added := false
+	return true
+}
+
+// requiredAdditions reports whether any name became required. ok is false
+// when a changed name's property cannot be judged (missing, read-only or
+// ambiguous on either side) or the visit budget runs out.
+func (c *impactCollector) requiredAdditions(am, bm map[string]any, oldSet, newSet map[string]bool) (added, ok bool) {
 	changedNames := maps.Clone(oldSet)
 	maps.Copy(changedNames, newSet)
 	for name := range changedNames {
 		if !c.visit() {
-			return false
+			return false, false
 		}
 		if oldSet[name] == newSet[name] {
 			continue
@@ -497,21 +555,13 @@ func (c *impactCollector) schemaRequiredRule(change *ImpactChange, beforeRoot, a
 		ap := impactObject(impactObject(am["properties"])[name])
 		bp := impactObject(impactObject(bm["properties"])[name])
 		if (ap == nil && bp == nil) || ap["readOnly"] == true || bp["readOnly"] == true || impactAmbiguousSchema(ap) || impactAmbiguousSchema(bp) {
-			return false
+			return false, false
 		}
 		if !oldSet[name] && newSet[name] {
 			added = true
 		}
 	}
-	change.Compatibility = "compatible"
-	change.ReasonCode = "input_required_relaxed"
-	change.Explanation = "Новые обязательные входные поля не добавлены"
-	if added {
-		change.Compatibility = "breaking"
-		change.ReasonCode = "input_required"
-		change.Explanation = "Добавлены обязательные входные поля"
-	}
-	return true
+	return added, true
 }
 func impactAmbiguousSchema(m map[string]any) bool {
 	for _, key := range []string{"$ref", "$dynamicRef", "allOf", "oneOf", "anyOf", "not", "if", "then", "else", "dependentSchemas", "dependentRequired"} {
@@ -572,19 +622,13 @@ func (c *impactCollector) parameterArrayRule(change *ImpactChange, before, after
 		if !exists {
 			return false
 		}
-		detail := newImpactCollector(c.ctx)
-		detail.visits = c.visits
-		detail.diff(pointer, oldParameter, newParameter, len(parts)+1)
-		c.visits = detail.visits
-		for _, reason := range detail.result.Coverage.TruncatedReasons {
-			c.truncate(reason)
-		}
-		if !detail.result.Complete {
+		deltas, ok := c.parameterDeltas(pointer, oldParameter, newParameter, len(parts)+1)
+		if !ok {
 			return false
 		}
 		oldRoot := impactParameterDocument(before.root, oldParameter)
 		newRoot := impactParameterDocument(after.root, newParameter)
-		for _, delta := range detail.result.Changes {
+		for _, delta := range deltas {
 			if !c.visit() {
 				return false
 			}
@@ -607,6 +651,12 @@ func (c *impactCollector) parameterArrayRule(change *ImpactChange, before, after
 			}
 		}
 	}
+	return parameterSummaryRule(change, allMetadata, allCompatible)
+}
+
+// parameterSummaryRule classifies a parameter array whose paired parameters
+// held no breaking delta: all-presentation first, then all-relaxing.
+func parameterSummaryRule(change *ImpactChange, allMetadata, allCompatible bool) bool {
 	if allMetadata {
 		change.ChangeClass = "metadata"
 		change.Compatibility = "compatible"
@@ -622,6 +672,24 @@ func (c *impactCollector) parameterArrayRule(change *ImpactChange, before, after
 	}
 	return false
 }
+
+// parameterDeltas diffs one paired parameter on a private collector that
+// shares this one's visit budget and truncation reasons; ok is false when
+// that diff was incomplete.
+func (c *impactCollector) parameterDeltas(pointer string, oldParameter, newParameter map[string]any, depth int) ([]ImpactChange, bool) {
+	detail := newImpactCollector(c.ctx)
+	detail.visits = c.visits
+	detail.diff(pointer, oldParameter, newParameter, depth)
+	c.visits = detail.visits
+	for _, reason := range detail.result.Coverage.TruncatedReasons {
+		c.truncate(reason)
+	}
+	if !detail.result.Complete {
+		return nil, false
+	}
+	return detail.result.Changes, true
+}
+
 func (c *impactCollector) parameterPairs(root map[string]any, value any) (map[string]map[string]any, bool) {
 	out := map[string]map[string]any{}
 	if value == nil {
