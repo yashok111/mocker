@@ -31,8 +31,22 @@ type DiagramReader interface {
 	QueryDiagram(context.Context, string, bm.DiagramQueryInput) (*bm.DiagramPage, error)
 }
 
+// fault derives the code from the status. Review 2026-10-06, F72: every
+// refusal used to carry backend_portable_invalid, so a lost-reply recovery
+// could branch only on free text to tell a missing session (404) from a
+// stale expectedVersion, reused key or immutable chunk (409) or a quota
+// (413). The conflict and quota codes follow the other backend modules.
 func fault(status int, message string) error {
-	return &bm.FaultError{Status: status, Code: "backend_portable_invalid", Message: message}
+	code := "backend_portable_invalid"
+	switch status {
+	case 404:
+		code = "backend_portable_not_found"
+	case 409:
+		code = "backend_portable_conflict"
+	case 413:
+		code = "backend_portable_limit"
+	}
+	return &bm.FaultError{Status: status, Code: code, Message: message}
 }
 
 type svgNode struct {

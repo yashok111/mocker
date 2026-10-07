@@ -9,6 +9,30 @@ import (
 	bm "github.com/yashok111/mocker/internal/backendmodel"
 )
 
+// TestPortableFaultCodeFollowsStatus pins review 2026-10-06, F72: every
+// portable refusal carried backend_portable_invalid, so an agent recovering
+// from a lost reply could not tell a missing session (404) from a stale
+// expectedVersion or reused key (409) or a quota refusal (413) by code.
+func TestPortableFaultCodeFollowsStatus(t *testing.T) {
+	t.Parallel()
+	for status, code := range map[int]string{
+		404: "backend_portable_not_found",
+		409: "backend_portable_conflict",
+		413: "backend_portable_limit",
+		422: "backend_portable_invalid",
+	} {
+		f, ok := errors.AsType[*bm.FaultError](fault(status, "x"))
+		if !ok || f.Status != status || f.Code != code {
+			t.Errorf("fault(%d) = %+v, want code %s", status, f, code)
+		}
+	}
+	s := makeRoundtripFixture(t).service
+	_, err := s.Abort(t.Context(), "01900000-0000-7000-8000-000000000009", SessionInput{ExpectedVersion: 1, IdempotencyKey: "missing"})
+	if f, ok := errors.AsType[*bm.FaultError](err); !ok || f.Code != "backend_portable_not_found" {
+		t.Errorf("abort of a missing session: %v", err)
+	}
+}
+
 // TestPortableMalformedRawEvidenceIs422 pins review 2026-10-06, F69: an
 // evidence record whose raw proof is empty or not a known JSON object passes
 // the envelope hash, and decodeModel returned the bare decoder error, which

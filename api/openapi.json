@@ -113558,16 +113558,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -113673,16 +113663,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -113807,16 +113787,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -113841,7 +113811,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -113930,16 +113914,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -114064,16 +114038,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -114098,7 +114062,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -114199,16 +114177,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -114233,7 +114201,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -114322,16 +114304,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -114474,16 +114446,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -114617,16 +114579,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -114743,7 +114695,15 @@
             }
           },
           "429": {
-            "description": "Request refused",
+            "description": "Replay queue full (backend_replay_queue_full, retryable); retry after two seconds",
+            "headers": {
+              "Retry-After": {
+                "schema": {
+                  "type": "string",
+                  "const": "2"
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -114776,7 +114736,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -114865,16 +114839,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -114998,16 +114962,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -115141,16 +115095,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -115175,7 +115119,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {
@@ -115267,16 +115225,6 @@
             }
           },
           "422": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
-          "429": {
             "description": "Request refused",
             "content": {
               "application/json": {
@@ -115420,16 +115368,6 @@
               }
             }
           },
-          "429": {
-            "description": "Request refused",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/BackendError"
-                }
-              }
-            }
-          },
           "500": {
             "description": "Request refused",
             "content": {
@@ -115454,7 +115392,21 @@
             "$ref": "#/components/responses/Unauthorized"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "description": "CSRF refusal (Error envelope), or backend_replay_forbidden (BackendError): the actor is no longer authorized, or only the consent author may revoke.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/Error"
+                    },
+                    {
+                      "$ref": "#/components/schemas/BackendError"
+                    }
+                  ]
+                }
+              }
+            }
           }
         },
         "requestBody": {

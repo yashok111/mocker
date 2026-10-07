@@ -18,7 +18,9 @@ import (
 
 func (s *Server) backendError(w http.ResponseWriter, err error) {
 	if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
-		if fault.Code == "backend_analysis_queue_full" && fault.Status == 429 {
+		// Every retryable 429 is a full job queue (analysis, and replay since
+		// review 2026-10-06, F29), and both wait the same two seconds.
+		if fault.Status == 429 && fault.Retryable {
 			w.Header().Set("Retry-After", "2")
 		}
 		httpx.JSON(w, fault.Status, struct {

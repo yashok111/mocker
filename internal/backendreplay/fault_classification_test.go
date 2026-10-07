@@ -2,6 +2,7 @@ package backendreplay
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"testing"
 
@@ -26,6 +27,31 @@ func TestDiagramScopeMismatchIsAReplayConflict(t *testing.T) {
 	err := ValidateDiagramBindings(t.Context(), reader, id, pkg)
 	if fault, ok := errors.AsType[*backendmodel.FaultError](err); !ok || fault.Status != 409 || fault.Code != "backend_replay_conflict" {
 		t.Fatalf("err = %T %v, want 409 backend_replay_conflict", err, err)
+	}
+}
+
+// TestReplayQueueFullIsRetryable429 pins review 2026-10-06, F29 and F12: a
+// full replay queue answered 409 backend_replay_queue_full with
+// retryable:false, while the contract lists 429 on every replay route and the
+// analysis queue answers 429, retryable, with Retry-After. A client treated a
+// transient queue as a permanent conflict.
+func TestReplayQueueFullIsRetryable429(t *testing.T) {
+	s, pid, in, _ := replayServiceFixture(t)
+	if err := s.repo.db.Write(t.Context(), func(tx *sql.Tx) error {
+		for range QueueLimit {
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_replay_runs(id,project_id,target_id,status,input_hash,input_json,version,author,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?,?,?)`,
+				newReplayID(), pid, "test", "queued", p.HashBytes([]byte("filler")), "{}", 1, "actor", nowReplay(), nowReplay()); err != nil {
+				return err
+			}
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	_, err := s.Start(t.Context(), pid, "actor", in)
+	fault, ok := errors.AsType[*backendmodel.FaultError](err)
+	if !ok || fault.Status != 429 || fault.Code != "backend_replay_queue_full" || !fault.Retryable {
+		t.Fatalf("err = %v (%+v), want retryable 429 backend_replay_queue_full", err, fault)
 	}
 }
 
