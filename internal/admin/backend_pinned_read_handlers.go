@@ -3,7 +3,6 @@ package admin
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -20,11 +19,7 @@ func (s *Server) backendProjectionBody(w http.ResponseWriter, r *http.Request, o
 		return false
 	}
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
-			s.backendError(w, fault)
-		} else {
-			s.backendError(w, backendQueryError())
-		}
+		s.backendError(w, backendBodyFault(err, "Request must match the request schema"))
 		return false
 	}
 	return true

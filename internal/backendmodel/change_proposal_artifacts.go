@@ -44,11 +44,19 @@ func prepareChangeArtifactCommands(ctx context.Context, request *EditorArtifactR
 		context.EditorBindings = slices.DeleteFunc(slices.Clone(context.EditorBindings), func(b EditorBinding) bool { return b.ArtifactKind == key.Kind && b.ArtifactID == key.ID })
 		if c.Type == "set_artifact_pin" {
 			pin, err := request.SnapshotPin(key, c.RevisionID)
-			if err != nil {
-				return err
+			if e := requiredArtifactError(ctx, err); e != nil {
+				return e
 			}
 			out := &ArtifactPinsPreview{CanApply: true, Diagnostics: []ArtifactDiagnostic{}}
 			builder := artifactPreviewBuilder{out: out, request: request, nodes: nodes}
+			if err != nil {
+				// Review 2026-10-06, F174: a missing artifact revision came back
+				// as the read budget's raw sql.ErrNoRows, a logged 500. Classify
+				// it as the legacy artifact-pins preview does: cancellation and
+				// 413 stay as they are, anything else blocks the pin.
+				builder.diagnostic("backend_artifact_target_unavailable", key, nil, nil, "Selected immutable artifact is unavailable or unverified", true)
+				return artifactPinsBlocked(out.Diagnostics)
+			}
 			api, err := builder.resolveAPIBindings(ctx, c.artifactCommand(), pin)
 			if err != nil {
 				return err

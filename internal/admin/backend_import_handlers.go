@@ -186,23 +186,24 @@ func (s *Server) handleQueryBackendGraph(w http.ResponseWriter, r *http.Request)
 	if in.RecordType == "edges" {
 		forbidden = []string{"search", "parentId"}
 	}
-	for _, key := range []string{"id", "parentId", "from", "to"} {
-		if value, ok := raw[key]; ok {
-			var id string
-			if err := json.Unmarshal(value, &id); err != nil || !backendmodel.ValidID(id) {
-				status, code := 422, "backend_import_invalid"
-				if key == "id" {
-					status, code = 400, "backend_invalid"
-				}
-				s.backendError(w, &backendmodel.FaultError{Status: status, Code: code, Message: "Selector must be a canonical UUID", Details: map[string]any{"path": "/" + key}})
-				return
-			}
-		}
-	}
+	// Presence first: a selector the recordType forbids is refused whatever
+	// its value (backend_graph_selector_contract_test pins 422 for "").
 	for _, key := range forbidden {
 		if _, ok := raw[key]; ok {
 			s.backendError(w, &backendmodel.FaultError{Status: 422, Code: "backend_import_invalid", Message: "Selector is unavailable for this recordType", Details: map[string]any{"path": "/" + key}})
 			return
+		}
+	}
+	// Review 2026-10-06, F17: a malformed parentId/from/to answered 422
+	// backend_import_invalid (an import code on a read) while the same mistake
+	// in id, serviceId or sourceSnapshotId is 400 backend_invalid. One class.
+	for _, key := range []string{"id", "parentId", "from", "to"} {
+		if value, ok := raw[key]; ok {
+			var id string
+			if err := json.Unmarshal(value, &id); err != nil || !backendmodel.ValidID(id) {
+				s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Selector must be a canonical UUID", Details: map[string]any{"path": "/" + key}})
+				return
+			}
 		}
 	}
 
@@ -316,7 +317,7 @@ func (s *Server) backendImportBody(w http.ResponseWriter, r *http.Request, out a
 
 func (s *Server) backendImportDecodedBody(w http.ResponseWriter, raw jsontext.Value, out any) bool {
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Request must match the import schema"})
+		s.backendError(w, backendBodyFault(err, "Request must match the import schema"))
 		return false
 	}
 	if err := backendImportShape(raw, reflect.TypeOf(out).Elem(), ""); err != nil {

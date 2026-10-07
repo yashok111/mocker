@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json/v2"
 	"errors"
@@ -116,14 +117,36 @@ func addBackendTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route string) {
 			return designScenarioToolErrorResult(err), nil
 		}
 		if status < 200 || status >= 300 {
-			if status >= 400 && status < 500 {
-				// Keep exact conflict versions and retry metadata in the new envelope.
-				return designScenarioToolErrorResult(fmt.Errorf("HTTP %d: %s", status, response)), nil
-			}
-			return designScenarioToolErrorResult(toolErr(status, response)), nil
+			return designScenarioToolErrorResult(backendStatusError(status, response)), nil
 		}
-		return &sdk.CallToolResult{StructuredContent: jsonx.RawMessage(response), Content: []sdk.Content{&sdk.TextContent{Text: string(response)}}}, nil
+		return backendToolResult(response), nil
 	})
+}
+
+// backendToolResult is the one 2xx answer of every backend tool family: the
+// exact REST body as text, and the same body as structuredContent. Review
+// 2026-10-06, F24: MCP defines structuredContent as an object, and the four
+// replay list routes answer a bare array, which a spec-strict client (the
+// TypeScript SDK) rejects with the whole result; an array is carried as
+// {"items":[...]} there, the text content unchanged.
+func backendToolResult(response []byte) *sdk.CallToolResult {
+	structured := jsonx.RawMessage(response)
+	if trimmed := bytes.TrimSpace(response); len(trimmed) > 0 && trimmed[0] == '[' {
+		structured = jsonx.RawMessage(`{"items":` + string(trimmed) + `}`)
+	}
+	return &sdk.CallToolResult{StructuredContent: structured, Content: []sdk.Content{&sdk.TextContent{Text: string(response)}}}
+}
+
+// backendStatusError is the one non-2xx answer of every backend tool family.
+// A 4xx keeps the exact envelope, which carries currentVersion and retry
+// metadata; a 5xx goes through toolErr, whose §I rule never echoes the body.
+// Review 2026-10-06, F133: the import, artifact and API-artifact families
+// returned "HTTP %d: <raw body>" for 5xx too.
+func backendStatusError(status int, response []byte) error {
+	if status >= 400 && status < 500 {
+		return fmt.Errorf("HTTP %d: %s", status, response)
+	}
+	return toolErr(status, response)
 }
 
 func backendToolCall(name string, in backendToolInput) (designScenarioCall, error) {

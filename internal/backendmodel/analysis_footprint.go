@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"errors"
 	"maps"
 	"slices"
 	"sync"
@@ -122,6 +123,25 @@ func (b *analysisFootprintBuilder) add(key string, size int64) error {
 	b.total += size
 	return nil
 }
+
+// footprintRow answers a single-row lookup that found nothing with the given
+// 404. Review 2026-10-06, F117: these scans run first on caller-supplied ids
+// (fromRevisionId, a change-proposal or legacy proposal revision, a pinned
+// owner) with no prior existence check, and the bare sql.ErrNoRows reached
+// backendError as a logged 500 backend_internal.
+func footprintRow(err, missing error) error {
+	if errors.Is(err, sql.ErrNoRows) {
+		return missing
+	}
+	return err
+}
+
+// changeRevisionNotFound is the answer AnalysisProposalBaseRevision already
+// gives for the same lookup.
+func changeRevisionNotFound() *FaultError {
+	return &FaultError{Status: 404, Code: "backend_change_not_found", Message: "Change proposal revision not found"}
+}
+
 func (b *analysisFootprintBuilder) source(rid string) error {
 	key := "source:" + rid
 	if _, ok := b.documents[key]; ok {
@@ -133,7 +153,7 @@ func (b *analysisFootprintBuilder) source(rid string) error {
 	}
 	var metadata int64
 	if err = b.q.QueryRowContext(b.ctx, `SELECT length(CAST(document AS BLOB)) FROM backend_revisions_documents WHERE project_id=? AND id=?`, b.pid, rid).Scan(&metadata); err != nil {
-		return err
+		return footprintRow(err, notFound())
 	}
 	if err = b.add(key, size); err != nil {
 		return err
@@ -214,7 +234,7 @@ func (b *analysisFootprintBuilder) owner(kind, id, rid string) error {
 		return invalid("artifact", "Unsupported owner kind")
 	}
 	if err != nil {
-		return err
+		return footprintRow(err, notFound())
 	}
 	if err = b.add(key, size); err != nil {
 		return err
@@ -261,7 +281,7 @@ func (b *analysisFootprintBuilder) target(target BackendReadTarget) error {
 	if p := target.ChangeProposal; p != nil {
 		err = b.q.QueryRowContext(b.ctx, `SELECT base_revision_id,length(CAST(document AS BLOB)) FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&base, &size)
 		if err != nil {
-			return err
+			return footprintRow(err, changeRevisionNotFound())
 		}
 		if err = b.add("change:"+p.ProposalRevisionID, size); err != nil {
 			return err
@@ -288,7 +308,7 @@ func (b *analysisFootprintBuilder) target(target BackendReadTarget) error {
 		p := target.Proposal
 		err = b.q.QueryRowContext(b.ctx, `SELECT json_extract(r.document,'$.baseRevisionId'),length(CAST(r.document AS BLOB)) FROM backend_proposal_revisions_documents r JOIN backend_proposals p ON p.id=r.proposal_id WHERE p.project_id=? AND r.proposal_id=? AND r.id=?`, b.pid, p.ProposalID, p.ProposalRevisionID).Scan(&base, &size)
 		if err != nil {
-			return err
+			return footprintRow(err, notFound())
 		}
 		if err = b.add("legacy:"+p.ProposalRevisionID, size); err != nil {
 			return err

@@ -143,6 +143,20 @@ type ResultChunk struct {
 	Sequence    int64  `json:"sequence"`
 	ItemsJSON   []byte `json:"-"`
 }
+
+// Kinds is every job kind the start contract can create, in the contract's
+// order, and ObservationModes every observationMode it accepts ("pinned"
+// for observed impact and both scenario kinds). The list route's kind
+// filter, the capabilities document and the list_backend_analysis tool all
+// read these. Review 2026-10-06, F10/F27/F28/F131: three hand copies had
+// six kinds and observationModes ["none"], so an agent could neither filter
+// for its measurement jobs over MCP nor learn from capabilities that they
+// and pinned observed impact exist.
+func Kinds() []string {
+	return []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics", "scenario_measurement", "scenario_comparison"}
+}
+func ObservationModes() []string { return []string{"none", "pinned"} }
+
 type ResultQuery struct {
 	ResultVersion int64  `json:"resultVersion"`
 	Section       string `json:"section"`
@@ -152,7 +166,12 @@ type ResultQuery struct {
 	Certainty     string `json:"certainty"`
 	Direction     string `json:"direction"`
 	Depth         int    `json:"depth"`
-	Limit         int    `json:"limit"`
+	// DepthSet carries the presence Depth's zero value loses: an explicit
+	// depth=0 filters to direct records (review 2026-10-06, F25), an absent
+	// depth does not filter. omitzero keeps the cursor binding of every query
+	// without an explicit 0 byte-for-byte unchanged.
+	DepthSet bool `json:"depthSet,omitzero"`
+	Limit    int  `json:"limit"`
 }
 type ResultPage struct {
 	Manifest   ResultManifest `json:"manifest"`

@@ -155,7 +155,16 @@ func TestBackendAnalysisRetainedQuotaAndCursorBinding(t *testing.T) {
 	}
 	b41Call(t, s, "GET", path+"?limit=1&cursor="+page.NextCursor, nil, 200, nil)
 	b41Call(t, s, "GET", path+"?limit=2&cursor="+page.NextCursor, nil, 400, nil)
-	b41Call(t, s, "GET", "/api/backend-projects/"+p.CurrentRevisionID+"/analyses?limit=1&cursor="+page.NextCursor, nil, 400, nil)
+	// The cursor does not transfer to another project. That project must
+	// exist: an unknown one is a 404 before any cursor is read (review
+	// 2026-10-06, F13), which this line used to pin as 400 by reusing a
+	// revision id as the project id.
+	other, err := s.backendRepo.Create(t.Context(), backendmodel.CreateInput{Name: "Other", IdempotencyKey: "other"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	b41Call(t, s, "GET", "/api/backend-projects/"+other.ID+"/analyses?limit=1&cursor="+page.NextCursor, nil, 400, nil)
+	b41Call(t, s, "GET", "/api/backend-projects/"+p.CurrentRevisionID+"/analyses?limit=1&cursor="+page.NextCursor, nil, 404, nil)
 	s.cfg.MaxBody = 128
 	b41Call(t, s, "POST", path, raw, 413, nil)
 }

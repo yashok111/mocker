@@ -51,6 +51,14 @@ func addBackendReplayTools(s *sdk.Server, lb *loopback) {
 			schema["properties"].(map[string]any)["version"] = map[string]any{"type": "integer", "minimum": 1}
 			schema["required"] = append(schema["required"].([]any), "version")
 		}
-		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: "Trusted Orders replay with exact immutable package/profile/source/build pins. Connect requires explicit allowReset consent. Save/select do not execute. Start queues work; preserve complete request and idempotency key before sending. Never retry uncertain mutations with new keys. Payment is mocked; fixture order persistence is actual. Compare does not execute.", InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
+		description := "Trusted Orders replay with exact immutable package/profile/source/build pins. Connect requires explicit allowReset consent. Save/select do not execute. Start queues work; preserve complete request and idempotency key before sending. Never retry uncertain mutations with new keys. Payment is mocked; fixture order persistence is actual. Compare does not execute."
+		if spec.name == "resolve_backend_diagram_scope" {
+			// Review 2026-10-06, F31/F132: the replay text above (consent,
+			// queued work, mocked payment) was published for this pure read
+			// too, so an agent could skip it or ask for a consent it does not
+			// need; it is also the step before a correlation diagramScope.
+			description = "Pure read: resolves a diagram pin and semantic selectors to the exact target, targetHash, scopeHash, members, gaps and truncation. Never connects to a fixture or starts work. Resolve before save_backend_replay_package or correlate_backend_observations with a diagramScope; save_backend_replay_package refuses a truncated scope or one with gaps, so narrow the selectors first."
+		}
+		addBackendImportTool(s, lb, &sdk.Tool{Name: spec.name, Description: description, InputSchema: schema, Annotations: &sdk.ToolAnnotations{ReadOnlyHint: spec.read, IdempotentHint: true}}, spec.route)
 	}
 }

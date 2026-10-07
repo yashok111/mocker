@@ -96,7 +96,8 @@ func (r *Repo) FreezeChangePreview(ctx context.Context, pid, id string, in Previ
 	}
 	var base string
 	if err = r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, id, in.ProposalRevisionID).Scan(&base); err != nil {
-		return nil, err
+		// Review 2026-10-06, F117: an unknown proposal revision is the caller's 404.
+		return nil, footprintRow(err, changeRevisionNotFound())
 	}
 	pin := ProposalReadTarget{ProposalID: id, ProposalRevisionID: in.ProposalRevisionID}
 	ctx, release, err := r.previewLease(ctx, pid, pin, in, base)

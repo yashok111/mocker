@@ -214,7 +214,9 @@ func TestBackendImportMCPBodySchemasMatchOpenAPI(t *testing.T) {
 		if !ok {
 			continue
 		}
-		got := decode(tool.InputSchema)
+		// tools/list publishes repeated subtrees through $defs (review
+		// 2026-10-06, F23); the contract comparison reads the expanded form.
+		got := inlineLocalDefs(decode(tool.InputSchema))
 		stripPaths := func(branch map[string]any) {
 			props := branch["properties"].(map[string]any)
 			for _, key := range []string{"projectId", "importId", "batchId"} {

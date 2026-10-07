@@ -66,7 +66,12 @@ const receipt = await call("commit_backend_portable_import", {
 ```
 
 A real caller must retain the request object/key at each step for recovery rather
-than restarting this example after uncertainty. Preview validates owner data in a
+than restarting this example after uncertainty. Branch on the error code:
+`backend_portable_conflict` (409: stale `expectedVersion`, a key reused with
+different input, an immutable chunk, a state that does not allow the step) means
+read the session and repeat the original request; `backend_portable_not_found`
+(404) means the session is gone; `backend_portable_limit` (413) is a quota;
+`backend_portable_invalid` (422) is a bundle or request to fix. Preview validates owner data in a
 rolled-back savepoint; the proposed project is not readable until Commit. Commit
 revalidates and writes owners, histories, maps, origins and receipt in one transaction.
 The receipt contains the new project and exact local target. Original immutable

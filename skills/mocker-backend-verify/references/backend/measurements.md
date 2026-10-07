@@ -53,7 +53,7 @@ Sampled failures, particularly tail/unknown sampling, are not population rates.
 
 3. Poll `get_backend_analysis` at the recommended interval; retain jobId,
 analysisInputHash and a terminal resultVersion. Read exact result pages using
-`get_backend_analysis_results {projectId,analysisId,resultVersion,section}`:
+`get_backend_analysis_results {projectId,jobId,resultVersion,section}`:
 checks with kind=scenario_measurement or scenario_comparison; witnesses with
 kind=observed_sequence. Existing Store26 section names are preserved. Retain returned cursors within
 that resultVersion. Later imports, correlation edits and diagram saves do not

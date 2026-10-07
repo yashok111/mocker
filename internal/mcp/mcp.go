@@ -113,6 +113,9 @@ func New(calls Caller, key string, cfg *config.Config, log *slog.Logger) *Endpoi
 	// otherwise built to avoid is still reachable unless it is refused
 	// outright.
 	srv.AddReceivingMiddleware(refuseSubscriptionsListen)
+	// Publish backend input schemas with shared $defs (review 2026-10-06,
+	// F23); see compactToolsList.
+	srv.AddReceivingMiddleware(compactToolsList())
 
 	registerTools(srv, newLoopback(calls))
 	// A9: the config tool reads cfg itself — no loopback, no route.

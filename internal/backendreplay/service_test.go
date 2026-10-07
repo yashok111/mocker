@@ -23,7 +23,7 @@ func replayServiceFixture(t *testing.T) (*Service, string, StartInput, *engineTr
 	_, provenance, journal, live := engineFixture(t, "fixed")
 	transport := &engineTransport{journal: journal, live: live, lost: -1}
 	s := NewService(NewRepo(db), graphs, []Target{{TargetInfo: TargetInfo{ID: "test", Version: 1, IsolationID: live.Identity.IsolationID}, Transport: transport, ConfigFingerprint: "fixture"}})
-	s.ActorAllowed = func(context.Context, string) bool { return true }
+	s.ActorAllowed = func(context.Context, string) (bool, error) { return true, nil }
 	profile, err := s.Connect(t.Context(), project.ID, "actor", ConnectInput{ConfiguredTargetID: "test", ExpectedIdentityHash: live.IdentityHash, AllowReset: true, IdempotencyKey: newReplayID()})
 	if err != nil {
 		t.Fatal(err)

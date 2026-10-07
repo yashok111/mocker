@@ -3,7 +3,6 @@ package admin
 import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
-	"errors"
 	"net/http"
 	"net/url"
 	"slices"
@@ -19,11 +18,7 @@ func (s *Server) backendProposalBody(w http.ResponseWriter, r *http.Request, out
 		return false
 	}
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {
-		if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
-			s.backendError(w, fault)
-		} else {
-			s.backendError(w, &backendmodel.FaultError{Status: 400, Code: "backend_invalid", Message: "Request must match the proposal schema"})
-		}
+		s.backendError(w, backendBodyFault(err, "Request must match the proposal schema"))
 		return false
 	}
 	return true

@@ -42,7 +42,11 @@ func (s *Server) diagramBody(w http.ResponseWriter, r *http.Request, out any, li
 		return false
 	}
 	var raw jsontext.Value
-	if !s.backendBodyLimit(w, r, &raw, min(s.cfg.MaxBody, limit)) {
+	// Review 2026-10-06, F171: this stage wrote its own 400 and bypassed
+	// diagramError, so `[]` or unparsable text answered 400 while a
+	// schema-invalid object on the same route answers 422.
+	if err := backendReadBody(w, r, &raw, min(s.cfg.MaxBody, limit)); err != nil {
+		s.diagramError(w, err)
 		return false
 	}
 	if err := json.Unmarshal(raw, out, json.RejectUnknownMembers(true)); err != nil {

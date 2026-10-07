@@ -3,6 +3,7 @@ package mcp
 import (
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/yashok111/mocker/api"
+	"github.com/yashok111/mocker/internal/backendanalysis"
 )
 
 func addBackendAnalysisTools(s *sdk.Server, lb *loopback) {
@@ -40,10 +41,10 @@ func addBackendAnalysisTools(s *sdk.Server, lb *loopback) {
 			}
 			if spec.name == "list_backend_analysis" || spec.name == "get_backend_analysis_results" {
 				fields["limit"] = map[string]any{"type": "integer", "minimum": 1, "maximum": 500}
-				fields["cursor"] = map[string]any{"type": "string", "maxLength": 1024}
+				fields["cursor"] = map[string]any{"type": "string", "maxLength": 1024, "description": "nextCursor of the previous page; it binds every selector and the limit, so keep the same limit"}
 			}
 			if spec.name == "list_backend_analysis" {
-				fields["kind"] = map[string]any{"type": "string", "enum": []string{"diff", "impact", "change_package", "conformance", "endpoint_review", "diagnostics"}}
+				fields["kind"] = map[string]any{"type": "string", "enum": backendanalysis.Kinds()}
 				fields["status"] = map[string]any{"type": "string", "enum": []string{"queued", "running", "completed", "failed", "cancelled", "interrupted"}}
 			}
 			if spec.name == "get_backend_analysis_results" {

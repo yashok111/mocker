@@ -7,6 +7,7 @@ import (
 	"github.com/yashok111/mocker/internal/backendblob"
 	"time"
 
+	"github.com/yashok111/mocker/internal/backendmodel"
 	p "github.com/yashok111/mocker/internal/ordersprotocol"
 )
 
@@ -84,7 +85,10 @@ func (s *Service) Start(ctx context.Context, pid, actor string, in StartInput) (
 			return err
 		}
 		if queued >= QueueLimit {
-			return replayFault(409, "queue_full", "Replay queue is full")
+			// Review 2026-10-06, F29/F12: a full queue is transient, as on the
+			// analysis queue: 429, retryable, Retry-After (set by backendError).
+			// It was a non-retryable 409, read as a permanent conflict.
+			return &backendmodel.FaultError{Status: 429, Code: "backend_replay_queue_full", Message: "Replay queue is full", Retryable: true, Details: map[string]any{"retryAfterSeconds": 2}}
 		}
 		runID := newReplayID()
 		input := RunInput{RunID: runID, Start: in, Package: pkg.Package, Profile: *profile, BusinessKey: newReplayID(), Requests: []p.Fence{}}

@@ -38,16 +38,25 @@ func NewService(repo *Repo, graphs *backendmodel.Repo, targets []Target) *Servic
 	for _, t := range targets {
 		s.targets[t.ID] = t
 	}
-	s.ActorAllowed = func(ctx context.Context, actor string) bool {
-		id, err := strconv.ParseInt(actor, 10, 64)
-		if err != nil || id < 1 {
-			return false
+	s.ActorAllowed = func(ctx context.Context, actor string) (bool, error) {
+		id, ok := actorID(actor)
+		if !ok {
+			return false, nil
 		}
 		var n int
-		err = repo.db.R.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE id=?`, id).Scan(&n)
-		return err == nil && n == 1
+		if err := repo.db.R.QueryRowContext(ctx, `SELECT count(*) FROM users WHERE id=?`, id).Scan(&n); err != nil {
+			return false, err
+		}
+		return n == 1, nil
 	}
 	return s
+}
+
+// actorID parses an account id. A malformed actor is a verdict (no such
+// account), never a failed lookup.
+func actorID(actor string) (int64, bool) {
+	id, err := strconv.ParseInt(actor, 10, 64)
+	return id, err == nil && id >= 1
 }
 func (s *Service) Targets() []TargetInfo {
 	out := make([]TargetInfo, 0, len(s.targets))
@@ -66,7 +75,19 @@ func (s *Service) Targets() []TargetInfo {
 	return out
 }
 func (s *Service) actor(ctx context.Context, actor string) error {
-	if s.ActorAllowed == nil || !s.ActorAllowed(ctx, actor) {
+	if s.ActorAllowed == nil {
+		return replayFault(403, "forbidden", "Actor is no longer authorized")
+	}
+	// Review 2026-10-06, F177: a lookup that failed (a cancelled request, a
+	// reader-pool or database error) is not an authorization verdict. It used
+	// to collapse into the 403 below, so the real cause was never logged and
+	// an agent chased a revoked consent that did not exist. The worker still
+	// fails closed: any error here closes the run as unverified.
+	allowed, err := s.ActorAllowed(ctx, actor)
+	if err != nil {
+		return err
+	}
+	if !allowed {
 		return replayFault(403, "forbidden", "Actor is no longer authorized")
 	}
 	return nil

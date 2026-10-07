@@ -32,7 +32,7 @@ func (r *Repo) AnalysisProposalBaseRevision(ctx context.Context, pid string, p P
 	var rid string
 	err := r.db.R.QueryRowContext(ctx, `SELECT base_revision_id FROM backend_change_proposal_revisions_documents WHERE project_id=? AND proposal_id=? AND id=?`, pid, p.ProposalID, p.ProposalRevisionID).Scan(&rid)
 	if errors.Is(err, sql.ErrNoRows) {
-		return "", &FaultError{Status: 404, Code: "backend_change_not_found", Message: "Change proposal revision not found"}
+		return "", changeRevisionNotFound()
 	}
 	return rid, err
 }
