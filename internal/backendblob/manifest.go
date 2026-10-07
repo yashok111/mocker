@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -42,7 +43,7 @@ func encodeValues(values []any) ([]byte, error) {
 func decodeValues(raw []byte, want int) ([]any, error) {
 	b := bytes.NewReader(raw)
 	var n uint64
-	if err := binary.Read(b, binary.BigEndian, &n); err != nil || n != uint64(want) {
+	if err := binary.Read(b, binary.BigEndian, &n); err != nil || n != uint64(want) { //nolint:gosec // G115: want is a column count, never negative
 		return nil, fmt.Errorf("%w: metadata arity", ErrCanonical)
 	}
 	out := make([]any, want)
@@ -61,7 +62,7 @@ func decodeValues(raw []byte, want int) ([]any, error) {
 			out[i] = v
 		case 1, 3:
 			var size uint64
-			if err := binary.Read(b, binary.BigEndian, &size); err != nil || size > uint64(b.Len()) {
+			if err := binary.Read(b, binary.BigEndian, &size); err != nil || size > uint64(b.Len()) { //nolint:gosec // G115: a reader length is never negative
 				return nil, fmt.Errorf("%w: metadata length", ErrCanonical)
 			}
 			data := make([]byte, int(size))
@@ -171,13 +172,13 @@ func manifestDigest(ctx context.Context, q Reader, owner, id, version string) (i
 		stringField(h, s)
 	}
 	var n [8]byte
-	binary.BigEndian.PutUint64(n[:], uint64(count))
+	binary.BigEndian.PutUint64(n[:], uint64(count)) //nolint:gosec // G115: a count(*) is never negative
 	field(h, n[:])
 	rows, err := q.QueryContext(ctx, `SELECT member_type,member_id,payload_key,metadata,project_id FROM backend_payload_members WHERE owner=? AND owner_id=? AND version=? ORDER BY member_type,member_id`, owner, id, version)
 	if err != nil {
 		return 0, "", err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var typ, mid, key, project string
 		var meta []byte
@@ -205,7 +206,7 @@ func Seal(ctx context.Context, tx *sql.Tx) error {
 	for {
 		var owner, id, version string
 		err := tx.QueryRowContext(ctx, `SELECT owner,owner_id,version FROM backend_payload_pending ORDER BY owner,owner_id,version LIMIT 1`).Scan(&owner, &id, &version)
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil
 		}
 		if err != nil {
