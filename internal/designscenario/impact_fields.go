@@ -137,6 +137,26 @@ func impactBindingCompatible(source, target apidesign.ImpactFieldState, binding 
 	return compatibleBindingTypes(projected, target.Type), true
 }
 
+// impactFieldScope is what every field check of one scenario draft reads: the
+// draft, its selected contracts and the binding schemas before and after the
+// proposal.
+type impactFieldScope struct {
+	draft         designUsageDraft
+	contracts     map[string]impactContractUsage
+	before, after []bindingSchema
+	positions     map[string]int
+	provenance    map[string]bool
+}
+
+// impactFieldUsage is one field reference: a binding end, an assertion or an
+// extraction, read through the operation of message operationIndex.
+type impactFieldUsage struct {
+	ownerIndex, operationIndex, usageIndex int
+	kind, pointer                          string
+	field                                  apidesign.ImpactFieldSelector
+	binding                                *DataBinding
+}
+
 func (c *impactUsageCollector) visitFields(draft designUsageDraft, contracts map[string]impactContractUsage) (bool, error) {
 	if c.pair.Before == "" || c.pair.Proposed == "" {
 		return false, nil
@@ -145,31 +165,17 @@ func (c *impactUsageCollector) visitFields(draft designUsageDraft, contracts map
 	if err != nil {
 		return false, err
 	}
-	provenance := map[string]bool{}
-	for id, contract := range contracts {
-		if err := c.ctx.Err(); err != nil {
-			return false, err
-		}
-		value, err := decodeJSONValue(contract.Contract.Document)
-		provenance[id] = err == nil && c.baseValue != nil && impactJSONEqual(c.ctx, value, c.baseValue)
-		if err := c.ctx.Err(); err != nil {
-			return false, err
-		}
-	}
-	projected := draft.Document
-	projected.Contracts = slices.Clone(draft.Document.Contracts)
-	for i, contract := range projected.Contracts {
-		if contract.Source != nil && contract.Source.DesignID == c.report.DesignID {
-			projected.Contracts[i].Document = jsonx.RawMessage(c.pair.Proposed)
-		}
-	}
-	after, err := bindingSchemasContext(c.ctx, projected)
+	provenance, err := c.contractProvenance(contracts)
 	if err != nil {
 		return false, err
 	}
-	positions := make(map[string]int, len(draft.Document.Messages))
+	after, err := bindingSchemasContext(c.ctx, c.proposedDocument(draft.Document))
+	if err != nil {
+		return false, err
+	}
+	s := &impactFieldScope{draft: draft, contracts: contracts, before: before, after: after, positions: make(map[string]int, len(draft.Document.Messages)), provenance: provenance}
 	for i, message := range draft.Document.Messages {
-		positions[message.ID] = i
+		s.positions[message.ID] = i
 	}
 	for ownerIndex, owner := range draft.Document.Messages {
 		if err := c.ctx.Err(); err != nil {
@@ -178,38 +184,75 @@ func (c *impactUsageCollector) visitFields(draft designUsageDraft, contracts map
 		if owner.Execution == nil {
 			continue
 		}
-		base := "/messages/" + strconv.Itoa(ownerIndex) + "/execution"
-		for usageIndex, binding := range owner.Execution.Bindings {
-			if sourceIndex, ok := positions[binding.SourceMessageID]; ok {
-				stop, err := c.checkField(draft, contracts, before, after, ownerIndex, sourceIndex, usageIndex,
-					"binding_source", base+"/bindings/"+strconv.Itoa(usageIndex)+"/sourcePointer",
-					apidesign.ImpactFieldSelector{Kind: "response", Pointer: binding.SourcePointer}, &binding, positions, provenance)
-				if stop || err != nil {
-					return stop, err
-				}
-			}
-			stop, err := c.checkField(draft, contracts, before, after, ownerIndex, ownerIndex, usageIndex,
-				"binding_target", base+"/bindings/"+strconv.Itoa(usageIndex)+"/target/"+impactTargetFieldName(binding.Target),
-				apidesign.ImpactFieldSelector{Kind: binding.Target.Kind, Pointer: binding.Target.Pointer, Name: binding.Target.Name}, &binding, positions, provenance)
+		if stop, err := c.visitMessageFields(s, ownerIndex, owner.Execution); stop || err != nil {
+			return stop, err
+		}
+	}
+	return false, nil
+}
+
+// contractProvenance marks the contracts whose embedded copy equals the
+// saved base revision, the precondition for a definitive verdict.
+func (c *impactUsageCollector) contractProvenance(contracts map[string]impactContractUsage) (map[string]bool, error) {
+	provenance := map[string]bool{}
+	for id, contract := range contracts {
+		if err := c.ctx.Err(); err != nil {
+			return nil, err
+		}
+		value, err := decodeJSONValue(contract.Contract.Document)
+		provenance[id] = err == nil && c.baseValue != nil && impactJSONEqual(c.ctx, value, c.baseValue)
+		if err := c.ctx.Err(); err != nil {
+			return nil, err
+		}
+	}
+	return provenance, nil
+}
+
+// proposedDocument swaps the proposed contract into every contract linked to
+// this design, leaving the draft itself untouched.
+func (c *impactUsageCollector) proposedDocument(document Document) Document {
+	projected := document
+	projected.Contracts = slices.Clone(document.Contracts)
+	for i, contract := range projected.Contracts {
+		if contract.Source != nil && contract.Source.DesignID == c.report.DesignID {
+			projected.Contracts[i].Document = jsonx.RawMessage(c.pair.Proposed)
+		}
+	}
+	return projected
+}
+
+func (c *impactUsageCollector) visitMessageFields(s *impactFieldScope, ownerIndex int, execution *StepExecution) (bool, error) {
+	base := "/messages/" + strconv.Itoa(ownerIndex) + "/execution"
+	for usageIndex, binding := range execution.Bindings {
+		if sourceIndex, ok := s.positions[binding.SourceMessageID]; ok {
+			stop, err := c.checkField(s, impactFieldUsage{ownerIndex, sourceIndex, usageIndex,
+				"binding_source", base + "/bindings/" + strconv.Itoa(usageIndex) + "/sourcePointer",
+				apidesign.ImpactFieldSelector{Kind: "response", Pointer: binding.SourcePointer}, &binding})
 			if stop || err != nil {
 				return stop, err
 			}
 		}
-		for usageIndex, assertion := range owner.Execution.Assertions {
-			stop, err := c.checkField(draft, contracts, before, after, ownerIndex, ownerIndex, usageIndex,
-				"assertion", base+"/assertions/"+strconv.Itoa(usageIndex)+"/pointer",
-				apidesign.ImpactFieldSelector{Kind: "response", Pointer: assertion.Pointer}, nil, positions, provenance)
-			if stop || err != nil {
-				return stop, err
-			}
+		stop, err := c.checkField(s, impactFieldUsage{ownerIndex, ownerIndex, usageIndex,
+			"binding_target", base + "/bindings/" + strconv.Itoa(usageIndex) + "/target/" + impactTargetFieldName(binding.Target),
+			apidesign.ImpactFieldSelector{Kind: binding.Target.Kind, Pointer: binding.Target.Pointer, Name: binding.Target.Name}, &binding})
+		if stop || err != nil {
+			return stop, err
 		}
-		for usageIndex, extract := range owner.Execution.Extract {
-			stop, err := c.checkField(draft, contracts, before, after, ownerIndex, ownerIndex, usageIndex,
-				"extract", base+"/extract/"+strconv.Itoa(usageIndex)+"/pointer",
-				apidesign.ImpactFieldSelector{Kind: "response", Pointer: extract.Pointer}, nil, positions, provenance)
-			if stop || err != nil {
-				return stop, err
-			}
+	}
+	for usageIndex, assertion := range execution.Assertions {
+		stop, err := c.checkField(s, impactFieldUsage{ownerIndex, ownerIndex, usageIndex,
+			"assertion", base + "/assertions/" + strconv.Itoa(usageIndex) + "/pointer",
+			apidesign.ImpactFieldSelector{Kind: "response", Pointer: assertion.Pointer}, nil})
+		if stop || err != nil {
+			return stop, err
+		}
+	}
+	for usageIndex, extract := range execution.Extract {
+		stop, err := c.checkField(s, impactFieldUsage{ownerIndex, ownerIndex, usageIndex,
+			"extract", base + "/extract/" + strconv.Itoa(usageIndex) + "/pointer",
+			apidesign.ImpactFieldSelector{Kind: "response", Pointer: extract.Pointer}, nil})
+		if stop || err != nil {
+			return stop, err
 		}
 	}
 	return false, nil
@@ -222,19 +265,21 @@ func impactTargetFieldName(target DataBindingTarget) string {
 	return "name"
 }
 
-func (c *impactUsageCollector) checkField(
-	draft designUsageDraft, contracts map[string]impactContractUsage, before, after []bindingSchema,
-	ownerIndex, operationIndex, usageIndex int, kind, usagePointer string, field apidesign.ImpactFieldSelector,
-	binding *DataBinding, positions map[string]int, provenance map[string]bool,
-) (bool, error) {
+// impactBindingShift is how a binding's source/target compatibility moves
+// across the proposal.
+type impactBindingShift struct {
+	changed, newCompatible, newKnown bool
+}
+
+func (c *impactUsageCollector) checkField(s *impactFieldScope, u impactFieldUsage) (bool, error) {
 	if err := c.ctx.Err(); err != nil {
 		return false, err
 	}
-	operationMessage := draft.Document.Messages[operationIndex]
+	operationMessage := s.draft.Document.Messages[u.operationIndex]
 	if operationMessage.Operation == nil {
 		return false, nil
 	}
-	contract, selected := contracts[operationMessage.Operation.ContractID]
+	contract, selected := s.contracts[operationMessage.Operation.ContractID]
 	if !selected {
 		return false, nil
 	}
@@ -244,80 +289,124 @@ func (c *impactUsageCollector) checkField(
 	}
 	c.result.Coverage.FieldUsagesChecked++
 	key := operationMessage.Operation.OperationKey
-	identityKnown := !contract.Invalid && contract.Keys[key].Count == 1 && !c.ambiguous[key]
-	var bp, bt, ap, at string
-	if field.Kind == "response" {
-		bp, bt = before[operationIndex].responseField(c.ctx, field.Pointer)
-		ap, at = after[operationIndex].responseField(c.ctx, field.Pointer)
-	} else {
-		target := DataBindingTarget{Kind: field.Kind, Pointer: field.Pointer, Name: field.Name}
-		bp, bt = before[operationIndex].targetField(c.ctx, target)
-		ap, at = after[operationIndex].targetField(c.ctx, target)
-	}
-	if !identityKnown {
+	bp, bt, ap, at := c.fieldPresence(s, u)
+	if contract.Invalid || contract.Keys[key].Count != 1 || c.ambiguous[key] {
 		bp, bt, ap, at = "unknown", "", "unknown", ""
 	}
 	previous, next := impactFieldState(bp, bt), impactFieldState(ap, at)
 	changed := previous != next
-	compatChanged := false
-	newCompatible, newKnown := false, false
-	if binding != nil {
-		sourceIndex, sourceExists := positions[binding.SourceMessageID]
-		if sourceExists {
-			oldSourcePresence, oldSourceType := before[sourceIndex].responseField(c.ctx, binding.SourcePointer)
-			newSourcePresence, newSourceType := after[sourceIndex].responseField(c.ctx, binding.SourcePointer)
-			oldTargetPresence, oldTargetType := before[ownerIndex].targetField(c.ctx, binding.Target)
-			newTargetPresence, newTargetType := after[ownerIndex].targetField(c.ctx, binding.Target)
-			oldCompatible, oldKnown := impactBindingCompatible(impactFieldState(oldSourcePresence, oldSourceType), impactFieldState(oldTargetPresence, oldTargetType), *binding)
-			newCompatible, newKnown = impactBindingCompatible(impactFieldState(newSourcePresence, newSourceType), impactFieldState(newTargetPresence, newTargetType), *binding)
-			compatChanged = oldKnown && newKnown && oldCompatible != newCompatible
-		}
-	}
+	shift := c.bindingShift(s, u)
 	unknown := bp == "unknown" || ap == "unknown"
-	relevant := len(c.operations[key]) > 0 || c.ambiguous[key] || changed || compatChanged
+	relevant := len(c.operations[key]) > 0 || c.ambiguous[key] || changed || shift.changed
 	if unknown && relevant {
-		c.result.Complete = false
-		if len(c.result.Diagnostics) < 10000 {
-			c.result.Diagnostics = append(c.result.Diagnostics, apidesign.ImpactDiagnostic{
-				Code: "scenario_field_unknown", Severity: "warning", Side: "after", Pointer: usagePointer,
-				Message: "Не удалось определить поле по сохранённому или предлагаемому контракту.",
-			})
-		}
+		c.noteUnknownField(u.pointer)
 	}
-	if !changed && !compatChanged && (!unknown || !relevant) {
+	if !changed && !shift.changed && (!unknown || !relevant) {
 		return false, nil
 	}
-	owner := draft.Document.Messages[ownerIndex]
+	owner := s.draft.Document.Messages[u.ownerIndex]
+	locator := impactFieldLocator(s.draft, u.operationIndex, key, contract, owner.ID)
+	definitive := c.fieldDefinitive(s, u, contract)
+	verdict, reason, explanation := impactFieldVerdict(unknown, bp, ap, definitive, shift)
+	id := fmt.Sprintf("scenario:%d:%d:%s:%s:%d:%s:%s:%s:%s", s.draft.ScenarioID, s.draft.RevisionID,
+		escapePointer(owner.ID), u.kind, u.usageIndex, escapePointer(operationMessage.ID), u.field.Kind,
+		escapePointer(u.field.Pointer), escapePointer(u.field.Name))
+	if len(c.result.FieldImpacts) >= apidesign.MaxImpactFieldFindings {
+		c.truncate("scenario_fields")
+		return true, nil
+	}
+	c.result.FieldImpacts = append(c.result.FieldImpacts, apidesign.ImpactFieldImpact{
+		ID: id, Locator: locator, OperationMessageID: operationMessage.ID, UsageKind: u.kind,
+		UsagePointer: u.pointer, Field: u.field, Before: previous, After: next,
+		Verdict: verdict, ReasonCode: reason, Explanation: explanation,
+	})
+	return false, nil
+}
+
+// noteUnknownField marks the report incomplete and, within the diagnostic
+// cap, says which usage could not be resolved.
+func (c *impactUsageCollector) noteUnknownField(pointer string) {
+	c.result.Complete = false
+	if len(c.result.Diagnostics) < 10000 {
+		c.result.Diagnostics = append(c.result.Diagnostics, apidesign.ImpactDiagnostic{
+			Code: "scenario_field_unknown", Severity: "warning", Side: "after", Pointer: pointer,
+			Message: "Не удалось определить поле по сохранённому или предлагаемому контракту.",
+		})
+	}
+}
+
+func impactFieldLocator(draft designUsageDraft, operationIndex int, key string, contract impactContractUsage, ownerID string) apidesign.ImpactLocator {
 	locator := apidesign.ImpactLocator{
 		Pointer: "/messages/" + strconv.Itoa(operationIndex) + "/operation", OperationKey: key,
 		ScenarioID: draft.ScenarioID, ScenarioName: draft.ScenarioName, ScenarioRevision: draft.RevisionID,
 		ContractID: contract.Contract.ID, Mode: cmp.Or(contract.Contract.Mode, "copy"),
-		PinnedRevisionID: contract.Contract.Source.RevisionID, MessageID: owner.ID,
+		PinnedRevisionID: contract.Contract.Source.RevisionID, MessageID: ownerID,
 	}
 	if embedded := contract.Keys[key]; embedded.Count == 1 {
 		locator.Method, locator.Path = embedded.Method, embedded.Path
 	}
-	definitive := c.contractDefinitive(contract, provenance)
-	if binding != nil {
-		sourceIndex, sourceExists := positions[binding.SourceMessageID]
-		if !sourceExists {
+	return locator
+}
+
+// fieldPresence reads the field's presence and type before and after.
+func (c *impactUsageCollector) fieldPresence(s *impactFieldScope, u impactFieldUsage) (bp, bt, ap, at string) {
+	if u.field.Kind == "response" {
+		bp, bt = s.before[u.operationIndex].responseField(c.ctx, u.field.Pointer)
+		ap, at = s.after[u.operationIndex].responseField(c.ctx, u.field.Pointer)
+		return bp, bt, ap, at
+	}
+	target := DataBindingTarget{Kind: u.field.Kind, Pointer: u.field.Pointer, Name: u.field.Name}
+	bp, bt = s.before[u.operationIndex].targetField(c.ctx, target)
+	ap, at = s.after[u.operationIndex].targetField(c.ctx, target)
+	return bp, bt, ap, at
+}
+
+func (c *impactUsageCollector) bindingShift(s *impactFieldScope, u impactFieldUsage) impactBindingShift {
+	if u.binding == nil {
+		return impactBindingShift{}
+	}
+	sourceIndex, sourceExists := s.positions[u.binding.SourceMessageID]
+	if !sourceExists {
+		return impactBindingShift{}
+	}
+	oldSourcePresence, oldSourceType := s.before[sourceIndex].responseField(c.ctx, u.binding.SourcePointer)
+	newSourcePresence, newSourceType := s.after[sourceIndex].responseField(c.ctx, u.binding.SourcePointer)
+	oldTargetPresence, oldTargetType := s.before[u.ownerIndex].targetField(c.ctx, u.binding.Target)
+	newTargetPresence, newTargetType := s.after[u.ownerIndex].targetField(c.ctx, u.binding.Target)
+	oldCompatible, oldKnown := impactBindingCompatible(impactFieldState(oldSourcePresence, oldSourceType), impactFieldState(oldTargetPresence, oldTargetType), *u.binding)
+	newCompatible, newKnown := impactBindingCompatible(impactFieldState(newSourcePresence, newSourceType), impactFieldState(newTargetPresence, newTargetType), *u.binding)
+	return impactBindingShift{changed: oldKnown && newKnown && oldCompatible != newCompatible, newCompatible: newCompatible, newKnown: newKnown}
+}
+
+// fieldDefinitive holds only when every contract the usage reads through is a
+// linked copy of the saved base revision.
+func (c *impactUsageCollector) fieldDefinitive(s *impactFieldScope, u impactFieldUsage, contract impactContractUsage) bool {
+	definitive := c.contractDefinitive(contract, s.provenance)
+	if u.binding == nil {
+		return definitive
+	}
+	sourceIndex, sourceExists := s.positions[u.binding.SourceMessageID]
+	if !sourceExists {
+		definitive = false
+	}
+	indices := []int{u.ownerIndex}
+	if sourceExists {
+		indices = append(indices, sourceIndex)
+	}
+	for _, index := range indices {
+		message := s.draft.Document.Messages[index]
+		if message.Operation == nil {
+			continue
+		}
+		if contributor, selected := s.contracts[message.Operation.ContractID]; selected && !c.contractDefinitive(contributor, s.provenance) {
 			definitive = false
 		}
-		indices := []int{ownerIndex}
-		if sourceExists {
-			indices = append(indices, sourceIndex)
-		}
-		for _, index := range indices {
-			message := draft.Document.Messages[index]
-			if message.Operation == nil {
-				continue
-			}
-			if contributor, selected := contracts[message.Operation.ContractID]; selected && !c.contractDefinitive(contributor, provenance) {
-				definitive = false
-			}
-		}
 	}
-	verdict, reason, explanation := "review", "scenario_field_changed", "Поле изменилось; проверьте сохранённый шаг с предлагаемым контрактом."
+	return definitive
+}
+
+func impactFieldVerdict(unknown bool, bp, ap string, definitive bool, shift impactBindingShift) (verdict, reason, explanation string) {
+	verdict, reason, explanation = "review", "scenario_field_changed", "Поле изменилось; проверьте сохранённый шаг с предлагаемым контрактом."
 	if unknown {
 		reason, explanation = "scenario_field_unknown", "Поле или операция не определены однозначно; проверьте совместимость вручную."
 	} else if ap == "absent" && bp == "present" {
@@ -326,7 +415,7 @@ func (c *impactUsageCollector) checkField(
 		} else {
 			reason, explanation = "scenario_field_hypothetical", "Поле отсутствует в предлагаемом контракте; сравните с встроенным контрактом этого шага."
 		}
-	} else if compatChanged && newKnown && !newCompatible {
+	} else if shift.changed && shift.newKnown && !shift.newCompatible {
 		if definitive {
 			verdict, reason, explanation = "broken", "scenario_binding_incompatible", "После изменения типы источника и получателя binding несовместимы."
 		} else {
@@ -336,19 +425,7 @@ func (c *impactUsageCollector) checkField(
 	if !definitive && !strings.Contains(explanation, "встроенн") {
 		explanation += " Сравните встроенный контракт шага с предложением."
 	}
-	id := fmt.Sprintf("scenario:%d:%d:%s:%s:%d:%s:%s:%s:%s", draft.ScenarioID, draft.RevisionID,
-		escapePointer(owner.ID), kind, usageIndex, escapePointer(operationMessage.ID), field.Kind,
-		escapePointer(field.Pointer), escapePointer(field.Name))
-	if len(c.result.FieldImpacts) >= apidesign.MaxImpactFieldFindings {
-		c.truncate("scenario_fields")
-		return true, nil
-	}
-	c.result.FieldImpacts = append(c.result.FieldImpacts, apidesign.ImpactFieldImpact{
-		ID: id, Locator: locator, OperationMessageID: operationMessage.ID, UsageKind: kind,
-		UsagePointer: usagePointer, Field: field, Before: previous, After: next,
-		Verdict: verdict, ReasonCode: reason, Explanation: explanation,
-	})
-	return false, nil
+	return verdict, reason, explanation
 }
 
 func (c *impactUsageCollector) contractDefinitive(contract impactContractUsage, provenance map[string]bool) bool {

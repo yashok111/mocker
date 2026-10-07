@@ -19,29 +19,14 @@ func revisionDescription(before *Revision, document Document, formDrafts map[str
 	if before == nil {
 		return "Создан сценарий"
 	}
-	changes := []string{}
-	count := 0
-	addColorChange := func(beforeColor, afterColor HexColor, target string) {
-		if strings.EqualFold(string(beforeColor), string(afterColor)) {
-			return
-		}
-		count++
-		if len(changes) == 2 {
-			return
-		}
-		if afterColor == "" {
-			changes = append(changes, "Сброшен цвет "+target)
-		} else {
-			changes = append(changes, "Цвет "+target+": "+strings.ToUpper(string(afterColor)))
-		}
-	}
+	colors := colorChanges{}
 	participants := make(map[string]Participant, len(before.Document.Participants))
 	for _, participant := range before.Document.Participants {
 		participants[participant.ID] = participant
 	}
 	for _, participant := range document.Participants {
 		if previous, exists := participants[participant.ID]; exists {
-			addColorChange(previous.Color, participant.Color, "объекта "+summaryEntityName(participant.Name, participant.ID))
+			colors.add(previous.Color, participant.Color, "объекта "+summaryEntityName(participant.Name, participant.ID))
 		}
 	}
 	messages := make(map[string]Message, len(before.Document.Messages))
@@ -51,39 +36,70 @@ func revisionDescription(before *Revision, document Document, formDrafts map[str
 	for _, message := range document.Messages {
 		if previous, exists := messages[message.ID]; exists {
 			name := summaryEntityName(message.Label, message.ID)
-			addColorChange(previous.Color, message.Color, "карточки сообщения "+name)
-			addColorChange(previous.ArrowColor, message.ArrowColor, "стрелки сообщения "+name)
+			colors.add(previous.Color, message.Color, "карточки сообщения "+name)
+			colors.add(previous.ArrowColor, message.ArrowColor, "стрелки сообщения "+name)
 		}
 	}
-	if count == 0 {
-		if !reflect.DeepEqual(before.Document.EventModel, document.EventModel) {
-			return "Изменена событийная модель"
-		}
-		for _, message := range document.Messages {
-			if previous, exists := messages[message.ID]; exists && !reflect.DeepEqual(previous.EventBindings, message.EventBindings) {
-				return "Изменены привязки событий"
-			}
-		}
-		return "Изменён сценарий"
+	if colors.count == 0 {
+		return colorlessDescription(before.Document, document, messages)
 	}
-	summary := strings.Join(changes, "; ")
-	if count > len(changes) {
-		remaining := count - len(changes)
-		word := "изменений"
-		if remaining%100 < 11 || remaining%100 > 14 {
-			switch remaining % 10 {
-			case 1:
-				word = "изменение"
-			case 2, 3, 4:
-				word = "изменения"
-			}
-		}
-		summary += fmt.Sprintf(" + ещё %d %s цвета", remaining, word)
+	summary := strings.Join(colors.changes, "; ")
+	if colors.count > len(colors.changes) {
+		remaining := colors.count - len(colors.changes)
+		summary += fmt.Sprintf(" + ещё %d %s цвета", remaining, russianChangeWord(remaining))
 	}
 	if !sameDocumentExceptColors(before.Document, document) || !maps.Equal(before.FormDrafts, formDrafts) {
 		summary += " + другие изменения"
 	}
 	return summary
+}
+
+// colorChanges counts every color edit but spells out only the first two.
+type colorChanges struct {
+	changes []string
+	count   int
+}
+
+func (c *colorChanges) add(beforeColor, afterColor HexColor, target string) {
+	if strings.EqualFold(string(beforeColor), string(afterColor)) {
+		return
+	}
+	c.count++
+	if len(c.changes) == 2 {
+		return
+	}
+	if afterColor == "" {
+		c.changes = append(c.changes, "Сброшен цвет "+target)
+	} else {
+		c.changes = append(c.changes, "Цвет "+target+": "+strings.ToUpper(string(afterColor)))
+	}
+}
+
+// colorlessDescription names the event edits a color-free revision may carry.
+func colorlessDescription(before, document Document, previousMessages map[string]Message) string {
+	if !reflect.DeepEqual(before.EventModel, document.EventModel) {
+		return "Изменена событийная модель"
+	}
+	for _, message := range document.Messages {
+		if previous, exists := previousMessages[message.ID]; exists && !reflect.DeepEqual(previous.EventBindings, message.EventBindings) {
+			return "Изменены привязки событий"
+		}
+	}
+	return "Изменён сценарий"
+}
+
+// russianChangeWord declines «изменение» for a count (1, 2–4, 5+ and 11–14).
+func russianChangeWord(n int) string {
+	if n%100 >= 11 && n%100 <= 14 {
+		return "изменений"
+	}
+	switch n % 10 {
+	case 1:
+		return "изменение"
+	case 2, 3, 4:
+		return "изменения"
+	}
+	return "изменений"
 }
 
 func sameDocumentExceptColors(before, after Document) bool {

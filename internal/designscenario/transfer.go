@@ -229,22 +229,13 @@ func (r *Repo) ImportTransfer(ctx context.Context, bundle TransferBundle, relink
 	var needed map[string]bool
 	var indexed int64
 	if relink {
-		// Retain only keys from the bounded package, not the entire API catalog.
-		needed = map[string]bool{}
-		for _, item := range bundle.Scenarios {
-			for _, revision := range item.Revisions {
-				for _, contract := range revision.Document.Contracts {
-					key, err := transferJSONKey(contract.Document)
-					if err != nil {
-						return result, err
-					}
-					needed[key] = true
-				}
-			}
+		var err error
+		if needed, err = transferNeededKeys(bundle); err != nil {
+			return result, err
 		}
 		// The catalog scan runs on a reader; the writer below only catches
 		// up on revisions committed since (review 2026-10-06, F181).
-		err := r.db.Read(ctx, func(tx *sql.Tx) error {
+		err = r.db.Read(ctx, func(tx *sql.Tx) error {
 			var err error
 			matches, indexed, err = r.transferAPIIndex(ctx, tx, needed, 0, nil)
 			return err
@@ -262,79 +253,9 @@ func (r *Repo) ImportTransfer(ctx context.Context, bundle TransferBundle, relink
 			}
 		}
 		for _, item := range bundle.Scenarios {
-			if len(item.Revisions) == 0 || len(item.Revisions) > MaxTransferRevisions {
-				return ErrInvalid
-			}
-			now := time.Now().Unix()
-			row, err := tx.ExecContext(ctx, "INSERT INTO design_scenarios(name,created_at,updated_at) VALUES (?,?,?)", item.Revisions[len(item.Revisions)-1].Document.Title, now, now)
-			if err != nil {
+			if err := r.importTransferScenario(ctx, tx, item, matches, &result); err != nil {
 				return err
 			}
-			id, err := row.LastInsertId()
-			if err != nil {
-				return err
-			}
-			var parent *int64
-			for i, rev := range item.Revisions {
-				if err := checkSource(rev.Source); err != nil {
-					return err
-				}
-				if rev.CreatedAt < 0 {
-					return ErrInvalid
-				}
-				document, err := portableTransferDocument(rev.Document)
-				if err != nil {
-					return err
-				}
-				linkedDesigns := map[int64]bool{}
-				for j := range document.Contracts {
-					contract := &document.Contracts[j]
-					key, err := transferJSONKey(contract.Document)
-					if err != nil {
-						return err
-					}
-					if source := matches[key]; source != nil && !linkedDesigns[source.DesignID] {
-						// Match by exact numeric value, then pin the original target
-						// snapshot so existing lexical pin checks remain unchanged.
-						revision, err := r.designs.RevisionTx(ctx, tx, source.DesignID, source.RevisionID)
-						if err != nil {
-							return err
-						}
-						contract.Document = jsonx.RawMessage(revision.Document)
-						linkedDesigns[source.DesignID] = true
-						detached := *source
-						contract.Mode = "linked"
-						contract.Source = &detached
-						result.LinkedContracts++
-					} else {
-						result.CopiedContracts++
-					}
-				}
-				if err := r.pinLinkedContracts(ctx, tx, &document); err != nil {
-					return err
-				}
-				prepared, _, err := r.prepare(document, rev.FormDrafts)
-				if err != nil {
-					return fmt.Errorf("import scenario %d revision %d: %w", len(result.Scenarios)+1, i+1, err)
-				}
-				createdAt := rev.CreatedAt
-				if createdAt == 0 {
-					createdAt = now
-				}
-				rid, err := insertRevision(ctx, tx, id, int64(i+1), parent, prepared, rev.Source, rev.Summary, createdAt)
-				if err != nil {
-					return err
-				}
-				parent = &rid
-			}
-			if _, err := tx.ExecContext(ctx, "UPDATE design_scenarios SET version=?,draft_revision_id=? WHERE id=?", len(item.Revisions), *parent, id); err != nil {
-				return err
-			}
-			scenario, err := getScenario(ctx, tx, id)
-			if err != nil {
-				return err
-			}
-			result.Scenarios = append(result.Scenarios, scenario)
 		}
 		return nil
 	})
@@ -342,4 +263,108 @@ func (r *Repo) ImportTransfer(ctx context.Context, bundle TransferBundle, relink
 		return TransferResult{}, err
 	}
 	return result, nil
+}
+
+// transferNeededKeys retains only keys from the bounded package, not the
+// entire API catalog.
+func transferNeededKeys(bundle TransferBundle) (map[string]bool, error) {
+	needed := map[string]bool{}
+	for _, item := range bundle.Scenarios {
+		for _, revision := range item.Revisions {
+			for _, contract := range revision.Document.Contracts {
+				key, err := transferJSONKey(contract.Document)
+				if err != nil {
+					return nil, err
+				}
+				needed[key] = true
+			}
+		}
+	}
+	return needed, nil
+}
+
+func (r *Repo) importTransferScenario(ctx context.Context, tx *sql.Tx, item TransferScenario, matches map[string]*ContractSource, result *TransferResult) error {
+	if len(item.Revisions) == 0 || len(item.Revisions) > MaxTransferRevisions {
+		return ErrInvalid
+	}
+	now := time.Now().Unix()
+	row, err := tx.ExecContext(ctx, "INSERT INTO design_scenarios(name,created_at,updated_at) VALUES (?,?,?)", item.Revisions[len(item.Revisions)-1].Document.Title, now, now)
+	if err != nil {
+		return err
+	}
+	id, err := row.LastInsertId()
+	if err != nil {
+		return err
+	}
+	var parent *int64
+	for i, rev := range item.Revisions {
+		if err := checkSource(rev.Source); err != nil {
+			return err
+		}
+		if rev.CreatedAt < 0 {
+			return ErrInvalid
+		}
+		document, err := portableTransferDocument(rev.Document)
+		if err != nil {
+			return err
+		}
+		if err := r.relinkTransferContracts(ctx, tx, &document, matches, result); err != nil {
+			return err
+		}
+		if err := r.pinLinkedContracts(ctx, tx, &document); err != nil {
+			return err
+		}
+		prepared, _, err := r.prepare(document, rev.FormDrafts)
+		if err != nil {
+			return fmt.Errorf("import scenario %d revision %d: %w", len(result.Scenarios)+1, i+1, err)
+		}
+		createdAt := rev.CreatedAt
+		if createdAt == 0 {
+			createdAt = now
+		}
+		rid, err := insertRevision(ctx, tx, id, int64(i+1), parent, prepared, rev.Source, rev.Summary, createdAt)
+		if err != nil {
+			return err
+		}
+		parent = &rid
+	}
+	if _, err := tx.ExecContext(ctx, "UPDATE design_scenarios SET version=?,draft_revision_id=? WHERE id=?", len(item.Revisions), *parent, id); err != nil {
+		return err
+	}
+	scenario, err := getScenario(ctx, tx, id)
+	if err != nil {
+		return err
+	}
+	result.Scenarios = append(result.Scenarios, scenario)
+	return nil
+}
+
+// relinkTransferContracts links each portable contract copy back to a local
+// API revision with the same content, at most once per design per revision.
+func (r *Repo) relinkTransferContracts(ctx context.Context, tx *sql.Tx, document *Document, matches map[string]*ContractSource, result *TransferResult) error {
+	linkedDesigns := map[int64]bool{}
+	for j := range document.Contracts {
+		contract := &document.Contracts[j]
+		key, err := transferJSONKey(contract.Document)
+		if err != nil {
+			return err
+		}
+		if source := matches[key]; source != nil && !linkedDesigns[source.DesignID] {
+			// Match by exact numeric value, then pin the original target
+			// snapshot so existing lexical pin checks remain unchanged.
+			revision, err := r.designs.RevisionTx(ctx, tx, source.DesignID, source.RevisionID)
+			if err != nil {
+				return err
+			}
+			contract.Document = jsonx.RawMessage(revision.Document)
+			linkedDesigns[source.DesignID] = true
+			detached := *source
+			contract.Mode = "linked"
+			contract.Source = &detached
+			result.LinkedContracts++
+		} else {
+			result.CopiedContracts++
+		}
+	}
+	return nil
 }

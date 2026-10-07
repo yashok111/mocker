@@ -74,6 +74,25 @@ func applyEventCommand(document *Document, command Command) error {
 		}
 	}
 	switch command.Type {
+	case "upsert_event_server", "remove_event_server", "upsert_event_channel", "remove_event_channel":
+		return applyEventTransportCommand(model, command)
+	case "upsert_event_message", "remove_event_message", "upsert_event_schema", "remove_event_schema":
+		return applyEventPayloadCommand(model, command)
+	case "upsert_event_contract", "remove_event_contract", "upsert_event_operation", "remove_event_operation":
+		return applyEventContractCommand(model, command)
+	case "set_event_failure_routes", "upsert_event_api_link", "remove_event_api_link", "upsert_event_state_link", "remove_event_state_link":
+		operation, err := eventOperationForCommand(model, command.ContractID, command.ID)
+		if err != nil {
+			return err
+		}
+		return applyEventOperationLinkCommand(operation, command)
+	}
+	return nil
+}
+
+// applyEventTransportCommand edits servers and channels.
+func applyEventTransportCommand(model *EventModel, command Command) error {
+	switch command.Type {
 	case "upsert_event_server":
 		if command.EventServer == nil {
 			return invalidAt("/eventServer", "сервер обязателен")
@@ -92,6 +111,13 @@ func applyEventCommand(document *Document, command Command) error {
 		if !removeEventItem(&model.Channels, command.ID, func(v EventChannel) string { return v.ID }) {
 			return invalidAt("/id", "канал не существует")
 		}
+	}
+	return nil
+}
+
+// applyEventPayloadCommand edits messages and schemas.
+func applyEventPayloadCommand(model *EventModel, command Command) error {
+	switch command.Type {
 	case "upsert_event_message":
 		if command.EventMessage == nil {
 			return invalidAt("/eventMessage", "сообщение обязательно")
@@ -110,6 +136,13 @@ func applyEventCommand(document *Document, command Command) error {
 		if !removeEventItem(&model.Schemas, command.ID, func(v EventSchema) string { return v.ID }) {
 			return invalidAt("/id", "схема не существует")
 		}
+	}
+	return nil
+}
+
+// applyEventContractCommand edits contracts and the operations inside them.
+func applyEventContractCommand(model *EventModel, command Command) error {
+	switch command.Type {
 	case "upsert_event_contract":
 		if command.EventContract == nil {
 			return invalidAt("/eventContract", "контракт обязателен")
@@ -140,47 +173,47 @@ func applyEventCommand(document *Document, command Command) error {
 			}
 		}
 		return invalidAt("/contractId", "контракт события не существует")
-	case "set_event_failure_routes", "upsert_event_api_link", "remove_event_api_link", "upsert_event_state_link", "remove_event_state_link":
-		operation, err := eventOperationForCommand(model, command.ContractID, command.ID)
-		if err != nil {
-			return err
+	}
+	return nil
+}
+
+// applyEventOperationLinkCommand edits the routes and links of one resolved operation.
+func applyEventOperationLinkCommand(operation *EventOperation, command Command) error {
+	switch command.Type {
+	case "set_event_failure_routes":
+		operation.FailureRoutes = command.FailureRoutes
+	case "upsert_event_api_link":
+		if command.APILink == nil {
+			return invalidAt("/apiLink", "связь API обязательна")
 		}
-		switch command.Type {
-		case "set_event_failure_routes":
-			operation.FailureRoutes = command.FailureRoutes
-		case "upsert_event_api_link":
-			if command.APILink == nil {
-				return invalidAt("/apiLink", "связь API обязательна")
-			}
-			if !slices.Contains(operation.APILinks, *command.APILink) {
-				operation.APILinks = append(operation.APILinks, *command.APILink)
-			}
-		case "remove_event_api_link":
-			if command.APILink == nil {
-				return invalidAt("/apiLink", "связь API обязательна")
-			}
-			i := slices.Index(operation.APILinks, *command.APILink)
-			if i < 0 {
-				return invalidAt("/apiLink", "связь API не существует")
-			}
-			operation.APILinks = slices.Delete(operation.APILinks, i, i+1)
-		case "upsert_event_state_link":
-			if command.StateLink == nil {
-				return invalidAt("/stateLink", "связь состояния обязательна")
-			}
-			if !slices.Contains(operation.StateLinks, *command.StateLink) {
-				operation.StateLinks = append(operation.StateLinks, *command.StateLink)
-			}
-		case "remove_event_state_link":
-			if command.StateLink == nil {
-				return invalidAt("/stateLink", "связь состояния обязательна")
-			}
-			i := slices.Index(operation.StateLinks, *command.StateLink)
-			if i < 0 {
-				return invalidAt("/stateLink", "связь состояния не существует")
-			}
-			operation.StateLinks = slices.Delete(operation.StateLinks, i, i+1)
+		if !slices.Contains(operation.APILinks, *command.APILink) {
+			operation.APILinks = append(operation.APILinks, *command.APILink)
 		}
+	case "remove_event_api_link":
+		if command.APILink == nil {
+			return invalidAt("/apiLink", "связь API обязательна")
+		}
+		i := slices.Index(operation.APILinks, *command.APILink)
+		if i < 0 {
+			return invalidAt("/apiLink", "связь API не существует")
+		}
+		operation.APILinks = slices.Delete(operation.APILinks, i, i+1)
+	case "upsert_event_state_link":
+		if command.StateLink == nil {
+			return invalidAt("/stateLink", "связь состояния обязательна")
+		}
+		if !slices.Contains(operation.StateLinks, *command.StateLink) {
+			operation.StateLinks = append(operation.StateLinks, *command.StateLink)
+		}
+	case "remove_event_state_link":
+		if command.StateLink == nil {
+			return invalidAt("/stateLink", "связь состояния обязательна")
+		}
+		i := slices.Index(operation.StateLinks, *command.StateLink)
+		if i < 0 {
+			return invalidAt("/stateLink", "связь состояния не существует")
+		}
+		operation.StateLinks = slices.Delete(operation.StateLinks, i, i+1)
 	}
 	return nil
 }
@@ -194,32 +227,14 @@ func eventCommandDependents(document Document, command Command) []string {
 	add := func(kind, id string) { dependents = append(dependents, kind+":"+id) }
 	switch command.Type {
 	case "remove_event_server":
-		for _, channel := range model.Channels {
-			if slices.Contains(channel.ServerIDs, command.ID) {
-				add("channel", channel.ID)
-			}
-		}
+		eventChannelDependents(model, add, func(channel EventChannel) bool { return slices.Contains(channel.ServerIDs, command.ID) })
 	case "remove_event_channel":
-		for _, contract := range model.Contracts {
-			for _, operation := range contract.Operations {
-				if operation.ChannelID == command.ID || operation.FailureRoutes != nil && (operation.FailureRoutes.RetryChannelID == command.ID || operation.FailureRoutes.DeadLetterChannelID == command.ID) {
-					add("operation", contract.ID+"/"+operation.ID)
-				}
-			}
-		}
+		eventOperationDependents(model, add, func(operation EventOperation) bool {
+			return operation.ChannelID == command.ID || operation.FailureRoutes != nil && (operation.FailureRoutes.RetryChannelID == command.ID || operation.FailureRoutes.DeadLetterChannelID == command.ID)
+		})
 	case "remove_event_message":
-		for _, channel := range model.Channels {
-			if slices.Contains(channel.MessageIDs, command.ID) {
-				add("channel", channel.ID)
-			}
-		}
-		for _, contract := range model.Contracts {
-			for _, operation := range contract.Operations {
-				if operation.MessageID == command.ID {
-					add("operation", contract.ID+"/"+operation.ID)
-				}
-			}
-		}
+		eventChannelDependents(model, add, func(channel EventChannel) bool { return slices.Contains(channel.MessageIDs, command.ID) })
+		eventOperationDependents(model, add, func(operation EventOperation) bool { return operation.MessageID == command.ID })
 	case "remove_event_schema":
 		for _, message := range model.Messages {
 			if message.PayloadSchemaID == command.ID || message.KeySchemaID == command.ID || message.HeadersSchemaID == command.ID {
@@ -227,22 +242,40 @@ func eventCommandDependents(document Document, command Command) []string {
 			}
 		}
 	case "remove_event_contract":
-		for _, message := range document.Messages {
-			for _, binding := range message.EventBindings {
-				if binding.ContractID == command.ID {
-					add("message", message.ID)
-				}
-			}
-		}
+		eventBindingDependents(document, add, func(binding EventBinding) bool { return binding.ContractID == command.ID })
 	case "remove_event_operation":
-		for _, message := range document.Messages {
-			for _, binding := range message.EventBindings {
-				if binding.ContractID == command.ContractID && binding.OperationID == command.ID {
-					add("message", message.ID)
-				}
-			}
-		}
+		eventBindingDependents(document, add, func(binding EventBinding) bool {
+			return binding.ContractID == command.ContractID && binding.OperationID == command.ID
+		})
 	}
 	slices.Sort(dependents)
 	return slices.Compact(dependents)
+}
+
+func eventChannelDependents(model *EventModel, add func(kind, id string), uses func(EventChannel) bool) {
+	for _, channel := range model.Channels {
+		if uses(channel) {
+			add("channel", channel.ID)
+		}
+	}
+}
+
+func eventOperationDependents(model *EventModel, add func(kind, id string), uses func(EventOperation) bool) {
+	for _, contract := range model.Contracts {
+		for _, operation := range contract.Operations {
+			if uses(operation) {
+				add("operation", contract.ID+"/"+operation.ID)
+			}
+		}
+	}
+}
+
+func eventBindingDependents(document Document, add func(kind, id string), uses func(EventBinding) bool) {
+	for _, message := range document.Messages {
+		for _, binding := range message.EventBindings {
+			if uses(binding) {
+				add("message", message.ID)
+			}
+		}
+	}
 }
