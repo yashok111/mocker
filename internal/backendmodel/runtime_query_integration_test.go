@@ -121,6 +121,7 @@ func runtimeQueryDBSnapshot(t *testing.T, db *sql.DB) [][]any {
 	if err != nil {
 		t.Fatal(err)
 	}
+	defer func() { _ = rows.Close() }()
 	names := []string{}
 	for rows.Next() {
 		var name string
@@ -132,39 +133,47 @@ func runtimeQueryDBSnapshot(t *testing.T, db *sql.DB) [][]any {
 	if err := rows.Err(); err != nil {
 		t.Fatal(err)
 	}
-	rows.Close()
+	_ = rows.Close()
 	snapshot := [][]any{}
 	for _, name := range names {
-		rows, err := db.QueryContext(t.Context(), `SELECT * FROM "`+name+`" ORDER BY rowid`)
-		if err != nil {
-			t.Fatal(err)
-		}
-		columns, err := rows.Columns()
-		if err != nil {
-			t.Fatal(err)
-		}
-		for rows.Next() {
-			values := make([]any, len(columns))
-			pointers := make([]any, len(columns))
-			for i := range values {
-				pointers[i] = &values[i]
-			}
-			if err := rows.Scan(pointers...); err != nil {
-				t.Fatal(err)
-			}
-			for i, v := range values {
-				if b, ok := v.([]byte); ok {
-					values[i] = string(b)
-				}
-			}
-			snapshot = append(snapshot, append([]any{name}, values...))
-		}
-		if err := rows.Err(); err != nil {
-			t.Fatal(err)
-		}
-		rows.Close()
+		snapshot = appendRuntimeQueryTable(t, db, snapshot, name)
 	}
 	return snapshot
+}
+
+// appendRuntimeQueryTable appends one table's rows, each prefixed with the
+// table name; it is its own function so the cursor closes by defer.
+func appendRuntimeQueryTable(t *testing.T, db *sql.DB, out [][]any, name string) [][]any {
+	t.Helper()
+	rows, err := db.QueryContext(t.Context(), `SELECT * FROM "`+name+`" ORDER BY rowid`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	columns, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		values := make([]any, len(columns))
+		pointers := make([]any, len(columns))
+		for i := range values {
+			pointers[i] = &values[i]
+		}
+		if err := rows.Scan(pointers...); err != nil {
+			t.Fatal(err)
+		}
+		for i, v := range values {
+			if b, ok := v.([]byte); ok {
+				values[i] = string(b)
+			}
+		}
+		out = append(out, append([]any{name}, values...))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func TestRuntimeReadPurityPinsErrorsAndRestart(t *testing.T) {

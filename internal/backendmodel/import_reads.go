@@ -57,7 +57,7 @@ func (r *Repo) Imports(ctx context.Context, pid string, in ListInput) (*ImportPa
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &ImportPage{Items: []ImportSession{}}
 	for rows.Next() {
 		var doc string
@@ -85,7 +85,7 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	s, err := loadSession(ctx, tx, pid, sid)
 	if err != nil {
 		return nil, err
@@ -114,7 +114,7 @@ func (r *Repo) Import(ctx context.Context, pid, sid string, in ListInput) (*Impo
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var b BatchSummary
 		if err := rows.Scan(&b.BatchID, &b.PayloadHash, &b.AcceptedVersion); err != nil {
@@ -216,7 +216,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 		prefix, table = records, "records"
 		args = append(args, pid, target.revisionID, typ)
 	}
-	query := prefix + `SELECT document,id FROM ` + table + ` WHERE project_id=? AND revision_id=? AND record_type=? AND id>?`
+	query := prefix + `SELECT document,id FROM ` + table + ` WHERE project_id=? AND revision_id=? AND record_type=? AND id>?` //nolint:gosec // prefix and table come from graphRecords, never from the request; every value binds as ?
 	afterArg := len(args)
 	args = append(args, after)
 	for _, f := range []struct{ column, value string }{{"id", in.ID}, {"kind", in.Kind}, {"parent_id", in.ParentID}, {"from_id", in.From}, {"to_id", in.To}} {
@@ -242,7 +242,7 @@ func (r *Repo) QueryGraph(ctx context.Context, pid string, in GraphQueryInput) (
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &GraphPage{Total: &total, Nodes: []Node{}, Edges: []Edge{}}
 	var sourceGraph *SourceGraphSnapshot
 	if revision.SchemaVersion == ComposedSchemaVersion {
@@ -416,7 +416,7 @@ func (r *Repo) evidence(ctx context.Context, pid, rid string, in EvidenceQueryIn
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &EvidencePage{Items: []Evidence{}}
 	var sourceGraph *SourceGraphSnapshot
 	if revision.SchemaVersion == ComposedSchemaVersion {

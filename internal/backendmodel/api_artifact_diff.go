@@ -179,8 +179,7 @@ func apiArtifactObjectDiff(ctx context.Context, before, after string, remaining 
 	out := []APIArtifactObjectChange{}
 	truncated := false
 	var walk func(any, bool, any, bool, string) error
-	var child func(any, bool, any, bool, string, string) error
-	child = func(a any, aPresent bool, b any, bPresent bool, p, segment string) error {
+	child := func(a any, aPresent bool, b any, bPresent bool, p, segment string) error {
 		if err := ctx.Err(); err != nil {
 			return err
 		}

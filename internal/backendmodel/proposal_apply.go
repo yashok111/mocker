@@ -133,7 +133,7 @@ func proposalCommandHistory(ctx context.Context, q importReader, proposalID stri
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
@@ -174,7 +174,7 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	p, err := loadProposal(ctx, tx, pid, proposalID)
 	if err != nil {
 		return nil, err

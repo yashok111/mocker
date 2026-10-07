@@ -263,7 +263,7 @@ func validateRuntimeGraphRules(ctx context.Context, profile string, s *ImportSes
 				if snapshot.ID != e.Source.SnapshotID || snapshot.RepositoryID != e.Source.RepositoryID {
 					continue
 				}
-				for _, file := range snapshot.SnapshotManifest.Files {
+				for _, file := range snapshot.Files {
 					if file.Path == e.Source.File && file.ContentHash == e.Source.ContentHash && file.AnalysisStatus == "analyzed" {
 						found = true
 					}

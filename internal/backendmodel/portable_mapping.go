@@ -401,12 +401,12 @@ func (m *portableMapper) source(s *PortableSource) {
 }
 
 func PortableModelIdentities(model PortableModel) ([]PortableIdentity, error) {
-	copy, err := portableClone(model)
+	cloned, err := portableClone(model)
 	if err != nil {
 		return nil, err
 	}
-	m := newPortableMapper(&copy, PortableRemap{}, true)
-	m.model(&copy)
+	m := newPortableMapper(&cloned, PortableRemap{}, true)
+	m.model(&cloned)
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -420,17 +420,17 @@ func RemapPortableModel(model PortableModel, remap PortableRemap) (*PortableMode
 	if !ValidID(remap.OriginInstallationID) || !ValidID(remap.InstallationID) {
 		return nil, invalid("namespace", "Exact installation IDs required")
 	}
-	copy, err := portableClone(model)
+	cloned, err := portableClone(model)
 	if err != nil {
 		return nil, err
 	}
-	m := newPortableMapper(&copy, remap, false)
-	m.model(&copy)
+	m := newPortableMapper(&cloned, remap, false)
+	m.model(&cloned)
 	if m.err != nil {
 		return nil, m.err
 	}
 	if len(m.seen) != len(m.ids) {
 		return nil, invalid("idMap", "Extraneous identity map entries")
 	}
-	return &copy, nil
+	return &cloned, nil
 }

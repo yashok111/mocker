@@ -318,11 +318,11 @@ func assignRelationalOwnership(base *RevisionState, g *graphCandidate, s *Import
 }
 func relationalOwnership(kind string, attrs map[string]jsontext.Value, edge bool, s *ImportSession, existing *AssertionOwnership) *AssertionOwnership {
 	if existing != nil {
-		copy := *existing
+		owned := *existing
 		if selectedProfile(s.Profile) == EventsProfile && (eventsSubject(kind, edge) || eventsEmit(kind, attrs, edge) || contextualLineageMapping(kind, attrs, edge)) {
-			copy.Profile = EventsProfile
+			owned.Profile = EventsProfile
 		}
-		return &copy
+		return &owned
 	}
 	profile := GraphProfile
 	if relationalSubject(kind, attrs, edge) {
@@ -784,17 +784,4 @@ func validateRelationalGraphRules(ctx context.Context, q importReader, s *Import
 		}
 	}
 	return nil
-}
-func relationalActiveReferenceTo(kind string, attrs map[string]jsontext.Value, edge bool, id string) bool {
-	refs, err := relationalReferences(kind, attrs, edge, true)
-	if err != nil {
-		return relationalSubject(kind, attrs, edge)
-	}
-	return slices.ContainsFunc(refs, func(r relationalReference) bool {
-		return r.Kind != "evidence" && r.HistoricalRevisionID == "" && r.ID == id
-	})
-}
-func relationalProofReferenceTo(kind string, attrs map[string]jsontext.Value, edge bool, id string) bool {
-	refs, err := relationalReferences(kind, attrs, edge, true)
-	return err == nil && slices.ContainsFunc(refs, func(r relationalReference) bool { return r.Kind == "evidence" && r.ID == id })
 }

@@ -66,43 +66,10 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 			ids["evidence\x00"+e.ExternalKey] = e.ID
 		}
 	}
-	rows, err := q.QueryContext(ctx, `SELECT record_type,external_key,id FROM backend_import_identities WHERE session_id=? ORDER BY id`, s.ID)
-	if err != nil {
+	if err := readImportIdentities(ctx, q, s.ID, ids); err != nil {
 		return nil, nil, err
 	}
-	for rows.Next() {
-		var typ, key, id string
-		if err := rows.Scan(&typ, &key, &id); err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		ids[typ+"\x00"+key] = id
-	}
-	err = rows.Err()
-	rows.Close()
-	if err != nil {
-		return nil, nil, err
-	}
-	commands := []ImportCommand{}
-	rows, err = q.QueryContext(ctx, `SELECT r.document FROM backend_import_records r JOIN backend_import_identities i ON i.session_id=r.session_id AND i.record_type=r.record_type AND i.external_key=r.external_key WHERE r.session_id=? ORDER BY i.id`, s.ID)
-	if err != nil {
-		return nil, nil, err
-	}
-	for rows.Next() {
-		var b string
-		if err := rows.Scan(&b); err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		var c ImportCommand
-		if err := json.Unmarshal([]byte(b), &c); err != nil {
-			rows.Close()
-			return nil, nil, err
-		}
-		commands = append(commands, c)
-	}
-	err = rows.Err()
-	rows.Close()
+	commands, err := readImportCommands(ctx, q, s.ID)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -130,7 +97,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 		return ids[address]
 	}
 	refs := func(keys []string, p string) []string {
-		out := []string{}
+		out := make([]string, 0, len(keys))
 		for _, k := range keys {
 			out = append(out, resolve("evidence", k, p))
 		}
@@ -559,7 +526,7 @@ func (r *Repo) CommitImport(ctx context.Context, pid, sid string, in CommitImpor
 	if err != nil {
 		return nil, err
 	}
-	defer readTx.Rollback()
+	defer func() { _ = readTx.Rollback() }()
 	found, err := readImportReceipt(ctx, readTx, scope, in.IdempotencyKey, digest, result)
 	if err != nil {
 		return nil, err
@@ -778,4 +745,51 @@ func saveImportedArtifactContext(ctx context.Context, tx *sql.Tx, revisionID str
 		}
 	}
 	return nil
+}
+
+// readImportIdentities folds the identities this session allocated into ids,
+// keyed "<record type>\x00<external key>" the way prepareGraph resolves them.
+func readImportIdentities(ctx context.Context, q importReader, sessionID string, ids map[string]string) error {
+	rows, err := q.QueryContext(ctx, `SELECT record_type,external_key,id FROM backend_import_identities WHERE session_id=? ORDER BY id`, sessionID)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rows.Close() }()
+	for rows.Next() {
+		var typ, key, id string
+		if err := rows.Scan(&typ, &key, &id); err != nil {
+			return err
+		}
+		ids[typ+"\x00"+key] = id
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	return rows.Close()
+}
+
+// readImportCommands returns the session's staged commands in identity
+// allocation order, the order prepareGraph must replay them in.
+func readImportCommands(ctx context.Context, q importReader, sessionID string) ([]ImportCommand, error) {
+	rows, err := q.QueryContext(ctx, `SELECT r.document FROM backend_import_records r JOIN backend_import_identities i ON i.session_id=r.session_id AND i.record_type=r.record_type AND i.external_key=r.external_key WHERE r.session_id=? ORDER BY i.id`, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	commands := []ImportCommand{}
+	for rows.Next() {
+		var b string
+		if err := rows.Scan(&b); err != nil {
+			return nil, err
+		}
+		var c ImportCommand
+		if err := json.Unmarshal([]byte(b), &c); err != nil {
+			return nil, err
+		}
+		commands = append(commands, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return commands, rows.Close()
 }

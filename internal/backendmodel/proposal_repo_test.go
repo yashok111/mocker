@@ -47,39 +47,44 @@ func proposalSourceBytesFrom(t *testing.T, q rowQuerier, store27 bool) map[strin
 		if !store27 {
 			query = strings.ReplaceAll(query, "_documents ", " ")
 		}
-		rows, err := q.QueryContext(t.Context(), query)
-		if err != nil {
-			t.Fatal(err)
-		}
-		columns, err := rows.Columns()
-		if err != nil {
-			rows.Close()
-			t.Fatal(err)
-		}
-		for rows.Next() {
-			values := make([]string, len(columns))
-			targets := make([]any, len(columns))
-			for i := range values {
-				targets[i] = &values[i]
-			}
-			if err := rows.Scan(targets...); err != nil {
-				rows.Close()
-				t.Fatal(err)
-			}
-			b, err := json.Marshal(values)
-			if err != nil {
-				rows.Close()
-				t.Fatal(err)
-			}
-			result[name] = append(result[name], string(b))
-		}
-		if err := rows.Err(); err != nil {
-			rows.Close()
-			t.Fatal(err)
-		}
-		rows.Close()
+		result[name] = append(result[name], proposalSourceRows(t, q, query)...)
 	}
 	return result
+}
+
+// proposalSourceRows renders one query's rows as JSON arrays of strings; it
+// is its own function so the cursor closes by defer on every path.
+func proposalSourceRows(t *testing.T, q rowQuerier, query string) []string {
+	t.Helper()
+	rows, err := q.QueryContext(t.Context(), query)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rows.Close() }()
+	columns, err := rows.Columns()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var out []string
+	for rows.Next() {
+		values := make([]string, len(columns))
+		targets := make([]any, len(columns))
+		for i := range values {
+			targets[i] = &values[i]
+		}
+		if err := rows.Scan(targets...); err != nil {
+			t.Fatal(err)
+		}
+		b, err := json.Marshal(values)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, string(b))
+	}
+	if err := rows.Err(); err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func assertProposalSourceBytes(t *testing.T, r *Repo, before map[string][]string) {

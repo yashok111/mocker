@@ -255,7 +255,7 @@ func (r *Repo) ListProposals(ctx context.Context, pid string, in ProposalListInp
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &ProposalPage{Items: []Proposal{}}
 	for rows.Next() {
 		p, err := scanProposal(rows)
@@ -277,7 +277,7 @@ func (r *Repo) GetProposal(ctx context.Context, pid, proposalID string, in GetPr
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	p, err := loadProposal(ctx, tx, pid, proposalID)
 	if err != nil {
 		return nil, err
@@ -318,15 +318,14 @@ func proposalDetail(ctx context.Context, q importReader, pid string, p Proposal,
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var raw string
 		if err := rows.Scan(&raw); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		var summary ProposalRevisionSummary
 		if err := json.Unmarshal([]byte(raw), &summary); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		if len(out.History) == limit {
@@ -337,7 +336,9 @@ func proposalDetail(ctx context.Context, q importReader, pid string, p Proposal,
 		after = summary.ID
 	}
 	err = rows.Err()
-	rows.Close()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return nil, err
 	}

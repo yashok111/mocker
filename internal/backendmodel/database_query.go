@@ -632,7 +632,7 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 	} else if p.observe(*item.TargetTableID) == nil {
 		missing = true
 	}
-	fromColumns, toColumns := []string{}, []string{}
+	fromColumns, toColumns := make([]string, 0, len(f.ColumnPairs)), make([]string, 0, len(f.ColumnPairs))
 	currentColumns := true
 	for _, pair := range f.ColumnPairs {
 		fromColumns = append(fromColumns, pair.FromColumnID)

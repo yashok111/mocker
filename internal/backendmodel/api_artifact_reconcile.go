@@ -74,7 +74,7 @@ func compareAPIArtifacts(ctx context.Context, before, after RevisionState, out *
 	for id := range right {
 		ids[id] = true
 	}
-	ordered := []string{}
+	ordered := make([]string, 0, len(ids))
 	for id := range ids {
 		ordered = append(ordered, id)
 	}

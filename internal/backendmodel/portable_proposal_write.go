@@ -266,7 +266,7 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 	if len(dialect) == 0 {
 		return nil, invalid("facet", "Pinned legacy dialect is missing")
 	}
-	copy, err := detachedEffectiveState(state)
+	detached, err := detachedEffectiveState(state)
 	if err != nil {
 		return nil, err
 	}
@@ -290,8 +290,8 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 	}
 	for _, o := range v.Overlays {
 		if o.RecordType == "node" {
-			for i := range copy.Nodes {
-				n := &copy.Nodes[i]
+			for i := range detached.Nodes {
+				n := &detached.Nodes[i]
 				if n.ID == o.SubjectID {
 					n.Attributes, err = enrich(n.Kind, n.Attributes, o.FacetKey)
 					if err != nil {
@@ -300,8 +300,8 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 				}
 			}
 		} else {
-			for i := range copy.Edges {
-				e := &copy.Edges[i]
+			for i := range detached.Edges {
+				e := &detached.Edges[i]
 				if e.ID == o.SubjectID {
 					e.Attributes, err = enrich(e.Kind, e.Attributes, o.FacetKey)
 					if err != nil {
@@ -311,5 +311,5 @@ func validatePortableLegacyStructure(ctx context.Context, base *RevisionState, p
 			}
 		}
 	}
-	return ValidateSourceStructure(ctx, SourceStructuralGraph{SchemaVersion: ComposedSchemaVersion, Nodes: copy.Nodes, Edges: copy.Edges})
+	return ValidateSourceStructure(ctx, SourceStructuralGraph{SchemaVersion: ComposedSchemaVersion, Nodes: detached.Nodes, Edges: detached.Edges})
 }

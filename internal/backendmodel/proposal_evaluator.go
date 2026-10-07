@@ -1,7 +1,7 @@
 package backendmodel
 
 import (
-	"crypto/sha1"
+	"crypto/sha1" //nolint:gosec // RFC 9562 UUIDv5 is defined over SHA-1; it derives an ID and protects nothing
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
@@ -50,7 +50,7 @@ type proposalEvaluation struct {
 func proposalDesignedID(proposalID, commandID, role string) string {
 	// RFC 9562 UUIDv5. The standard UUID package has no named-hash constructor.
 	namespace := uuid.MustParse("7d651c82-44d3-5f20-9c72-2c20d503a8b6")
-	h := sha1.New()
+	h := sha1.New() //nolint:gosec // UUIDv5 is SHA-1 by definition, see the import
 	_, _ = h.Write(namespace[:])
 	_, _ = h.Write([]byte(proposalID + "\x00" + commandID + "\x00" + role))
 	var id uuid.UUID
@@ -532,21 +532,8 @@ func (e *proposalEvaluation) newCount(recordType string) int {
 	return n
 }
 
-// Every source assertion remains historical context. This helper is also used
-// by effective reads; it strips only source envelope metadata from values.
-func proposalBasisEvidence(o ProposalOverlay) []string {
-	ids := []string{}
-	for _, origin := range o.PropertyOrigins {
-		if origin.Kind == "source" {
-			ids = append(ids, origin.EvidenceIDs...)
-		}
-	}
-	slices.Sort(ids)
-	return slices.Compact(ids)
-}
-
 func proposalChangeSummary(changes []ProposalChange) string {
-	kinds := []string{}
+	kinds := make([]string, 0, len(changes))
 	for _, c := range changes {
 		kinds = append(kinds, c.Type)
 	}

@@ -166,7 +166,7 @@ func validateLineageGraphRules(ctx context.Context, profile string, s *ImportSes
 	// evidence with physical line bounds, including retained historical evidence.
 	files := map[string]bool{}
 	for _, src := range g.Sources {
-		for _, f := range src.SnapshotManifest.Files {
+		for _, f := range src.Files {
 			if f.AnalysisStatus == "analyzed" {
 				files[src.RepositoryID+"\x00"+src.ID+"\x00"+f.Path+"\x00"+f.ContentHash] = true
 			}

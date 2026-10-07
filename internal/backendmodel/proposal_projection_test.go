@@ -162,7 +162,7 @@ func TestProposalFKSelfAndCycles(t *testing.T) {
 
 func TestProposalCommandLimits(t *testing.T) {
 	_, detail, base, ids := proposalEvaluationFixture(t, "sqlite")
-	commands := []ProposalCommand{}
+	commands := make([]ProposalCommand, 0, 100)
 	for i := range 100 {
 		c := proposalNullable(ids, uuid.NewV7().String(), false)
 		if i == 0 {
@@ -418,18 +418,19 @@ func TestProposalProjectionSeparatesSourceAndIntent(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, overlay := range candidate.Overlays {
-		if overlay.Kind == "column" {
+		switch overlay.Kind {
+		case "column":
 			n := base.Nodes[slices.IndexFunc(base.Nodes, func(n Node) bool { return n.ID == overlay.SubjectID })]
 			projected, err := projectProposalNode(detail.Proposal, nil, &n, &overlay)
 			if err != nil || projected.SourceRecord == nil || !reflect.DeepEqual(*projected.SourceRecord, n) || projected.EffectiveFacet.Origin != "proposal" || projected.EffectiveFacet.ProposalRevisionID != nil || projected.EffectiveFacet.PropertyOrigins["/nullable"].Kind != "intent" || projected.EffectiveFacet.PropertyOrigins["/nativeType"].Kind != "source" || len(projected.EffectiveFacet.BasisEvidenceIDs) == 0 {
 				t.Fatalf("source/intent projection: %+v %v", projected, err)
 			}
-		} else if overlay.Kind == "constraint" {
+		case "constraint":
 			projected, err := projectProposalNode(detail.Proposal, new(detail.Revision.ID), nil, &overlay)
 			if err != nil || projected.SourceRecord != nil || projected.EffectiveFacet.Base != nil || len(projected.EffectiveFacet.BasisEvidenceIDs) != 0 || projected.EffectiveFacet.ProposalRevisionID == nil || string(projected.EffectiveFacet.Values["nativeDefinition"]) != "null" {
 				t.Fatalf("fabricated source for designed FK: %+v %v", projected, err)
 			}
-		} else {
+		default:
 			projected, err := projectProposalEdge(detail.Proposal, nil, nil, &overlay)
 			if err != nil || projected.SourceRecord != nil || projected.From != candidate.Changes[1].GeneratedIDs["constraintId"] || projected.To != ids["table:users"] || len(projected.EffectiveFacet.BasisEvidenceIDs) != 0 {
 				t.Fatalf("designed reference projection: %+v %v", projected, err)

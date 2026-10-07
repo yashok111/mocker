@@ -344,7 +344,7 @@ func (r *Repo) ListSavedViews(ctx context.Context, pid string, in SavedViewListI
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := &SavedViewPage{Items: []SavedViewSummary{}}
 	for rows.Next() {
 		var v SavedViewSummary

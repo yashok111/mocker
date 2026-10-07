@@ -61,7 +61,7 @@ func loadRevisionState(ctx context.Context, q importReader, pid, rid string) (*R
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -645,7 +645,7 @@ func finishReconciliation(s *ImportSession, g *graphCandidate) {
 	}
 }
 func sourceIDs(sources []SourceSnapshot) []string {
-	out := []string{}
+	out := make([]string, 0, len(sources))
 	for _, s := range sources {
 		out = append(out, s.ID)
 	}

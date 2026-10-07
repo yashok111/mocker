@@ -18,7 +18,7 @@ func TestDiagramScopeProjectedRelation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ids := []string{}
+	ids := make([]string, 0, len(s.SourceRefs))
 	for _, ref := range s.SourceRefs {
 		ids = append(ids, ref.ID)
 	}

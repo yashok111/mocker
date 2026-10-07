@@ -629,17 +629,8 @@ func (r lineageProofReader) node(p *lineageProof, n Node, ref *LineageValueRef) 
 	}
 	lineageAnalysis(p, n.Attributes)
 	if ref != nil && ref.Kind == "column" {
-		facets, _, err := relationalFacetObject(n.Kind, n.Attributes)
-		if err != nil {
-			p.status = runtimeWorseStatus(p.status, "unresolved")
-			p.add("unresolved_facet", true)
-			return nil
-		}
-		var f struct {
-			EvidenceIDs []string            `json:"evidenceIds"`
-			Freshness   *AssertionFreshness `json:"freshness"`
-		}
-		if json.Unmarshal(facets[ref.FacetKey], &f) != nil {
+		raw, f, ok := lineageColumnFacet(n, ref.FacetKey)
+		if !ok {
 			p.status = runtimeWorseStatus(p.status, "unresolved")
 			p.add("unresolved_facet", true)
 			return nil
@@ -648,11 +639,33 @@ func (r lineageProofReader) node(p *lineageProof, n Node, ref *LineageValueRef) 
 			return err
 		}
 		var attrs map[string]jsontext.Value
-		if json.Unmarshal(facets[ref.FacetKey], &attrs) == nil {
+		if json.Unmarshal(raw, &attrs) == nil {
 			lineageAnalysis(p, attrs)
 		}
 	}
 	return nil
+}
+
+// lineageFacetProof is the provenance a column facet carries for itself.
+type lineageFacetProof struct {
+	EvidenceIDs []string            `json:"evidenceIds"`
+	Freshness   *AssertionFreshness `json:"freshness"`
+}
+
+// lineageColumnFacet reports a column's facet body and its provenance, and
+// false when either cannot be read. An unreadable facet degrades the proof to
+// "unresolved_facet"; it is a finding about the path, never a query failure,
+// which is why the decode errors are folded into a bool here.
+func lineageColumnFacet(n Node, key string) (jsontext.Value, lineageFacetProof, bool) {
+	var f lineageFacetProof
+	facets, _, err := relationalFacetObject(n.Kind, n.Attributes)
+	if err != nil {
+		return nil, f, false
+	}
+	if json.Unmarshal(facets[key], &f) != nil {
+		return nil, f, false
+	}
+	return facets[key], f, true
 }
 func (r lineageProofReader) owner(p *lineageProof, n Node) error {
 	if n.ParentID == nil {

@@ -62,7 +62,7 @@ func (s *APIArtifactService) prepare(ctx context.Context, pid string, in Preview
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	p, err := scanProject(tx.QueryRowContext(ctx, `SELECT `+projectColumns+` FROM backend_projects WHERE id=?`, pid))
 	if err != nil {
 		return nil, err
@@ -286,7 +286,7 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 					return nil, err
 				}
 				digest, e := s.artifacts.ArtifactDigestTx(ctx, tx, apiArtifactID(id), apiArtifactID(oldPin.RevisionID))
-				tx.Rollback()
+				_ = tx.Rollback()
 				if err := fatalArtifactReadError(ctx, e); err != nil {
 					return nil, err
 				}

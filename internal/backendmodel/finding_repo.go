@@ -80,7 +80,7 @@ func readFindingReview(ctx context.Context, tx *sql.Tx, pid, fp string) (*Findin
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	for rows.Next() {
 		var raw []byte
 		var e FindingReviewEvent
@@ -254,7 +254,7 @@ func (r *Repo) ListBackendFindings(ctx context.Context, pid string, ref FindingA
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 	var exists int
 	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM backend_analysis_manifests_documents m JOIN backend_analysis_jobs j ON j.project_id=m.project_id AND j.id=m.job_id WHERE m.project_id=? AND m.job_id=? AND m.result_version=? AND j.kind='diagnostics'`, pid, ref.JobID, ref.ResultVersion).Scan(&exists); err != nil {
 		return nil, err
@@ -266,22 +266,23 @@ func (r *Repo) ListBackendFindings(ctx context.Context, pid string, ref FindingA
 	if err != nil {
 		return nil, err
 	}
+	defer func() { _ = rows.Close() }()
 	out := &FindingPage{Items: []FindingItem{}}
 	for rows.Next() {
 		var raw []byte
 		var f Finding
 		if err = rows.Scan(&raw); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		if err = json.Unmarshal(raw, &f); err != nil {
-			rows.Close()
 			return nil, err
 		}
 		out.Items = append(out.Items, FindingItem{Finding: f, Analysis: ref})
 	}
 	err = rows.Err()
-	rows.Close()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return nil, err
 	}

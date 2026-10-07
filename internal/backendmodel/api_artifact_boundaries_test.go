@@ -74,7 +74,7 @@ func TestAPIArtifactRetainedUnavailableAndExplicitRemove(t *testing.T) {
 
 func TestAPIArtifactGoCallBodyLimitBeforeDependencies(t *testing.T) {
 	s, base, _, api := apiPinFixture(t)
-	bindings := []APIPinBindingInput{}
+	bindings := make([]APIPinBindingInput, 0, 200)
 	for range 200 {
 		bindings = append(bindings, APIPinBindingInput{SourceNodeID: uuid.NewV7().String(), Selector: APIArtifactSelector{JSONPointer: "/components/schemas/" + strings.Repeat("x", 2000)}})
 	}
@@ -277,7 +277,7 @@ func TestAPIArtifactDiffSharedBudgetAllowsLaterUnchangedObject(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			s, base, ids, api := apiPinFixture(t)
 			owner := s.artifacts.(*apidesign.Repo)
-			artifacts := []*apidesign.Detail{api}
+			artifacts := slices.Grow([]*apidesign.Detail{api}, 2)
 			for range 2 {
 				other, err := owner.Create(t.Context(), apidesign.CreateInput{Name: "Another API", Document: artifactTestDocument, Source: "ui"})
 				if err != nil {
@@ -417,7 +417,7 @@ func TestAPIArtifactSnapshotBudgetAndRetainedUnavailableGroup(t *testing.T) {
 	revision.ID = uuid.NewV7().String()
 	revision.ArtifactPins = []ArtifactPin{}
 	context := APIArtifactContext{SourceContentHash: strings.Repeat("a", 64), SourceSemanticHash: base.Revision.SemanticHash, Bindings: []APIArtifactBinding{}}
-	commands := []APIPinCommand{}
+	commands := make([]APIPinCommand, 0, 20)
 	for i := range 20 {
 		id := strconv.Itoa(i + 1)
 		source := uuid.NewV7().String()

@@ -98,7 +98,7 @@ func loadDecisions(ctx context.Context, q importReader, sid string) ([]ImportCom
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	out := []ImportCommand{}
 	for rows.Next() {
 		var doc string
@@ -143,7 +143,8 @@ func reserveIdentity(ctx context.Context, tx *sql.Tx, s *ImportSession, c Import
 		if s.Mode != "reconcile" {
 			return "", reconciliationFault("backend_unsupported_scope", "Identity and deletion decisions require reconcile mode")
 		}
-		sourceKey, expected := key, ""
+		sourceKey := key
+		var expected string
 		if c.Identity != nil {
 			sourceKey = c.Identity.FromExternalKey
 			expected = c.Identity.ExpectedID
@@ -358,17 +359,19 @@ func publishBindings(ctx context.Context, tx *sql.Tx, s *ImportSession, g *graph
 	if err != nil {
 		return err
 	}
+	defer func() { _ = rows.Close() }()
 	allocations := []RecordIdentity{}
 	for rows.Next() {
 		var a RecordIdentity
 		if err := rows.Scan(&a.RecordType, &a.ExternalKey, &a.ID); err != nil {
-			rows.Close()
 			return err
 		}
 		allocations = append(allocations, a)
 	}
 	err = rows.Err()
-	rows.Close()
+	if closeErr := rows.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		return err
 	}

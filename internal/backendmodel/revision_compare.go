@@ -324,9 +324,7 @@ func (r *Repo) CompareRevisions(ctx context.Context, pid string, in CompareRevis
 	}
 	out := &RevisionComparison{SourceBefore: sourceBefore, SourceAfter: sourceAfter, From: left, To: right, ComparisonVersion: 1, ComparisonHash: hash, Summary: delta.Summary, CoverageBefore: from.Revision.Coverage, CoverageAfter: to.Revision.Coverage, Limitations: []string{"Structural comparison describes provider assertions; it does not verify runtime behavior or impact safety."}, Items: []ComparisonItem{}}
 	for _, state := range []*RevisionState{from, to} {
-		for _, gap := range state.Revision.Coverage.Gaps {
-			out.Limitations = append(out.Limitations, gap)
-		}
+		out.Limitations = append(out.Limitations, state.Revision.Coverage.Gaps...)
 	}
 	slices.Sort(out.Limitations)
 	out.Limitations = slices.Compact(out.Limitations)

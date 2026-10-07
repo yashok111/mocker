@@ -117,8 +117,9 @@ func mergeSourceProof(p *lineageProof, other lineageProof) {
 }
 func sourceRecordProof(graph *SourceGraphSnapshot, typ, id string, ref *LineageValueRef) (lineageProof, error) {
 	p := lineageProof{status: "explicit", reasons: map[string]bool{}}
-	payloads := []SourceAssertionPayload{}
-	for _, a := range graph.recordClaims(typ, id) {
+	recorded := graph.recordClaims(typ, id)
+	payloads := make([]SourceAssertionPayload, 0, len(recorded))
+	for _, a := range recorded {
 		payloads = append(payloads, a.Payload)
 	}
 	if len(payloads) == 0 {

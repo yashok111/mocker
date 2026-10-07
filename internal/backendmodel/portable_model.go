@@ -144,28 +144,11 @@ func (r *Repo) ExportPortableProposalTx(ctx context.Context, tx *sql.Tx, pid str
 				return nil, err
 			}
 			out.Batches = append(out.Batches, batch)
-			rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_change_proposal_identities_documents WHERE proposal_id=? AND first_revision_id=?`, pin.ProposalID, v.ID)
+			identities, err := readFirstRevisionIdentities(ctx, tx, pin.ProposalID, v.ID)
 			if err != nil {
 				return nil, err
 			}
-			for rows.Next() {
-				var raw string
-				if err := rows.Scan(&raw); err != nil {
-					_ = rows.Close()
-					return nil, err
-				}
-				var identity ChangeObjectIdentity
-				if err := json.Unmarshal([]byte(raw), &identity); err != nil {
-					_ = rows.Close()
-					return nil, err
-				}
-				out.Identities = append(out.Identities, identity)
-			}
-			err = rows.Err()
-			_ = rows.Close()
-			if err != nil {
-				return nil, err
-			}
+			out.Identities = append(out.Identities, identities...)
 		}
 		slices.Reverse(out.FullRevisions)
 		selected := out.FullRevisions[len(out.FullRevisions)-1]
@@ -216,4 +199,31 @@ func portableClone[T any](in T) (T, error) {
 	}
 	err = json.Unmarshal(raw, &out, json.RejectUnknownMembers(true))
 	return out, err
+}
+
+// readFirstRevisionIdentities lists the object identities a proposal revision
+// introduced. It is its own function so the cursor closes by defer on every
+// path of the export loop that calls it once per revision.
+func readFirstRevisionIdentities(ctx context.Context, tx *sql.Tx, proposalID, revisionID string) ([]ChangeObjectIdentity, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT document FROM backend_change_proposal_identities_documents WHERE proposal_id=? AND first_revision_id=?`, proposalID, revisionID)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = rows.Close() }()
+	var out []ChangeObjectIdentity
+	for rows.Next() {
+		var raw string
+		if err := rows.Scan(&raw); err != nil {
+			return nil, err
+		}
+		var identity ChangeObjectIdentity
+		if err := json.Unmarshal([]byte(raw), &identity); err != nil {
+			return nil, err
+		}
+		out = append(out, identity)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return out, rows.Close()
 }

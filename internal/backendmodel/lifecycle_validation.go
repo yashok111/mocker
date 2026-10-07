@@ -28,7 +28,7 @@ func validateLifecycle(d DiagramDocument) error {
 	if err := validateDiagramRef(p.Entity); err != nil {
 		return err
 	}
-	if p.StateFields == nil || len(p.StateFields) == 0 || len(p.StateFields) > 100 {
+	if len(p.StateFields) == 0 || len(p.StateFields) > 100 {
 		return invalid("stateFields", "Select 1–100 exact fields")
 	}
 	if err := validateLifecycleRefs(p.StateFields); err != nil {

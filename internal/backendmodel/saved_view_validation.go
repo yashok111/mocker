@@ -219,11 +219,12 @@ func validateSavedGraphReferences(target *resolvedBackendTarget, state *Revision
 			if !inStore(e.From) || !inStore(e.To) {
 				return nil, invalid("state.selection.id", "Edge is outside the selected datastore")
 			}
-			if e.Kind == "contains" {
+			switch e.Kind {
+			case "contains":
 				if !hasFacet(nodes[e.From]) || !hasFacet(nodes[e.To]) {
 					return nil, invalid("state.selection.id", "Edge is outside the selected facet")
 				}
-			} else if e.Kind == "references" {
+			case "references":
 				if target.proposal != nil {
 					f, err := effectiveProposalFacet(*target.proposal, new(target.draft.ID), e.ID, e.Kind, e.Attributes, target.overlay(e.ID))
 					if err != nil || f == nil {
@@ -235,7 +236,7 @@ func validateSavedGraphReferences(target *resolvedBackendTarget, state *Revision
 						return nil, invalid("state.selection.id", "Edge is outside the selected facet")
 					}
 				}
-			} else {
+			default:
 				return nil, invalid("state.selection.id", "Expected a relational edge")
 			}
 		}

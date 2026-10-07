@@ -461,7 +461,7 @@ func TestLineageQueryCursorBindsValidFullAddresses(t *testing.T) {
 		t.Run(kind, func(t *testing.T) {
 			s := lineageQueryState(t, 3)
 			a := LineageValueRef{NodeID: s.Nodes[0].ID}
-			alternatives := []LineageValueRef{}
+			var alternatives []LineageValueRef
 			if kind == "port" {
 				s.Nodes[0].Kind = "flow_step"
 				s.Nodes[0].Attributes = map[string]jsontext.Value{"inputs": jsontext.Value(`[{"key":"x"},{"key":"y"}]`), "outputs": jsontext.Value(`[{"key":"x"}]`)}

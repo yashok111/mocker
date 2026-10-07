@@ -21,7 +21,7 @@ func relationalCommand(cs []ImportCommand, key string) *ImportCommand {
 func mutateRelationalFacet(t *testing.T, cs []ImportCommand, key, fk string, fn func(map[string]jsontext.Value)) {
 	t.Helper()
 	c := relationalCommand(cs, key)
-	kind := ""
+	var kind string
 	var attrs map[string]jsontext.Value
 	if c.Node != nil {
 		kind, attrs = c.Node.Kind, c.Node.Attributes
@@ -481,8 +481,7 @@ func TestRelationalMappedRenameNestedDeletionHistory(t *testing.T) {
 			mutateRelationalFacet(t, commands, "view:order_summaries", "sql", func(m map[string]jsontext.Value) {
 				var deps []string
 				_ = json.Unmarshal(m["dependencyKeys"], &deps)
-				deps = append(deps, "column:orders:legacy_note")
-				m["dependencyKeys"] = relationalRaw(t, deps)
+				m["dependencyKeys"] = relationalRaw(t, slices.Concat(deps, []string{"column:orders:legacy_note"}))
 			})
 			bad, ack := stageRelational(t, r, p, next, commands, "v2-dangling")
 			if ack["column:orders:state"] != ids["column:orders:status"] || bad.CandidateHash != nil || !slices.ContainsFunc(bad.Diagnostics, func(d ImportDiagnostic) bool { return d.Code == "backend_unsafe_deletion" }) {
@@ -636,25 +635,25 @@ func TestRelationalReferenceAndNativeBounds(t *testing.T) {
 			limit := true
 			switch name {
 			case "constraint65":
-				keys := []string{}
+				keys := make([]string, 0, 65)
 				for i := range 65 {
 					keys = append(keys, fmt.Sprintf("column:extra%d", i))
 				}
 				mutateRelationalFacet(t, cs, "constraint:orders:user_fk", "sql", func(m map[string]jsontext.Value) { m["columnKeys"] = relationalRaw(t, keys) })
 			case "index65":
-				terms := []any{}
+				terms := make([]any, 0, 65)
 				for i := range 65 {
 					terms = append(terms, map[string]any{"columnKey": fmt.Sprintf("column:extra%d", i), "direction": "asc", "nulls": "unknown"})
 				}
 				mutateRelationalFacet(t, cs, "index:orders:state_idx", "sql", func(m map[string]jsontext.Value) { m["terms"] = relationalRaw(t, terms) })
 			case "view501":
-				keys := []string{}
+				keys := make([]string, 0, 501)
 				for i := range 501 {
 					keys = append(keys, fmt.Sprintf("table:extra%d", i))
 				}
 				mutateRelationalFacet(t, cs, "view:order_summaries", "sql", func(m map[string]jsontext.Value) { m["dependencyKeys"] = relationalRaw(t, keys) })
 			case "migration501":
-				changes := []any{}
+				changes := make([]any, 0, 501)
 				for range 501 {
 					changes = append(changes, map[string]any{"target": map[string]any{"kind": "candidate", "objectKey": "table:orders"}, "operation": "alter", "description": "change"})
 				}
@@ -924,7 +923,7 @@ func TestRelationalRevisionCompareExactIntegerTokens(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	hashes := []string{}
+	hashes := make([]string, 0, 2)
 	for _, state := range []*RevisionState{before, &after} {
 		for _, n := range state.Nodes {
 			if n.ID == ids["column:orders:total"] {

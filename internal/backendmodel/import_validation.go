@@ -22,7 +22,7 @@ func importConflict(code, message string, version int64) *FaultError {
 	return &FaultError{Status: 409, Code: code, Message: message, CurrentVersion: version}
 }
 func validHash(h string) bool {
-	return len(h) == 64 && !strings.ContainsFunc(h, func(r rune) bool { return !(r >= '0' && r <= '9' || r >= 'a' && r <= 'f') })
+	return len(h) == 64 && !strings.ContainsFunc(h, func(r rune) bool { return (r < '0' || r > '9') && (r < 'a' || r > 'f') })
 }
 func nonblank(v string) bool {
 	return utf8.ValidString(v) && strings.TrimSpace(v) != "" && !strings.ContainsFunc(v, unicode.IsControl)
