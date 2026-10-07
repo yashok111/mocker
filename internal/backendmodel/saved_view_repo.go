@@ -83,8 +83,10 @@ func savedViewQuota() error {
 }
 func checkSavedViewQuota(ctx context.Context, tx *sql.Tx, pid, vid string, reserved int64) error {
 	var views, versions int
-	var total int64
-	err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_saved_views WHERE project_id=?),(SELECT count(*) FROM backend_saved_view_versions_documents WHERE view_id=?),(SELECT coalesce(sum(length(CAST(d.document AS BLOB))),0) FROM backend_saved_view_versions_documents d JOIN backend_saved_views v ON v.id=d.view_id WHERE v.project_id=?)+(SELECT coalesce(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, vid, pid, "saved-view-create:"+pid, "saved-view-save:"+pid+":%").Scan(&views, &versions, &total)
+	if err := tx.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_saved_views WHERE project_id=?),(SELECT count(*) FROM backend_saved_view_versions_documents WHERE view_id=?)`, pid, vid).Scan(&views, &versions); err != nil {
+		return err
+	}
+	total, err := savedViewRetainedBytes(ctx, tx, pid)
 	if err != nil {
 		return err
 	}
@@ -92,6 +94,37 @@ func checkSavedViewQuota(ctx context.Context, tx *sql.Tx, pid, vid string, reser
 		return savedViewQuota()
 	}
 	return nil
+}
+
+// savedViewRetainedBytes is the project's retained saved-view bytes: every version
+// document plus every create/save receipt.
+func savedViewRetainedBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
+	var total int64
+	err := tx.QueryRowContext(ctx, `SELECT (SELECT coalesce(sum(length(CAST(d.document AS BLOB))),0) FROM backend_saved_view_versions_documents d JOIN backend_saved_views v ON v.id=d.view_id WHERE v.project_id=?)+(SELECT coalesce(sum(length(CAST(response AS BLOB))),0) FROM backend_command_receipts WHERE scope=? OR scope LIKE ?)`, pid, "saved-view-create:"+pid, "saved-view-save:"+pid+":%").Scan(&total)
+	return total, err
+}
+
+// sameSavedViewContent reports whether a save would store exactly the current
+// name, state and resolved pins (F185).
+func sameSavedViewContent(current *SavedView, name string, state SavedViewState, pins SavedViewPins) (bool, error) {
+	if current.Name != name {
+		return false, nil
+	}
+	a, err := requestDigest(struct {
+		State SavedViewState
+		Pins  SavedViewPins
+	}{current.State, current.Pins})
+	if err != nil {
+		return false, err
+	}
+	b, err := requestDigest(struct {
+		State SavedViewState
+		Pins  SavedViewPins
+	}{state, pins})
+	if err != nil {
+		return false, err
+	}
+	return a == b, nil
 }
 func writeSavedDocument(ctx context.Context, tx *sql.Tx, out *SavedView, scope, key, digest string) error {
 	raw, err := json.Marshal(out)
@@ -225,6 +258,29 @@ func (r *Repo) SaveSavedView(ctx context.Context, pid, vid string, in SaveSavedV
 		}
 		if current.Version == math.MaxInt64 {
 			return &FaultError{Status: 409, Code: "backend_version_exhausted", Message: "Saved view version cannot be incremented", CurrentVersion: current.Version}
+		}
+		// An identical save answers the current version, as diagram and
+		// diagram-view saves do. It used to append a byte-identical version,
+		// consume MaxSavedViewVersions and invalidate every other client's
+		// expectedVersion (review 2026-10-06, F185). The receipt still lands,
+		// inside the byte quota that already counts saved-view receipts.
+		same, err := sameSavedViewContent(current, name, in.State, *pins)
+		if err != nil {
+			return err
+		}
+		if same {
+			usage, err := savedViewRetainedBytes(ctx, tx, pid)
+			if err != nil {
+				return err
+			}
+			if usage+int64(len(current.receiptJSON)) > MaxSavedViewBytes {
+				return savedViewQuota()
+			}
+			if _, err = tx.ExecContext(ctx, `INSERT INTO backend_command_receipts(scope,key,request_hash,response) VALUES(?,?,?,?)`, scope, in.IdempotencyKey, digest, current.receiptJSON); err != nil {
+				return err
+			}
+			*out = *current
+			return nil
 		}
 		*out = *current
 		out.receiptJSON = ""

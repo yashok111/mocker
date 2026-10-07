@@ -6,6 +6,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"github.com/yashok111/mocker/internal/backendblob"
+	"strings"
 	"time"
 	"uuid"
 )
@@ -19,6 +20,35 @@ func diagramPinMismatch() error {
 func diagramQuota() error {
 	return &FaultError{Status: 409, Code: "backend_diagram_quota", Message: "Immutable diagram storage quota exceeded"}
 }
+
+// diagramReceiptRef is what a diagram or view receipt stores: the immutable
+// version the mutation answered, not a copy of it.
+//
+// Review 2026-10-06, F100: every receipt held the full version JSON (up to
+// ~1 MiB for a diagram, 128 KiB for a view). A save equal to the head returns
+// before the quota query, yet wrote that copy under each fresh idempotency
+// key, and receipts are never counted, never pruned and cannot be deleted; a
+// create or fork stored its document twice with one copy counted. A version
+// row is immutable and the response of every diagram mutation is exactly the
+// stored bytes of one version (persistDiagramVersion and persistDiagramView
+// write the same raw to both; a no-op answers the head's stored raw), so
+// replay reloads those bytes and stays byte-identical. Receipts written
+// before this change still hold the full JSON and replay as they did.
+type diagramReceiptRef struct {
+	Kind    string `json:"kind"`
+	ID      string `json:"id"`
+	Version int64  `json:"version"`
+}
+
+const diagramReceiptPrefix = `{"receiptRef":`
+
+func diagramReceiptJSON(kind, id string, version int64) (string, error) {
+	raw, err := json.Marshal(struct {
+		Ref diagramReceiptRef `json:"receiptRef"`
+	}{diagramReceiptRef{Kind: kind, ID: id, Version: version}})
+	return string(raw), err
+}
+
 func readDiagramReceipt(ctx context.Context, q importReader, pid, op, key, digest string) (string, error) {
 	var previous, raw string
 	err := q.QueryRowContext(ctx, `SELECT request_hash,receipt FROM backend_diagram_receipts WHERE project_id=? AND operation=? AND idempotency_key=?`, pid, op, key).Scan(&previous, &raw)
@@ -30,6 +60,27 @@ func readDiagramReceipt(ctx context.Context, q importReader, pid, op, key, diges
 	}
 	if previous != digest {
 		return "", &FaultError{Status: 409, Code: "backend_idempotency_conflict", Message: "Key already used for a different request"}
+	}
+	if !strings.HasPrefix(raw, diagramReceiptPrefix) {
+		return raw, nil
+	}
+	var envelope struct {
+		Ref diagramReceiptRef `json:"receiptRef"`
+	}
+	if err = json.Unmarshal([]byte(raw), &envelope, json.RejectUnknownMembers(true)); err != nil {
+		return "", err
+	}
+	ref := envelope.Ref
+	switch ref.Kind {
+	case "diagram":
+		err = q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_versions_documents WHERE project_id=? AND diagram_id=? AND version=?`, pid, ref.ID, ref.Version).Scan(&raw)
+	case "view":
+		err = q.QueryRowContext(ctx, `SELECT document FROM backend_diagram_view_versions_documents WHERE project_id=? AND view_id=? AND version=?`, pid, ref.ID, ref.Version).Scan(&raw)
+	default:
+		return "", errors.New("diagram receipt names an unknown version kind")
+	}
+	if err != nil {
+		return "", err
 	}
 	return raw, nil
 }
@@ -97,8 +148,15 @@ func advanceDiagramCatalog(ctx context.Context, tx *sql.Tx, pid string) error {
 	_, err := tx.ExecContext(ctx, `INSERT INTO backend_diagram_catalog(project_id,version) VALUES(?,1) ON CONFLICT(project_id) DO UPDATE SET version=version+1`, pid)
 	return err
 }
-func writeDiagramReceipt(ctx context.Context, tx *sql.Tx, pid, op, key, digest, raw string) error {
-	_, err := tx.ExecContext(ctx, `INSERT INTO backend_diagram_receipts(project_id,operation,idempotency_key,request_hash,receipt) VALUES(?,?,?,?,?)`, pid, op, key, digest, raw)
+
+// writeDiagramReceipt records that key answered the stored version
+// (kind "diagram" or "view", id, version); see diagramReceiptRef.
+func writeDiagramReceipt(ctx context.Context, tx *sql.Tx, pid, op, key, digest, kind, id string, version int64) error {
+	raw, err := diagramReceiptJSON(kind, id, version)
+	if err != nil {
+		return err
+	}
+	_, err = tx.ExecContext(ctx, `INSERT INTO backend_diagram_receipts(project_id,operation,idempotency_key,request_hash,receipt) VALUES(?,?,?,?,?)`, pid, op, key, digest, raw)
 	return err
 }
 
@@ -220,6 +278,14 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 		m.previous, err = diagramHead(ctx, r.db.R, m.pid, m.id)
 		if err != nil {
 			return nil, err
+		}
+		// Everything below validates against this head (immutability, ref
+		// and evidence inheritance, architecture retention). A stale writer
+		// whose document is valid only against the base it read got a 400/422
+		// there instead of the 409 that tells it to reread or fork (review
+		// 2026-10-06, F101). The writer re-checks under the lock.
+		if m.previous.Pin.Version != m.expected {
+			return nil, diagramConflict()
 		}
 		if err = validateDiagramSave(m.previous, m.document); err != nil {
 			return nil, err
@@ -354,7 +420,7 @@ func persistDiagramVersion(ctx context.Context, tx *sql.Tx, m diagramMutation, o
 	if err = advanceDiagramCatalog(ctx, tx, m.pid); err != nil {
 		return err
 	}
-	if err = writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, raw); err != nil {
+	if err = writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, "diagram", id, version); err != nil {
 		return err
 	}
 
@@ -395,7 +461,7 @@ func (r *Repo) writeDiagramMutation(ctx context.Context, tx *sql.Tx, m diagramMu
 			return nil, err
 		}
 		if current.Pin.ContentHash == hash {
-			return current, writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, current.receiptJSON)
+			return current, writeDiagramReceipt(ctx, tx, m.pid, m.op, m.key, m.digest, "diagram", current.Pin.ID, current.Pin.Version)
 		}
 		if err = rejectRetiredDiagramIDs(ctx, tx, m.pid, m.id, current, m.document); err != nil {
 			return nil, err

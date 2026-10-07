@@ -270,6 +270,15 @@ func (s *APIArtifactService) prepareV1APIPins(ctx context.Context, tx *sql.Tx, p
 		previous := oldBindings[id]
 		sortArtifactBindings(previous)
 		if changed && c.Type == "remove_api_pin" {
+			// Removing an artifact that has no pin (a typo or a stale id)
+			// changed nothing, yet previewed as applicable and Apply wrote a
+			// new revision and bumped the project version (review 2026-10-06,
+			// F95).
+			if !hadOld {
+				preview.Diagnostics = append(preview.Diagnostics, APIArtifactDiagnostic{Code: "backend_api_pin_absent", ArtifactID: id, Message: "Artifact is not pinned in this revision; nothing to remove"})
+				preview.CanApply = false
+				continue
+			}
 			// A detach never needs to decode an unavailable or oversized previous body.
 			if hadOld && s.artifacts != nil {
 				tx, err := s.repo.db.R.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})

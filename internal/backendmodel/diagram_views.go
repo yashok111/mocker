@@ -275,7 +275,7 @@ func (r *Repo) mutateDiagramView(ctx context.Context, pid, id string, expected i
 			b, _ := requestDigest(state)
 			if current.Name == name && a == b {
 				out = current
-				return writeDiagramReceipt(ctx, tx, pid, op, key, hash, current.receiptJSON)
+				return writeDiagramReceipt(ctx, tx, pid, op, key, hash, "view", current.ID, current.Version)
 			}
 			version = head + 1
 		} else {
@@ -362,7 +362,7 @@ func persistDiagramView(ctx context.Context, tx *sql.Tx, pid, id, op, key, hash 
 	if err = advanceDiagramCatalog(ctx, tx, pid); err != nil {
 		return err
 	}
-	if err = writeDiagramReceipt(ctx, tx, pid, op, key, hash, raw); err != nil {
+	if err = writeDiagramReceipt(ctx, tx, pid, op, key, hash, "view", newID, version); err != nil {
 		return err
 	}
 

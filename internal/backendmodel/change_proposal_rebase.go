@@ -33,7 +33,7 @@ func validateChangeRebaseInput(in PreviewChangeProposalRebaseInput) error {
 	}
 	seen := map[string]bool{}
 	for _, r := range in.Resolutions {
-		if !validHash(r.ConflictID) || !slices.Contains([]string{"take_source", "keep_proposal", "replace"}, r.Choice) || !validAPIText(r.Reason, 1, 4096) || seen[r.ConflictID] {
+		if !validHash(r.ConflictID) || !slices.Contains([]string{"take_source", "keep_proposal", "replace"}, r.Choice) || !validChangeReason(r.Reason) || seen[r.ConflictID] {
 			return invalid("resolutions", "Duplicate or invalid resolution")
 		}
 		if (r.Choice == "replace") != (len(r.Value) > 0) {
@@ -299,8 +299,9 @@ func (r *Repo) finishChangeRebase(ctx context.Context, tx importReader, pid, id 
 		func() error { return r.validateChangeCriteriaReferences(ctx, tx, pid, result) },
 		func() error { return validateChangeRebaseCarry(ctx, tx, pid, result) },
 	} {
-		if err = check(); err != nil {
-			diagnostics = append(diagnostics, ImportDiagnostic{Code: "backend_change_invalid", Path: "rebase", Message: err.Error()})
+		// Only content refusals become diagnostics (review 2026-10-06, F40).
+		if diagnostics, err = changeCheckDiagnostic(diagnostics, "rebase", check()); err != nil {
+			return nil, err
 		}
 	}
 	vectorHash, err := requestDigest(next.SourceVector)
@@ -367,6 +368,16 @@ func (r *Repo) applyChangeRebaseTx(ctx context.Context, tx *sql.Tx, pid, id, sco
 	if err = checkChangeCommandHistory(ctx, tx, id, in.RepairCommands); err != nil {
 		return err
 	}
+	// Unresolved B/O/N conflicts leave CandidateHash nil with possibly no
+	// diagnostic at all; answering changeInvalid then said "unresolved
+	// validation diagnostics" with an empty list (review 2026-10-06, F42).
+	if conflicts := prepared.candidate.Conflicts; prepared.candidate.CandidateHash == nil && len(conflicts) > 0 {
+		ids := make([]string, len(conflicts))
+		for i, c := range conflicts {
+			ids[i] = c.ID
+		}
+		return &FaultError{Status: 409, Code: "backend_change_rebase_conflict", Message: "Rebase has unresolved conflicts; preview again with a resolution for each conflictId", Details: map[string]any{"conflictIds": ids, "diagnostics": prepared.candidate.Diagnostics}}
+	}
 	if prepared.candidate.CandidateHash == nil {
 		return changeInvalid(prepared.candidate.Diagnostics)
 	}
@@ -392,6 +403,7 @@ func (r *Repo) applyChangeRebaseTx(ctx context.Context, tx *sql.Tx, pid, id, sco
 	rev.Summary = "Rebase desired graph onto exact source revision"
 	stampChangeRebaseOrigins(&rev, in.Resolutions, prepared.evaluation.newIDs)
 	rev.Rebase = &ChangeRebaseAction{Protocol: changeRebaseProtocol, Input: in.PreviewChangeProposalRebaseInput, CandidateHash: in.CandidateHash}
+	rev.ImportOrigin = nil // a local rebase is not an import (F38)
 	p.Version++
 	p.Status = "draft"
 	p.ReadyReference = nil

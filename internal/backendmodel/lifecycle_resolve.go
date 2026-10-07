@@ -94,7 +94,14 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 			}
 		}
 		if ref.Kind == "namespaced_artifact" && ref.NamespacedLocator != nil && ref.NamespacedLocator.Namespace.Scope == "foreign" {
-			gaps = append(gaps, diagramGap(subject, "foreign_artifact_unresolved", "Foreign artifact role remains unverified"))
+			// Entity and field refs have no row: their gap belongs to the
+			// lifecycle scope, not to an empty subject (review 2026-10-06,
+			// F104). subject itself stays "" for the historical-role key.
+			gapSubject := subject
+			if gapSubject == "" {
+				gapSubject = meta
+			}
+			gaps = append(gaps, diagramGap(gapSubject, "foreign_artifact_unresolved", "Foreign artifact role remains unverified"))
 			return nil
 		}
 		if ref.Kind == "artifact" || ref.Kind == "namespaced_artifact" {
@@ -161,9 +168,15 @@ func resolveLifecycleGaps(ctx context.Context, resolver *diagramArtifactResolver
 		states[s.ID] = s
 	}
 	for _, tr := range p.Transitions {
-		for role, refs := range map[string][]DiagramRef{"trigger": tr.Triggers, "write": tr.Writes, "event": tr.Events} {
-			for _, ref := range refs {
-				if err = check(ref, role, tr.ID); err != nil {
+		// A fixed role order: ranging over a map literal made a transition
+		// with two invalid roles fail with the trigger message on one call
+		// and the write message on the next (review 2026-10-06, F105).
+		for _, role := range []struct {
+			name string
+			refs []DiagramRef
+		}{{"trigger", tr.Triggers}, {"write", tr.Writes}, {"event", tr.Events}} {
+			for _, ref := range role.refs {
+				if err = check(ref, role.name, tr.ID); err != nil {
 					return nil, err
 				}
 			}
