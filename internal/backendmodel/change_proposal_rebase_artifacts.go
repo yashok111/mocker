@@ -118,11 +118,10 @@ func validateChangeRebaseArtifacts(e *changeEvaluation) error {
 		}
 		pins[artifactKey(pin)] = pin
 	}
+	if err := validateChangeArtifactBindingSources(e); err != nil {
+		return err
+	}
 	for _, binding := range e.revision.ArtifactContext.APIBindings {
-		record, ok := e.records[binding.SourceNodeID]
-		if !ok || record.RecordType != "node" || record.Payload.Kind != binding.SourceKind {
-			return invalid("artifacts", "Final API binding source is missing or changed kind")
-		}
 		pin := pins[ArtifactKey{Kind: binding.Ref.Kind, ID: binding.Ref.ArtifactID}]
 		object, err := e.artifactRequest.ResolveAPIObject(pin, binding.Ref.Selector)
 		if err != nil {
@@ -133,11 +132,6 @@ func validateChangeRebaseArtifacts(e *changeEvaluation) error {
 		}
 	}
 	for _, binding := range e.revision.ArtifactContext.EditorBindings {
-		for _, id := range binding.SourceNodeIDs {
-			if record, ok := e.records[id]; !ok || record.RecordType != "node" {
-				return invalid("artifacts", "Final editor binding source is missing")
-			}
-		}
 		object, err := e.artifactRequest.ResolveObject(pins[ArtifactKey{Kind: binding.ArtifactKind, ID: binding.ArtifactID}], binding.Selector)
 		if err != nil {
 			return err

@@ -120,6 +120,31 @@ func (c *ChangeProposalCommand) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
+// validChangeReason is the documented "nonblank reason" of commands, criterion
+// descriptions and rebase resolutions. validAPIText alone counted bytes, so a
+// reason of " " was stored as the immutable why of an intent origin (review
+// 2026-10-06, F47). Newlines inside a reason stay legal; only an all-space
+// one is refused. It is applied to NEW input only (validateChangeCommands,
+// validateChangeRebaseInput, the rebase correspondence map): Validate and
+// the UnmarshalJSON methods also decode stored revisions, commands and
+// receipts, and a stricter decoder would make an older draft that carries
+// such a reason unreadable.
+func validChangeReason(s string) bool {
+	return validAPIText(s, 1, 4096) && strings.TrimSpace(s) != ""
+}
+
+func validateChangeReasons(c ChangeProposalCommand) error {
+	if !validChangeReason(c.Reason) {
+		return invalid("reason", "A nonblank reason is required")
+	}
+	for _, criterion := range c.Criteria {
+		if !validChangeReason(criterion.Description) {
+			return invalid("criteria/description", "A nonblank criterion description is required")
+		}
+	}
+	return nil
+}
+
 func (c ChangeProposalCommand) Validate() error {
 	if !ValidID(c.CommandID) || !validAPIText(c.Reason, 1, 4096) {
 		return invalid("command", "Canonical commandId and 1–4096-byte reason are required")
@@ -433,6 +458,9 @@ func validateChangeCommands(commands []ChangeProposalCommand) error {
 			return invalid("commandId", "Command IDs must be distinct")
 		}
 		ids[c.CommandID] = true
+		if err = validateChangeReasons(c); err != nil {
+			return err
+		}
 	}
 	return nil
 }

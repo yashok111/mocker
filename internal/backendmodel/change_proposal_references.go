@@ -1,13 +1,22 @@
 package backendmodel
 
-import "context"
+import (
+	"context"
+	"maps"
+	"slices"
+	"strings"
+)
 
 // Desired historical references are exact project-owned structural addresses.
 // They do not grant source ownership or evidence to a proposed record.
 func validateChangeHistoricalReferences(ctx context.Context, q importReader, pid string, e *changeEvaluation) error {
 	var ancestors map[string]bool
 	history := map[string]*SourceGraphSnapshot{}
-	for _, record := range e.records {
+	// Records are walked in ID order: the first failure is the one diagnostic,
+	// and ranging over the map reported a different record (and message) on
+	// identical previews (review 2026-10-06, F41).
+	for _, id := range slices.Sorted(maps.Keys(e.records)) {
+		record := e.records[id]
 		p := record.Payload
 		if !relationalSubject(p.Kind, p.Attributes, record.RecordType == "edge") {
 			continue
@@ -16,6 +25,9 @@ func validateChangeHistoricalReferences(ctx context.Context, q importReader, pid
 		if err != nil {
 			return err
 		}
+		// relationalReferencesMode ranges over the facet map, so within one
+		// record the order is random too.
+		slices.SortStableFunc(refs, func(a, b relationalReference) int { return strings.Compare(a.Path, b.Path) })
 		for _, ref := range refs {
 			if ref.HistoricalRevisionID == "" {
 				continue

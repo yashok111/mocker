@@ -94,8 +94,12 @@ func requireChangeDraft(p *ChangeProposal, version int64, rid string) error {
 	if err := requireChangeCAS(p, version, rid); err != nil {
 		return err
 	}
+	// An implemented or archived proposal is a recoverable state mismatch
+	// (unarchive first), the same 409 the lifecycle arms answer; 422
+	// backend_unsupported_scope read as a feature the server lacks (review
+	// 2026-10-06, F48).
 	if p.Status != "draft" && p.Status != "ready" {
-		return &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft or ready proposals may be edited"}
+		return &FaultError{Status: 409, Code: "backend_change_status_conflict", Message: "Only draft or ready proposals may be edited", Details: map[string]any{"status": p.Status}}
 	}
 	return nil
 }
@@ -128,7 +132,9 @@ func (r *Repo) CreateChangeProposal(ctx context.Context, pid string, in CreateCh
 			return prepareErr
 		}
 		now := time.Now().UTC()
-		p := ChangeProposal{ID: uuid.NewV7().String(), ProjectID: pid, Name: in.Name, Version: 1, Status: "draft", CurrentDraftRevisionID: uuid.NewV7().String(), CurrentDraftHash: prepared.SemanticHash, CreatedAt: now, UpdatedAt: now}
+		// The validated (trimmed) name is stored, not the raw padded one
+		// (review 2026-10-06, F39); the receipt still binds the raw request.
+		p := ChangeProposal{ID: uuid.NewV7().String(), ProjectID: pid, Name: changeName(in.Name), Version: 1, Status: "draft", CurrentDraftRevisionID: uuid.NewV7().String(), CurrentDraftHash: prepared.SemanticHash, CreatedAt: now, UpdatedAt: now}
 		rev := *prepared
 		rev.ID, rev.ProposalID, rev.AcceptedBatchRevisionID, rev.CreatedAt = p.CurrentDraftRevisionID, p.ID, p.CurrentDraftRevisionID, now
 		stamp := now.Format(time.RFC3339Nano)
@@ -278,7 +284,12 @@ func persistChangeRevision(ctx context.Context, tx *sql.Tx, p ChangeProposal, re
 func checkChangeProposalQuota(ctx context.Context, q importReader, pid, id string) error {
 	var proposals, revisions int
 	var retained int64
-	err := q.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_change_proposals WHERE project_id=?),(SELECT count(*) FROM backend_change_proposal_revisions_documents WHERE proposal_id=?),
+	// The proposal cap counts ACTIVE proposals: archive is the documented end
+	// of life and nothing ever deletes a proposal, so counting archived rows
+	// made the 100th create permanent (review 2026-10-06, F43). Archived rows
+	// stay inside the byte cap, and unarchive re-runs this check, so archive
+	// cannot be used to hold more than MaxChangeProposals editable proposals.
+	err := q.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM backend_change_proposals WHERE project_id=? AND status<>'archived'),(SELECT count(*) FROM backend_change_proposal_revisions_documents WHERE proposal_id=?),
  (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_revisions_documents WHERE project_id=?)+
  (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_events_documents WHERE project_id=?)+
  (SELECT COALESCE(sum(length(CAST(document AS BLOB))),0) FROM backend_change_proposal_identities_documents WHERE project_id=?)+
@@ -289,8 +300,24 @@ func checkChangeProposalQuota(ctx context.Context, q importReader, pid, id strin
 	if err != nil {
 		return err
 	}
-	if proposals > MaxChangeProposals || revisions > MaxChangeProposalRevisions || retained > MaxChangeProposalBytes {
-		return &FaultError{Status: 409, Code: "backend_change_quota_exceeded", Message: "Full proposal retention quota exceeded"}
+	return changeQuotaFault(proposals, revisions, retained)
+}
+
+// changeQuotaFault names the exceeded dimension and its remedy: active
+// proposals are freed by archiving one; revisions of one proposal and retained
+// bytes are permanent, so the remedy there is a new proposal (F43).
+func changeQuotaFault(proposals, revisions int, retained int64) error {
+	message := ""
+	switch {
+	case proposals > MaxChangeProposals:
+		message = "Active proposal quota exceeded: archive a proposal that is no longer edited to free a slot"
+	case revisions > MaxChangeProposalRevisions:
+		message = "Proposal revision quota exceeded: revisions are permanent; continue in a new proposal and archive this one"
+	case retained > MaxChangeProposalBytes:
+		message = "Full proposal retention quota exceeded: retained proposal history is permanent and archive does not reclaim it"
+	}
+	if message != "" {
+		return &FaultError{Status: 409, Code: "backend_change_quota_exceeded", Message: message, Details: map[string]any{"proposals": proposals, "maxProposals": MaxChangeProposals, "revisions": revisions, "maxRevisions": MaxChangeProposalRevisions, "retainedBytes": retained, "maxRetainedBytes": MaxChangeProposalBytes}}
 	}
 	return nil
 }
@@ -363,7 +390,7 @@ func (r *Repo) ListChangeProposals(ctx context.Context, pid string, in ChangePro
 		return nil, err
 	}
 	if in.Status != "" && !slices.Contains([]string{"draft", "ready", "implemented", "archived"}, in.Status) {
-		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Only draft and ready proposals are supported"}
+		return nil, &FaultError{Status: 422, Code: "backend_unsupported_scope", Message: "Status filter must be draft, ready, implemented or archived"}
 	}
 	if in.BaseRevisionID != "" && !ValidID(in.BaseRevisionID) {
 		return nil, invalid("baseRevisionId", "Expected canonical UUID")

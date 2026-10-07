@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json/v2"
+	"errors"
 	"time"
 	"uuid"
 
@@ -199,6 +200,49 @@ func loadChangeSourceForDraft(ctx context.Context, tx importReader, pid string, 
 	}
 	return source, nil
 }
+
+// changeCheckDiagnostic turns a check's refusal into a desired-graph
+// diagnostic only when it is a statement about the request's content: a
+// FaultError answering 400, 404 or 422. Every other error - a driver error,
+// a 413 limit or transient-budget refusal, a cancelled context - is the
+// call's own error. Converting all of them made a size limit or a closed
+// database read as "your commands are invalid", inviting a repair of commands
+// that were fine instead of a retry (review 2026-10-06, F40).
+func changeCheckDiagnostic(diagnostics []ImportDiagnostic, path string, err error) ([]ImportDiagnostic, error) {
+	if err == nil {
+		return diagnostics, nil
+	}
+	fault, ok := errors.AsType[*FaultError](err)
+	if !ok || fault.Status != 400 && fault.Status != 404 && fault.Status != 422 {
+		return diagnostics, err
+	}
+	return append(diagnostics, ImportDiagnostic{Code: "backend_change_invalid", Path: path, Message: err.Error()}), nil
+}
+
+// validateChangeArtifactBindingSources requires every legacy API and editor
+// binding of the final draft to name a live node. Only a batch carrying an
+// artifact command re-resolved bindings, so remove_node alone left a binding
+// on a missing node that Apply accepted and the next Rebase refused (review
+// 2026-10-06, F44). Owner resolution stays where it was (artifact commands
+// and Rebase); this is the record-liveness half of
+// validateChangeRebaseArtifacts, which now calls it too.
+func validateChangeArtifactBindingSources(e *changeEvaluation) error {
+	for _, binding := range e.revision.ArtifactContext.APIBindings {
+		record, ok := e.records[binding.SourceNodeID]
+		if !ok || record.RecordType != "node" || record.Payload.Kind != binding.SourceKind {
+			return invalid("artifacts", "Final API binding source is missing or changed kind")
+		}
+	}
+	for _, binding := range e.revision.ArtifactContext.EditorBindings {
+		for _, id := range binding.SourceNodeIDs {
+			if record, ok := e.records[id]; !ok || record.RecordType != "node" {
+				return invalid("artifacts", "Final editor binding source is missing")
+			}
+		}
+	}
+	return nil
+}
+
 func (r *Repo) evaluateChangeDraft(ctx context.Context, tx importReader, pid string, prepared *preparedChangeProposal) error {
 	var err error
 	p, draft, evaluation := &prepared.proposal, &prepared.draft, prepared.evaluation
@@ -218,11 +262,14 @@ func (r *Repo) evaluateChangeDraft(ctx context.Context, tx importReader, pid str
 	if err != nil {
 		return err
 	}
-	if err = validateChangeHistoricalReferences(ctx, tx, pid, evaluation); err != nil {
-		diagnostics = append(diagnostics, ImportDiagnostic{Code: "backend_change_invalid", Path: "historicalReferences", Message: err.Error()})
+	if diagnostics, err = changeCheckDiagnostic(diagnostics, "artifacts", validateChangeArtifactBindingSources(evaluation)); err != nil {
+		return err
 	}
-	if err = r.validateChangeCriteriaReferences(ctx, tx, pid, evaluation); err != nil {
-		diagnostics = append(diagnostics, ImportDiagnostic{Code: "backend_change_invalid", Path: "criteria", Message: err.Error()})
+	if diagnostics, err = changeCheckDiagnostic(diagnostics, "historicalReferences", validateChangeHistoricalReferences(ctx, tx, pid, evaluation)); err != nil {
+		return err
+	}
+	if diagnostics, err = changeCheckDiagnostic(diagnostics, "criteria", r.validateChangeCriteriaReferences(ctx, tx, pid, evaluation)); err != nil {
+		return err
 	}
 	if err = ctx.Err(); err != nil {
 		return err
@@ -349,6 +396,11 @@ func (r *Repo) applyChangeTx(ctx context.Context, tx *sql.Tx, w changeApplyWrite
 	rev.CreatedAt = now
 	rev.Author = "user"
 	rev.Summary = "Apply desired graph commands"
+	// The evaluation copies the whole draft, including a rebase action and a
+	// portable import origin that describe how THAT draft was made; carried
+	// over, every later Apply claimed to be a rebase output or an import
+	// (review 2026-10-06, F38).
+	rev.Rebase, rev.ImportOrigin = nil, nil
 	p.Version++
 	p.Status = "draft"
 	p.ReadyReference = nil
