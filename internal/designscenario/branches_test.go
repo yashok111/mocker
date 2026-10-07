@@ -96,8 +96,8 @@ func TestBranchMovePreservesMembership(t *testing.T) {
 func TestBranchCloneIsIndependent(t *testing.T) {
 	t.Parallel()
 	doc := branchDocument(t, branchFixture)
-	copy := cloneRunDocument(doc)
-	copy.Fragments[0].Branches[0].Label = "changed"
+	cloned := cloneRunDocument(doc)
+	cloned.Fragments[0].Branches[0].Label = "changed"
 	if doc.Fragments[0].Branches[0].Label != "ok" {
 		t.Fatal("clone shares branches")
 	}

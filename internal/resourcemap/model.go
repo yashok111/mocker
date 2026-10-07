@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"maps"
 	"math"
+	"net/http"
 	"slices"
 	"strings"
 	"unicode/utf8"
@@ -635,7 +636,7 @@ func hasResource(rs []ResourceView, id string) bool {
 }
 func hasCollectionGet(ops []Operation, name string) bool {
 	for _, op := range ops {
-		if op.Method == "GET" && normalizePath(op.Path) == name {
+		if op.Method == http.MethodGet && normalizePath(op.Path) == name {
 			return true
 		}
 	}
@@ -643,7 +644,7 @@ func hasCollectionGet(ops []Operation, name string) bool {
 }
 func hasCollectionPost(ops []Operation, name string) bool {
 	for _, op := range ops {
-		if op.Method == "POST" && normalizePath(op.Path) == name {
+		if op.Method == http.MethodPost && normalizePath(op.Path) == name {
 			return true
 		}
 	}

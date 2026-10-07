@@ -3,6 +3,7 @@ package responserules
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -90,7 +91,7 @@ func decodeJSONValue(ctx context.Context, text string, limit int) (any, error) {
 		return nil, err
 	}
 	var extra any
-	if err := decoder.Decode(&extra); err != io.EOF {
+	if err := decoder.Decode(&extra); !errors.Is(err, io.EOF) {
 		return nil, invalid("", "ожидается одно значение JSON")
 	}
 	if err := ctx.Err(); err != nil {

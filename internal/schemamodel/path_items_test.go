@@ -12,7 +12,7 @@ func TestPathItemsBoundCyclesAndRetainEncounteredMethods(t *testing.T) {
 	if len(nodes) != 3 || len(operations) != 3 || len(diagnostics) != 1 || diagnostics[0].Code != "path_item_ref_cycle" {
 		t.Fatalf("cycle lost siblings or failed to stop: %+v %+v %+v", nodes, operations, diagnostics)
 	}
-	if operations[0].Method != "delete" || operations[1].Pointer != "/components/pathItems/A/get" || operations[2].Pointer != "/paths/~1a/post" {
+	if operations[0].Method != "delete" || operations[1].Pointer != "/components/pathItems/A/get" || operations[2].Pointer != "/paths/~1a/post" { //nolint:usestdlibvars // lowercase OpenAPI path-item key; http.MethodDelete is "DELETE"
 		t.Fatalf("wrong effective sources: %+v", operations)
 	}
 }
@@ -62,7 +62,7 @@ func TestPathItemsRejectNonPathItemObjectsAtReferenceSite(t *testing.T) {
 			t.Fatalf("invalid target %s accepted: %+v", ref, diagnostics)
 		}
 		operations := PathItemOperations(nodes)
-		if len(operations) != 1 || operations[0].Method != "post" || operations[0].Pointer != "/paths/~1orders/post" {
+		if len(operations) != 1 || operations[0].Method != "post" || operations[0].Pointer != "/paths/~1orders/post" { //nolint:usestdlibvars // lowercase OpenAPI path-item key; http.MethodPost is "POST"
 			t.Fatalf("valid sibling lost: %+v", operations)
 		}
 	}

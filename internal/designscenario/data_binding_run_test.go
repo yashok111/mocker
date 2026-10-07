@@ -2,6 +2,7 @@ package designscenario
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -238,7 +239,7 @@ func TestDataBindingCancellationAndRetainedLimit(t *testing.T) {
 		t.Fatal("dispatch despite retained limit")
 		return StepResponse{}, nil
 	})
-	if err != errRunDataLimit || len(engine.report.Steps[1].BindingResults) != 0 {
+	if !errors.Is(err, errRunDataLimit) || len(engine.report.Steps[1].BindingResults) != 0 {
 		t.Fatalf("limit: %v", err)
 	}
 }

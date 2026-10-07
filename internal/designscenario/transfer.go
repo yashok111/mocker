@@ -47,15 +47,15 @@ func transferSize(bundle TransferBundle) error {
 }
 
 func portableTransferDocument(document Document) (Document, error) {
-	copy, err := cloneDocument(document)
+	cloned, err := cloneDocument(document)
 	if err != nil {
 		return Document{}, err
 	}
-	for i := range copy.Contracts {
-		copy.Contracts[i].Mode = "copy"
-		copy.Contracts[i].Source = nil
+	for i := range cloned.Contracts {
+		cloned.Contracts[i].Mode = "copy"
+		cloned.Contracts[i].Source = nil
 	}
-	return copy, nil
+	return cloned, nil
 }
 
 // ExportTransfer captures all selected histories from one database snapshot.
@@ -91,7 +91,7 @@ func (r *Repo) ExportTransfer(ctx context.Context, ids []int64, history bool) (T
 			}
 			item := TransferScenario{Revisions: []TransferRevision{}}
 			err = func() error {
-				defer rows.Close()
+				defer func() { _ = rows.Close() }()
 				for rows.Next() {
 					rev, err := scanRevision(rows)
 					if err != nil {
@@ -156,7 +156,7 @@ func (r *Repo) transferAPIIndex(ctx context.Context, tx *sql.Tx, needed map[stri
 	if err != nil {
 		return nil, 0, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	last := after
 	for rows.Next() {
 		if err := ctx.Err(); err != nil {
@@ -302,9 +302,9 @@ func (r *Repo) ImportTransfer(ctx context.Context, bundle TransferBundle, relink
 						}
 						contract.Document = jsonx.RawMessage(revision.Document)
 						linkedDesigns[source.DesignID] = true
-						copy := *source
+						detached := *source
 						contract.Mode = "linked"
-						contract.Source = &copy
+						contract.Source = &detached
 						result.LinkedContracts++
 					} else {
 						result.CopiedContracts++

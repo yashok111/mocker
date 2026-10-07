@@ -2,6 +2,8 @@ package responserules
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"fmt"
 	"math"
 	"mime"
@@ -23,7 +25,7 @@ type FieldError struct {
 func (e *FieldError) Error() string         { return e.Pointer + ": " + e.Message }
 func invalid(pointer, message string) error { return &FieldError{Pointer: pointer, Message: message} }
 func at(prefix string, err error) error {
-	if e, ok := err.(*FieldError); ok {
+	if e, ok := errors.AsType[*FieldError](err); ok {
 		return &FieldError{Pointer: prefix + e.Pointer, Message: e.Message}
 	}
 	return invalid(prefix, err.Error())
@@ -355,7 +357,7 @@ func ValidID(id string) bool {
 		return false
 	}
 	for _, c := range []byte(id) {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || c == '_' || c == '-') {
+		if !asciiAlnum(rune(c)) && c != '_' && c != '-' {
 			return false
 		}
 	}
@@ -376,9 +378,21 @@ func Decode(root map[string]any) (Envelope, error) {
 	}
 	return env, nil
 }
-func textBound(value string, max int) bool { return len(value) <= max && utf8.ValidString(value) }
-func coordinate(v float64) bool            { return !math.IsNaN(v) && !math.IsInf(v, 0) && math.Abs(v) <= 100000 }
-func CheckStructure(r Rule) error {
+func textBound(value string, limit int) bool { return len(value) <= limit && utf8.ValidString(value) }
+
+// jsonMediaType admits application/json and concrete application/*+json types.
+func jsonMediaType(media string) bool {
+	return media == "application/json" || strings.HasPrefix(media, "application/") && strings.HasSuffix(media, "+json") && !strings.Contains(media, "*")
+}
+func asciiAlnum(c rune) bool {
+	return c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9'
+}
+func coordinate(v float64) bool { return !math.IsNaN(v) && !math.IsInf(v, 0) && math.Abs(v) <= 100000 }
+
+// CheckStructure is the context-free entry for decoders and tests; callers
+// that hold a request context use checkStructure so example checks honour it.
+func CheckStructure(r Rule) error { return checkStructure(context.Background(), r) }
+func checkStructure(ctx context.Context, r Rule) error {
 	if !ValidID(r.ID) {
 		return invalid("/id", "недопустимый ID")
 	}
@@ -388,7 +402,7 @@ func CheckStructure(r Rule) error {
 	if r.Binding != nil && (!textBound(r.Binding.Path, 2048) || !textBound(r.Binding.Method, 256)) {
 		return invalid("/binding", "слишком длинная привязка")
 	}
-	if err := checkExamples(r.Examples); err != nil {
+	if err := checkExamples(ctx, r.Examples); err != nil {
 		return at("/examples", err)
 	}
 	if r.Nodes == nil || len(r.Nodes) > MaxNodes {
@@ -410,7 +424,7 @@ func CheckStructure(r Rule) error {
 		if !coordinate(n.X) || !coordinate(n.Y) {
 			return invalid(prefix, "координаты должны быть конечными в пределах ±100000")
 		}
-		if err := checkNode(n); err != nil {
+		if err := checkNode(ctx, n); err != nil {
 			return at(prefix, err)
 		}
 	}
@@ -437,7 +451,7 @@ func CheckStructure(r Rule) error {
 	}
 	return nil
 }
-func checkNode(n Node) error {
+func checkNode(ctx context.Context, n Node) error {
 	condition, delay, response := n.Condition != nil, n.DelayMs != nil, n.Response != nil
 	resultCondition := n.ResultCondition != nil
 	entity := n.Entity != nil
@@ -451,7 +465,7 @@ func checkNode(n Node) error {
 			return invalid("/condition", "требуется ровно одно из condition и resultCondition")
 		}
 		if resultCondition {
-			if err := checkResultCondition(*n.ResultCondition); err != nil {
+			if err := checkResultCondition(ctx, *n.ResultCondition); err != nil {
 				return at("/resultCondition", err)
 			}
 			return nil
@@ -471,25 +485,25 @@ func checkNode(n Node) error {
 		if !response || condition || resultCondition || delay || entity {
 			return invalid("/response", "требуется только response")
 		}
-		if err := checkResponse(*n.Response); err != nil {
+		if err := checkResponse(ctx, *n.Response); err != nil {
 			return at("/response", err)
 		}
 	case "entity_read", "entity_create", "entity_update":
 		if !entity || condition || resultCondition || delay || response {
 			return invalid("/entity", "требуется только entity")
 		}
-		return checkEntityOperation(n.Type, *n.Entity)
+		return checkEntityOperation(ctx, n.Type, *n.Entity)
 	default:
 		return invalid("/type", "неизвестный тип узла")
 	}
 	return nil
 }
-func checkResponse(r Response) error {
+func checkResponse(ctx context.Context, r Response) error {
 	if r.BodyFrom != nil {
 		if r.BodyJSON != nil {
 			return invalid("/bodyFrom", "источники тела взаимоисключающие")
 		}
-		if err := checkValueRef(*r.BodyFrom); err != nil {
+		if err := checkValueRef(ctx, *r.BodyFrom); err != nil {
 			return at("/bodyFrom", err)
 		}
 	}
@@ -497,7 +511,7 @@ func checkResponse(r Response) error {
 		return at("/mediaType", err)
 	}
 	media, _, err := mime.ParseMediaType(r.MediaType)
-	if err != nil || httpx.BrowserExecutableMediaType(r.MediaType) || !(media == "application/json" || strings.HasPrefix(media, "application/") && strings.HasSuffix(media, "+json") && !strings.Contains(media, "*")) {
+	if err != nil || httpx.BrowserExecutableMediaType(r.MediaType) || !jsonMediaType(media) {
 		return invalid("/mediaType", "требуется корректный JSON media type")
 	}
 	if r.BodyJSON != nil && !textBound(*r.BodyJSON, MaxBodyBytes) {
@@ -529,7 +543,7 @@ func checkHeader(f Field) error {
 		return invalid("/name", "недопустимое имя заголовка")
 	}
 	for _, c := range []byte(f.Name) {
-		if !(c >= 'a' && c <= 'z' || c >= 'A' && c <= 'Z' || c >= '0' && c <= '9' || strings.ContainsRune("!#$%&'*+-.^_`|~", rune(c))) {
+		if !asciiAlnum(rune(c)) && !strings.ContainsRune("!#$%&'*+-.^_`|~", rune(c)) {
 			return invalid("/name", "недопустимое имя заголовка")
 		}
 	}

@@ -33,7 +33,7 @@ func (r *ValueRef) UnmarshalJSON(data []byte) error {
 	if err := decodeObject(data, fields...); err != nil {
 		return err
 	}
-	if err := checkValueRef(v); err != nil {
+	if err := checkValueRef(context.Background(), v); err != nil {
 		return err
 	}
 	*r = v
@@ -72,7 +72,7 @@ func (r *EntityFixtureRow) UnmarshalJSON(data []byte) error {
 	*r = v
 	return nil
 }
-func checkValueRef(r ValueRef) error {
+func checkValueRef(ctx context.Context, r ValueRef) error {
 	remaining := r
 	remaining.Source = ""
 	switch r.Source {
@@ -80,7 +80,7 @@ func checkValueRef(r ValueRef) error {
 		if r.ValueJSON == nil {
 			return invalid("/valueJSON", "требуется valueJSON")
 		}
-		if _, err := decodeBody(context.Background(), *r.ValueJSON); err != nil {
+		if _, err := decodeBody(ctx, *r.ValueJSON); err != nil {
 			return at("/valueJSON", err)
 		}
 		remaining.ValueJSON = nil
@@ -136,7 +136,7 @@ func checkEntityFamily(family string) bool {
 	}
 	return strings.Count(family, "{}") <= 3
 }
-func checkEntityOperation(kind string, e EntityOperation) error {
+func checkEntityOperation(ctx context.Context, kind string, e EntityOperation) error {
 	if !checkEntityFamily(e.Family) {
 		return invalid("/entity/family", "укажите каноническое семейство ресурса")
 	}
@@ -145,7 +145,7 @@ func checkEntityOperation(kind string, e EntityOperation) error {
 			return invalid("/entity/scope", "допустимо до трёх значений scope")
 		}
 		for i, r := range *e.Scope {
-			if err := checkValueRef(r); err != nil {
+			if err := checkValueRef(ctx, r); err != nil {
 				return at(fmt.Sprintf("/entity/scope/%d", i), err)
 			}
 		}
@@ -165,12 +165,12 @@ func checkEntityOperation(kind string, e EntityOperation) error {
 		}
 	}
 	if e.Key != nil {
-		if err := checkValueRef(*e.Key); err != nil {
+		if err := checkValueRef(ctx, *e.Key); err != nil {
 			return at("/entity/key", err)
 		}
 	}
 	if e.Data != nil {
-		if err := checkValueRef(*e.Data); err != nil {
+		if err := checkValueRef(ctx, *e.Data); err != nil {
 			return at("/entity/data", err)
 		}
 	}

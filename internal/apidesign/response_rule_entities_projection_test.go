@@ -170,7 +170,7 @@ func TestManagedEntityProjectionIdentityChangeRefusesSaveAtomically(t *testing.T
 	if err != nil {
 		t.Fatal(err)
 	}
-	changed := strings.Replace(detail.Draft.Document, `"type": "integer"`, `"type": "string"`, -1)
+	changed := strings.ReplaceAll(detail.Draft.Document, `"type": "integer"`, `"type": "string"`)
 	if _, err = r.Save(t.Context(), detail.Design.ID, SaveInput{ExpectedVersion: detail.Design.Version, Document: changed, Source: "ui"}); !errors.Is(err, ErrInvalid) {
 		t.Fatalf("incompatible identity accepted: %v", err)
 	}

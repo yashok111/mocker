@@ -16,8 +16,9 @@ type interval struct {
 
 func sequenceIntervals(doc designscenario.Document) ([]interval, []Diagnostic) {
 	if doc.FormatVersion >= 2 {
-		issues := []Diagnostic{}
-		for _, d := range designscenario.ValidateFragments(doc) {
+		fragmentDiagnostics := designscenario.ValidateFragments(doc)
+		issues := make([]Diagnostic, 0, len(fragmentDiagnostics))
+		for _, d := range fragmentDiagnostics {
 			id := ""
 			var index int
 			if _, err := fmt.Sscanf(d.Pointer, "/fragments/%d", &index); err == nil && index >= 0 && index < len(doc.Fragments) {

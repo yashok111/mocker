@@ -234,9 +234,9 @@ func TestEventJSONLimitsAndExactNumbers(t *testing.T) {
 		{"bytes", `{"x":"` + strings.Repeat("a", maxEventJSONBytes) + `"}`, "/eventModel/schemas/0/schemaJSON"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			copy := eventFixture(t)
-			copy.EventModel.Schemas[0].SchemaJSON = tc.source
-			if !hasEventError(copy, tc.pointer) {
+			fixture := eventFixture(t)
+			fixture.EventModel.Schemas[0].SchemaJSON = tc.source
+			if !hasEventError(fixture, tc.pointer) {
 				t.Fatalf("accepted %s", tc.name)
 			}
 		})

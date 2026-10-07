@@ -58,7 +58,7 @@ func (r *Repo) CreateTx(ctx context.Context, tx *sql.Tx, in CreateInput) (*Detai
 	if err != nil {
 		return nil, err
 	}
-	prepared, err := r.prepare(keyed)
+	prepared, err := r.prepare(ctx, keyed)
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (r *Repo) SaveTx(ctx context.Context, tx *sql.Tx, id int64, in SaveInput) (
 	if err != nil {
 		return nil, err
 	}
-	p, err := r.prepare(keyed)
+	p, err := r.prepare(ctx, keyed)
 	if err != nil {
 		return nil, err
 	}

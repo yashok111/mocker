@@ -74,15 +74,15 @@ func decodeResultCondition(data []byte, level int, leaves *int) (ResultCondition
 	if err := decodeObject(data, required("source", &v.Source), required("op", &v.Op), optional("valueJSON", &v.ValueJSON), optional("valueFrom", &v.ValueFrom)); err != nil {
 		return v, err
 	}
-	return v, checkResultConditionLeaf(v)
+	return v, checkResultConditionLeaf(context.Background(), v)
 }
 
-func checkResultCondition(c ResultCondition) error {
+func checkResultCondition(ctx context.Context, c ResultCondition) error {
 	leaves := 0
-	return checkResultConditionTree(c, 1, &leaves)
+	return checkResultConditionTree(ctx, c, 1, &leaves)
 }
 
-func checkResultConditionTree(c ResultCondition, level int, leaves *int) error {
+func checkResultConditionTree(ctx context.Context, c ResultCondition, level int, leaves *int) error {
 	if level > MaxResultConditionDepth {
 		return invalid("", "условие результата превышает четыре уровня")
 	}
@@ -98,7 +98,7 @@ func checkResultConditionTree(c ResultCondition, level int, leaves *int) error {
 			return invalid("/"+name, "группа требует от двух до 16 условий")
 		}
 		for i, child := range children {
-			if err := checkResultConditionTree(child, level+1, leaves); err != nil {
+			if err := checkResultConditionTree(ctx, child, level+1, leaves); err != nil {
 				return at(fmt.Sprintf("/%s/%d", name, i), err)
 			}
 		}
@@ -108,21 +108,21 @@ func checkResultConditionTree(c ResultCondition, level int, leaves *int) error {
 	if *leaves > MaxResultConditionLeaves {
 		return invalid("", "допустимо не более 16 листовых условий")
 	}
-	return checkResultConditionLeaf(c)
+	return checkResultConditionLeaf(ctx, c)
 }
 
-func checkResultConditionLeaf(c ResultCondition) error {
+func checkResultConditionLeaf(ctx context.Context, c ResultCondition) error {
 	if c.Source.Source != "result" {
 		return invalid("/source/source", "условие требует источник result")
 	}
-	if err := checkValueRef(c.Source); err != nil {
+	if err := checkValueRef(ctx, c.Source); err != nil {
 		return at("/source", err)
 	}
 	if c.ValueFrom != nil {
 		if c.ValueFrom.Source != "result" {
 			return invalid("/valueFrom/source", "условие требует источник result")
 		}
-		if err := checkValueRef(*c.ValueFrom); err != nil {
+		if err := checkValueRef(ctx, *c.ValueFrom); err != nil {
 			return at("/valueFrom", err)
 		}
 	}
@@ -132,7 +132,7 @@ func checkResultConditionLeaf(c ResultCondition) error {
 			return invalid("/valueJSON", "сравнение требует ровно одно из valueJSON и valueFrom")
 		}
 		if c.ValueJSON != nil {
-			value, err := resultConditionScalar(context.Background(), *c.ValueJSON)
+			value, err := resultConditionScalar(ctx, *c.ValueJSON)
 			if err != nil {
 				return at("/valueJSON", err)
 			}

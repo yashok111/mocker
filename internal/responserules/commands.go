@@ -1,6 +1,7 @@
 package responserules
 
 import (
+	"context"
 	"fmt"
 	"slices"
 
@@ -8,11 +9,11 @@ import (
 )
 
 // ApplyCommands applies an atomic batch to a private copy, retaining incomplete graphs.
-func ApplyCommands(rule Rule, commands []Command) (Rule, error) {
+func ApplyCommands(ctx context.Context, rule Rule, commands []Command) (Rule, error) {
 	if len(commands) > MaxCommands {
 		return Rule{}, invalid("/commands", "слишком много команд")
 	}
-	if err := CheckStructure(rule); err != nil {
+	if err := checkStructure(ctx, rule); err != nil {
 		return Rule{}, err
 	}
 	data, err := jsonx.Marshal(rule)
@@ -36,7 +37,7 @@ func ApplyCommands(rule Rule, commands []Command) (Rule, error) {
 		if err := apply(&result, c); err != nil {
 			return Rule{}, at(fmt.Sprintf("/commands/%d", i), err)
 		}
-		if err := CheckStructure(result); err != nil {
+		if err := checkStructure(ctx, result); err != nil {
 			return Rule{}, at(fmt.Sprintf("/commands/%d", i), err)
 		}
 	}

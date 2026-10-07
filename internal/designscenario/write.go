@@ -279,14 +279,14 @@ func invalidAt(pointer, message string) error {
 // PrepareMaterialization validates an authored document without writing linked
 // owners. The orchestrator must enumerate and validate those links separately.
 func (r *Repo) PrepareMaterialization(document Document) (Document, error) {
-	copy, err := cloneDocument(document)
+	cloned, err := cloneDocument(document)
 	if err != nil {
 		return Document{}, err
 	}
-	if _, _, err := r.prepare(copy, nil); err != nil {
+	if _, _, err := r.prepare(cloned, nil); err != nil {
 		return Document{}, err
 	}
-	return copy, nil
+	return cloned, nil
 }
 
 func (r *Repo) DraftTx(ctx context.Context, tx *sql.Tx, id int64) (Scenario, Revision, error) {

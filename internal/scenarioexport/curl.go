@@ -54,9 +54,9 @@ func (s *Service) renderCURL(prepared httpExport) ([]byte, error) {
 	out := exportText{buffer: boundedBuffer{limit: s.maxBytes}}
 	_, _ = out.WriteString("#!/bin/sh\nset -eu\n\n# Edit the saved service URLs before running. Response bodies are discarded.\n")
 	for _, base := range prepared.Bases {
-		fmt.Fprintf(&out, "%s=", base.Name)
+		_, _ = fmt.Fprintf(&out, "%s=", base.Name)
 		writeShellWord(&out, base.URL)
-		fmt.Fprintf(&out, "\n: \"${%s:?Fill in %s before running}\"\n", base.Name, base.Name)
+		_, _ = fmt.Fprintf(&out, "\n: \"${%s:?Fill in %s before running}\"\n", base.Name, base.Name)
 	}
 	for i, request := range prepared.Requests {
 		if out.err != nil {
@@ -82,7 +82,7 @@ func (s *Service) renderCURL(prepared httpExport) ([]byte, error) {
 		if len(query) > 0 {
 			path += "?" + query.Encode()
 		}
-		fmt.Fprintf(&out, "\n# Request %d\nstatus=$(", i+1)
+		_, _ = fmt.Fprintf(&out, "\n# Request %d\nstatus=$(", i+1)
 		if request.Execution.Body != "" {
 			_, _ = out.WriteString("printf '%s' ")
 			writeShellWord(&out, request.Execution.Body)
@@ -102,11 +102,11 @@ func (s *Service) renderCURL(prepared httpExport) ([]byte, error) {
 		if request.Execution.Body != "" {
 			_, _ = out.WriteString(" --data-binary @-")
 		}
-		fmt.Fprintf(&out, " --url \"${%s}\"", request.Base)
+		_, _ = fmt.Fprintf(&out, " --url \"${%s}\"", request.Base)
 		writeShellWord(&out, path)
 		_, _ = out.WriteString(")\nprintf 'HTTP %s\\n' \"$status\"\n")
 		if request.Execution.ExpectedStatus != nil {
-			fmt.Fprintf(&out, "[ \"$status\" = '%d' ] || { printf 'Unexpected HTTP status\\n' >&2; exit 1; }\n", *request.Execution.ExpectedStatus)
+			_, _ = fmt.Fprintf(&out, "[ \"$status\" = '%d' ] || { printf 'Unexpected HTTP status\\n' >&2; exit 1; }\n", *request.Execution.ExpectedStatus)
 		} else {
 			_, _ = out.WriteString("case \"$status\" in 2??) ;; *) printf 'Expected HTTP 2xx\\n' >&2; exit 1 ;; esac\n")
 		}

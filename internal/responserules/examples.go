@@ -13,27 +13,27 @@ func (e *Example) UnmarshalJSON(data []byte) error {
 	if err := decodeObject(data, required("id", &v.ID), required("name", &v.Name), required("request", &v.Request)); err != nil {
 		return err
 	}
-	if err := checkExample(v); err != nil {
+	if err := checkExample(context.Background(), v); err != nil {
 		return err
 	}
 	*e = v
 	return nil
 }
 
-func checkExample(example Example) error {
+func checkExample(ctx context.Context, example Example) error {
 	if !ValidID(example.ID) {
 		return invalid("/id", "недопустимый ID примера")
 	}
 	if !textBound(example.Name, 200) || strings.TrimSpace(example.Name) == "" {
 		return invalid("/name", "требуется непустое имя до 200 байт UTF-8")
 	}
-	if err := CheckRequest(context.Background(), example.Request); err != nil {
+	if err := CheckRequest(ctx, example.Request); err != nil {
 		return at("/request", err)
 	}
 	return nil
 }
 
-func checkExamples(examples []Example) error {
+func checkExamples(ctx context.Context, examples []Example) error {
 	if len(examples) > MaxExamples {
 		return invalid("", "допустимо до 20 примеров")
 	}
@@ -44,7 +44,7 @@ func checkExamples(examples []Example) error {
 			return invalid(prefix+"/id", "повторяющийся ID примера")
 		}
 		seen[example.ID] = true
-		if err := checkExample(example); err != nil {
+		if err := checkExample(ctx, example); err != nil {
 			return at(prefix, err)
 		}
 	}

@@ -391,10 +391,11 @@ func (b *eventMapBuilder) topologyDiagnostics() {
 				continue
 			}
 			key := eventMapID(op.ChannelID, op.MessageID)
-			if op.Action == "send" {
+			switch op.Action {
+			case "send":
 				producers[key] = true
 				channelSenders[op.ChannelID] = true
-			} else if op.Action == "receive" {
+			case "receive":
 				consumers[key] = true
 			}
 		}

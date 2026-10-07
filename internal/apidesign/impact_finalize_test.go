@@ -2,6 +2,7 @@ package apidesign
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -111,7 +112,7 @@ func TestFinalizeImpactCapsOutputWithoutDanglingReferences(t *testing.T) {
 func TestFinalizeImpactHonorsCancellation(t *testing.T) {
 	ctx, cancel := context.WithCancel(t.Context())
 	cancel()
-	if err := FinalizeImpactReport(ctx, &ImpactReport{}); err != context.Canceled {
+	if err := FinalizeImpactReport(ctx, &ImpactReport{}); !errors.Is(err, context.Canceled) {
 		t.Fatalf("cancel: %v", err)
 	}
 }

@@ -241,11 +241,6 @@ func collectOperations(root map[string]any) ([]operation, error) {
 	return ops, nil
 }
 
-func resolve(root map[string]any, pointer string) any {
-	value, _ := resolveFound(root, pointer)
-	return value
-}
-
 func resolveFound(root map[string]any, pointer string) (any, bool) {
 	var value any = root
 	for token := range strings.SplitSeq(strings.TrimPrefix(pointer, "/"), "/") {

@@ -85,7 +85,7 @@ func (r *Repo) PreviewResourceMap(ctx context.Context, id int64, in ResourceMapP
 	if int64(len(encoded)) > r.cfg.MaxBody {
 		return ResourceMapPreview{}, specs.ErrTooLarge
 	}
-	diagnostics, err := r.Validate(string(encoded))
+	diagnostics, err := r.validateContext(ctx, string(encoded))
 	if err != nil {
 		return ResourceMapPreview{}, err
 	}

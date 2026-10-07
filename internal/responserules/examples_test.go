@@ -101,7 +101,7 @@ func TestExamplesStrictAdmission(t *testing.T) {
 }
 
 func TestExamplesCountAndAggregateLimits(t *testing.T) {
-	examples := []any{}
+	examples := make([]any, 0, 21)
 	for i := range 21 {
 		examples = append(examples, map[string]any{"id": fmt.Sprintf("case_%d", i), "name": "Case", "request": Request{Query: []Field{}, Headers: []Field{}}})
 	}
@@ -114,11 +114,11 @@ func TestExamplesCountAndAggregateLimits(t *testing.T) {
 	if err := jsonx.Unmarshal(exampleRuleJSON(t, string(raw)), &rule); err != nil {
 		t.Fatalf("20 bounded examples rejected: %v", err)
 	}
-	fields := []Field{}
+	fields := make([]Field, 0, 25)
 	for range 25 {
 		fields = append(fields, Field{Name: "large", Value: strings.Repeat("a", 4096)})
 	}
-	examples = []any{}
+	examples = make([]any, 0, 3)
 	for i := range 3 {
 		examples = append(examples, map[string]any{"id": fmt.Sprintf("case_%d", i), "name": "Case", "request": Request{Query: fields, Headers: []Field{}}})
 	}
@@ -148,7 +148,7 @@ func TestExampleCommandsAtomicAndPreserveGraph(t *testing.T) {
 	if err := jsonx.Unmarshal([]byte(`[{"type":"add_example","example":{"id":"first","name":"First","request":{"query":[],"headers":[],"bodyJSON":"9007199254740993"}}},{"type":"add_example","example":{"id":"second","name":"Second","request":{"query":[],"headers":[]}}},{"type":"update_example","example":{"id":"first","name":"Renamed","request":{"query":[],"headers":[],"bodyJSON":"1e10000"}}},{"type":"remove_example","exampleId":"second"},{"type":"set_rule","name":"Graph edit"}]`), &commands); err != nil {
 		t.Fatalf("example commands rejected: %v", err)
 	}
-	result, err := ApplyCommands(base, commands)
+	result, err := ApplyCommands(t.Context(), base, commands)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func TestExampleCommandsAtomicAndPreserveGraph(t *testing.T) {
 		if err := jsonx.Unmarshal([]byte(batch), &commands); err != nil {
 			t.Fatal(err)
 		}
-		if _, err := ApplyCommands(result, commands); err == nil {
+		if _, err := ApplyCommands(t.Context(), result, commands); err == nil {
 			t.Fatalf("invalid batch accepted: %s", batch)
 		}
 		after, _ := jsonx.Marshal(result)
@@ -195,7 +195,7 @@ func TestSavedExampleSurvivesGraphInvalidation(t *testing.T) {
 	if err := jsonx.Unmarshal(exampleRuleJSON(t, `[{"id":"one","name":"Saved case","request":{"query":[],"headers":[],"bodyJSON":"9007199254740993"}}]`), &rule); err != nil {
 		t.Fatal(err)
 	}
-	changed, err := ApplyCommands(rule, []Command{{Type: "remove_edge", EdgeID: "e"}})
+	changed, err := ApplyCommands(t.Context(), rule, []Command{{Type: "remove_edge", EdgeID: "e"}})
 	if err != nil {
 		t.Fatalf("rule edit rejected retained example: %v", err)
 	}

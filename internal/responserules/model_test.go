@@ -105,7 +105,7 @@ func TestCompactLimitsAndBounds(t *testing.T) {
 		t.Fatal("accepted 21 rules")
 	}
 	commands := make([]Command, 201)
-	if _, err := ApplyCommands(baseRule(), commands); err == nil {
+	if _, err := ApplyCommands(t.Context(), baseRule(), commands); err == nil {
 		t.Fatal("accepted 201 commands")
 	}
 }

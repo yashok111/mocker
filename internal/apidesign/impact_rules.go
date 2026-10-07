@@ -266,15 +266,16 @@ func impactContext(parts []string) string {
 				return "opaque"
 			}
 		case "media":
-			if token == "schema" {
+			switch token {
+			case "schema":
 				kind = "schema"
-			} else if token == "examples" {
+			case "examples":
 				if i+1 >= len(parts) {
 					return "named_map"
 				}
 				i++
 				kind = "example"
-			} else {
+			default:
 				return "opaque"
 			}
 		case "schema":

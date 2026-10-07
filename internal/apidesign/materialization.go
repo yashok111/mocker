@@ -42,7 +42,7 @@ func (r *Repo) PrepareMaterializationTx(ctx context.Context, tx *sql.Tx, id, exp
 	if err != nil {
 		return "", err
 	}
-	p, err := r.prepare(keyed)
+	p, err := r.prepare(ctx, keyed)
 	if err != nil {
 		return "", err
 	}

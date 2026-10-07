@@ -493,7 +493,7 @@ func validKafkaHost(host string) bool {
 		return false
 	}
 	for _, r := range parts[0] {
-		if !(unicode.IsLetter(r) || unicode.IsDigit(r) || r == '.' || r == '-' || r == '_') {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && !strings.ContainsRune(".-_", r) {
 			return false
 		}
 	}

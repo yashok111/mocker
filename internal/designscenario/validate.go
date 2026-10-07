@@ -254,7 +254,7 @@ func (v *documentValidator) validateFragments(items []Fragment, messages map[str
 		pointer := fmt.Sprintf("/fragments/%d", index)
 		v.checkText(pointer+"/id", fragment.ID, false)
 		v.checkText(pointer+"/label", fragment.Label, true)
-		if !slices.Contains(fragmentKinds, fragment.Kind) && !(version >= 2 && fragment.Kind == "alt") {
+		if !slices.Contains(fragmentKinds, fragment.Kind) && (version < 2 || fragment.Kind != "alt") {
 			v.errorAt(pointer+"/kind", "unknown fragment kind")
 		}
 		if _, exists := fragments[fragment.ID]; exists {

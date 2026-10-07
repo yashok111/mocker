@@ -64,7 +64,7 @@ func TestAuthoredContractAcceptsOpenAPIDialectsAndOpaqueExtensions(t *testing.T)
 		`{"openapi":"3.0.3","info":{"title":"A","version":"1"},"paths":{},"components":{"schemas":{"Value":{"type":"integer","minimum":0,"exclusiveMinimum":true,"nullable":true}}}}`,
 		`{"openapi":"3.1.0","info":{"title":"A","version":"1"},"paths":{},"components":{"schemas":{"Value":{"type":["integer","null"],"exclusiveMinimum":0,"enum":[1,2,null]},"Allowed":true}},"x-data":{"schema":42,"security":42}}`,
 	} {
-		if _, err := r.prepare(raw); err != nil {
+		if _, err := r.prepare(t.Context(), raw); err != nil {
 			t.Fatalf("valid authored contract rejected: %v", err)
 		}
 	}

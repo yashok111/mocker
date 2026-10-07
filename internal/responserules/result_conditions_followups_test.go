@@ -265,7 +265,7 @@ func TestResultConditionFollowupsTypedLimits(t *testing.T) {
 		{All: slices.Repeat([]ResultCondition{leaf}, 17)},
 		{All: []ResultCondition{{All: slices.Repeat([]ResultCondition{leaf}, 9)}, {Any: slices.Repeat([]ResultCondition{leaf}, 8)}}},
 	} {
-		if err := checkResultCondition(c); err == nil {
+		if err := checkResultCondition(t.Context(), c); err == nil {
 			t.Fatalf("accepted typed predicate=%+v", c)
 		}
 	}
@@ -273,12 +273,12 @@ func TestResultConditionFollowupsTypedLimits(t *testing.T) {
 	for range 4 {
 		deep = ResultCondition{Any: []ResultCondition{leaf, deep}}
 	}
-	if err := checkResultCondition(deep); err == nil {
+	if err := checkResultCondition(t.Context(), deep); err == nil {
 		t.Fatal("accepted deep typed predicate")
 	}
 	cyclic := ResultCondition{All: make([]ResultCondition, 2)}
 	cyclic.All[0], cyclic.All[1] = leaf, cyclic
-	if err := checkResultCondition(cyclic); err == nil {
+	if err := checkResultCondition(t.Context(), cyclic); err == nil {
 		t.Fatal("accepted cyclic typed predicate")
 	}
 	encoded, err := jsonx.Marshal(ResultCondition{All: []ResultCondition{leaf, leaf}})
@@ -286,7 +286,7 @@ func TestResultConditionFollowupsTypedLimits(t *testing.T) {
 		t.Fatalf("group roundtrip=%s err=%v", encoded, err)
 	}
 	var restored ResultCondition
-	if err := jsonx.Unmarshal(encoded, &restored); err != nil || checkResultCondition(restored) != nil {
+	if err := jsonx.Unmarshal(encoded, &restored); err != nil || checkResultCondition(t.Context(), restored) != nil {
 		t.Fatalf("restore err=%v", err)
 	}
 }

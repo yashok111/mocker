@@ -178,7 +178,7 @@ func TestArchiveWireBudgetAndRawTotal(t *testing.T) {
 func TestArchiveAccepts32UniqueFiles(t *testing.T) {
 	t.Parallel()
 	rev := revisionFixture()
-	items := []Request{}
+	items := make([]Request, 0, 32)
 	for i := range 32 {
 		id := fmt.Sprintf("api-%d", i)
 		rev.Document.Contracts = append(rev.Document.Contracts, designscenario.Contract{ID: id, Document: []byte(apiDocument)})

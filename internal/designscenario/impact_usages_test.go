@@ -113,7 +113,7 @@ func TestImpactUsagesExtendsOperationEvidenceAndKeepsSnapshotLocators(t *testing
 	if got.Evidence[0].ChangeID != "change" || got.Evidence[0].Side != "before" || got.Evidence[0].Direction != "response" || len(got.Evidence[0].ReferenceSites) != 2 || got.Evidence[0].ReferenceSites[0] != report.Evidence[0].ReferenceSites[0] {
 		t.Fatalf("evidence=%+v", got.Evidence[0])
 	}
-	codes := []string{}
+	codes := make([]string, 0, len(got.Diagnostics))
 	for _, diagnostic := range got.Diagnostics {
 		codes = append(codes, diagnostic.Code)
 	}
@@ -436,7 +436,7 @@ func TestImpactUsagesAliasTargetUsesInheritedParameterOverride(t *testing.T) {
 		t.Fatalf("result=%+v err=%v", got, err)
 	}
 	finding := got.FieldImpacts[0]
-	if finding.UsageKind != "binding_target" || finding.Before.Type != "string" || finding.After.Type != "integer" || finding.Verdict != "broken" || finding.Locator.Path != "/orders" || finding.Locator.Method != "get" || finding.Field.Name != "id" {
+	if finding.UsageKind != "binding_target" || finding.Before.Type != "string" || finding.After.Type != "integer" || finding.Verdict != "broken" || finding.Locator.Path != "/orders" || finding.Locator.Method != "get" || finding.Field.Name != "id" { //nolint:usestdlibvars // lowercase OpenAPI path-item key; http.MethodGet is "GET"
 		t.Fatalf("finding=%+v", finding)
 	}
 }

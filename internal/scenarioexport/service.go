@@ -91,7 +91,7 @@ func (s *Service) ExportContext(ctx context.Context, rev designscenario.Revision
 	var diagnostics []Diagnostic
 	var content []byte
 	var err error
-	ext := ""
+	var ext string
 	switch req.Format {
 	case AsyncAPIJSON, AsyncAPIYAML:
 		if req.ContractID == "" {

@@ -284,7 +284,7 @@ func (c *impactUsageCollector) checkField(
 			})
 		}
 	}
-	if !changed && !compatChanged && !(unknown && relevant) {
+	if !changed && !compatChanged && (!unknown || !relevant) {
 		return false, nil
 	}
 	owner := draft.Document.Messages[ownerIndex]

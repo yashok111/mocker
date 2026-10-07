@@ -1,17 +1,12 @@
 package scenarioexport
 
 import (
-	"context"
 	"fmt"
 	"strings"
 
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/jsonx"
 )
-
-func (s *Service) documentationDiagnostics(rev designscenario.Revision) ([]Diagnostic, error) {
-	return s.documentationDiagnosticsWithCache(rev, newEventValidationCache(context.Background(), rev))
-}
 
 func (s *Service) documentationDiagnosticsWithCache(rev designscenario.Revision, cache *eventValidationCache) ([]Diagnostic, error) {
 	if err := cache.ctx.Err(); err != nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 	"slices"
 	"strconv"
 	"strings"
@@ -116,7 +117,7 @@ func (v *validator) binding(root map[string]any) map[string]any {
 		return nil
 	}
 	switch b.Method {
-	case "GET", "PUT", "POST", "DELETE", "OPTIONS", "HEAD", "PATCH", "TRACE":
+	case http.MethodGet, http.MethodPut, http.MethodPost, http.MethodDelete, http.MethodOptions, http.MethodHead, http.MethodPatch, http.MethodTrace:
 	default:
 		bad()
 		return nil
@@ -256,7 +257,7 @@ func admitEnvelope(ctx context.Context, env Envelope, ruleID string) (int, error
 			return -1, invalid(fmt.Sprintf("/%s/rules/%d/id", Extension, i), "повторяющийся ID")
 		}
 		ids[r.ID] = true
-		if err := CheckStructure(r); err != nil {
+		if err := checkStructure(ctx, r); err != nil {
 			return -1, at(fmt.Sprintf("/%s/rules/%d", Extension, i), err)
 		}
 		if r.ID == ruleID {
@@ -400,7 +401,7 @@ func (v *validator) response(i int, n Node, operation map[string]any) error {
 		v.node(i, "invalid_response", "Статус должен быть от 200 до 599.", "/response/status")
 	}
 	if response.BodyJSON != nil || response.BodyFrom != nil {
-		if response.Status == 204 || response.Status == 205 || response.Status == 304 || v.rule.Binding != nil && v.rule.Binding.Method == "HEAD" {
+		if response.Status == 204 || response.Status == 205 || response.Status == 304 || v.rule.Binding != nil && v.rule.Binding.Method == http.MethodHead {
 			v.node(i, "body_not_allowed", "Для этого статуса или HEAD тело должно отсутствовать.", "/response/bodyJSON")
 		}
 		if response.BodyJSON != nil {

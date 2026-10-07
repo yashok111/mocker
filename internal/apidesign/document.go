@@ -34,7 +34,7 @@ type preparedDocument struct {
 	runtime        *specs.PreparedImport
 }
 
-func (r *Repo) prepare(raw string) (*preparedDocument, error) {
+func (r *Repo) prepare(ctx context.Context, raw string) (*preparedDocument, error) {
 	if int64(len(raw)) > r.cfg.MaxBody {
 		return nil, specs.ErrTooLarge
 	}
@@ -57,10 +57,10 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	if _, err := responserules.Decode(root); err != nil {
 		return nil, responseRuleError(err)
 	}
-	if _, err := responserules.CompileExecution(context.Background(), root); err != nil {
+	if _, err := responserules.CompileExecution(ctx, root); err != nil {
 		return nil, responseRuleError(err)
 	}
-	if _, err := statediagram.CompileExecution(context.Background(), root); err != nil {
+	if _, err := statediagram.CompileExecution(ctx, root); err != nil {
 		if field, ok := errors.AsType[*statediagram.FieldError](err); ok {
 			return nil, invalidField(field.Pointer, field.Message)
 		}
@@ -88,7 +88,9 @@ func (r *Repo) prepare(raw string) (*preparedDocument, error) {
 	if err != nil {
 		return nil, err
 	}
-	runtime, err := r.specs.PrepareImport(specs.ImportInput{Document: canonical, Source: "upload"})
+	// specs.PrepareImport takes no context (it compiles the executable copies
+	// under its own context.Background); internal/specs is outside this change.
+	runtime, err := r.specs.PrepareImport(specs.ImportInput{Document: canonical, Source: "upload"}) //nolint:contextcheck // specs.PrepareImport has no context parameter
 	if err != nil {
 		if errors.Is(err, specs.ErrTooLarge) {
 			return nil, err
@@ -457,8 +459,14 @@ func escape(value string) string {
 	return strings.ReplaceAll(strings.ReplaceAll(value, "~", "~0"), "/", "~1")
 }
 
+// Validate is the context-free entry the admin handlers call; in-package
+// callers that hold a request context use validateContext.
 func (r *Repo) Validate(document string) ([]Diagnostic, error) {
-	_, err := r.prepare(document)
+	return r.validateContext(context.Background(), document)
+}
+
+func (r *Repo) validateContext(ctx context.Context, document string) ([]Diagnostic, error) {
+	_, err := r.prepare(ctx, document)
 	if invalid, ok := errors.AsType[*InvalidError](err); ok {
 		return invalid.Diagnostics, nil
 	}

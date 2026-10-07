@@ -273,7 +273,7 @@ func eventFormDiagnostics(envelope map[string]string, contractID string, channel
 		if len(parts) < 2 {
 			return []Diagnostic{{Code: "event_forms_pending", Severity: "error", Message: "Неизвестная область формы"}}
 		}
-		used := false
+		var used bool
 		switch parts[0] {
 		case "event-contract":
 			used = parts[1] == contractID

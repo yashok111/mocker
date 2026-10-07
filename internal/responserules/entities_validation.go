@@ -78,7 +78,7 @@ func reachableWithout(r Rule, start, target, blocked, blockedPort string) bool {
 			return true
 		}
 		for _, e := range r.Edges {
-			if e.From == id && !(id == blocked && e.Port == blockedPort) {
+			if e.From == id && (id != blocked || e.Port != blockedPort) {
 				queue = append(queue, e.To)
 			}
 		}

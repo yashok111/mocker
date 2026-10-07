@@ -194,7 +194,7 @@ func impactEmbeddedOperationKeys(
 	value, err := decodeJSONValue(contract.Document)
 	root := object(value)
 	if err != nil || root == nil {
-		return keys, true, nil
+		return keys, true, nil //nolint:nilerr // an undecodable contract is reported as uncertain, not as a failure
 	}
 	for _, operation := range ContractOperations(root) {
 		if err := ctx.Err(); err != nil {

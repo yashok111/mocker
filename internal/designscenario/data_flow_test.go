@@ -258,9 +258,9 @@ func TestDataFlowAnalysisBounds(t *testing.T) {
 		for i := range 1100 {
 			m := original
 			m.ID = fmt.Sprintf("m%d", i)
-			copy := *m.Execution
-			copy.Bindings = []DataBinding{{ID: "id", SourceMessageID: m.ID, SourcePointer: "/x", Target: DataBindingTarget{Kind: "path", Name: "id"}}}
-			m.Execution = &copy
+			execution := *m.Execution
+			execution.Bindings = []DataBinding{{ID: "id", SourceMessageID: m.ID, SourcePointer: "/x", Target: DataBindingTarget{Kind: "path", Name: "id"}}}
+			m.Execution = &execution
 			r.Document.Messages = append(r.Document.Messages, m)
 		}
 		analysis := AnalyzeDataFlow(r.Document)
@@ -277,7 +277,7 @@ func TestDataFlowAnalysisBounds(t *testing.T) {
 	})
 	t.Run("large field names block output", func(t *testing.T) {
 		r := runRevision()
-		parameters := []any{}
+		parameters := make([]any, 0, 100)
 		for i := range 100 {
 			parameters = append(parameters, map[string]any{"in": "query", "name": fmt.Sprint(i) + strings.Repeat("a", 50000), "schema": map[string]any{"type": "string"}})
 		}
@@ -319,7 +319,7 @@ func TestDataFlowAmbiguousJSONMediaSchema(t *testing.T) {
 func TestDataBindingLegacyRunIgnoresCatalogBudget(t *testing.T) {
 	t.Parallel()
 	r := runRevision()
-	parameters := []any{}
+	parameters := make([]any, 0, 100)
 	for i := range 100 {
 		parameters = append(parameters, map[string]any{"in": "query", "name": fmt.Sprint(i) + strings.Repeat("a", 50000), "schema": map[string]any{"type": "string"}})
 	}
