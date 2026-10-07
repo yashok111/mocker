@@ -33,7 +33,7 @@ func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
 			return err
 		}
 	}
-	if err := verify(ctx, tx, false); err != nil {
+	if err := verify(ctx, tx, false, ""); err != nil {
 		return err
 	}
 	for _, o := range owners {
@@ -47,6 +47,7 @@ func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
 		if err != nil {
 			return err
 		}
+		var copied int64
 		for rows.Next() {
 			v := make([]any, o.metadataCount())
 			ptrs := make([]any, len(v))
@@ -75,6 +76,7 @@ func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
 				rows.Close()
 				return err
 			}
+			copied++
 		}
 		err = rows.Err()
 		rows.Close()
@@ -96,8 +98,16 @@ func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
 		}); err != nil {
 			return err
 		}
-		// Compare shadows with immutable canonical rows before touching old indexes.
+		// Compare shadows with immutable canonical rows before touching old
+		// indexes — only the rows this rebuild regenerated. Other projects'
+		// rows were copied through as they are, damaged or missing, and are
+		// their own rebuild's to repair: comparing them too (review
+		// 2026-10-06, F163) made damage in project B abort A's repair and the
+		// reverse, so neither could ever be fixed.
 		if err = walkMembers(ctx, tx, o, func(id, version, typ, mid, key, pid string, meta []byte, v []any) error {
+			if pid != project && pid != "" {
+				return nil
+			}
 			shadow := o
 			shadow.Table = o.Table + "_blob_rebuild"
 			got, err := physicalRow(ctx, tx, shadow, v)
@@ -115,14 +125,18 @@ func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
 		}); err != nil {
 			return err
 		}
+		// Every shadow row is either regenerated from this scope's canonical
+		// members or copied through, so the count is checked against exactly
+		// that sum rather than the global member count a missing row in
+		// another project would break.
 		var actual, canonical int64
 		if err = tx.QueryRowContext(ctx, "SELECT count(*) FROM "+o.Table+"_blob_rebuild").Scan(&actual); err != nil {
 			return err
 		}
-		if err = tx.QueryRowContext(ctx, "SELECT count(DISTINCT member_id) FROM backend_payload_members WHERE owner=?", o.Table).Scan(&canonical); err != nil {
+		if err = tx.QueryRowContext(ctx, "SELECT count(DISTINCT member_id) FROM backend_payload_members WHERE owner=? AND (project_id=? OR project_id='')", o.Table, project).Scan(&canonical); err != nil {
 			return err
 		}
-		if actual != canonical {
+		if actual != canonical+copied {
 			return fmt.Errorf("%w: shadow count %s", ErrDerived, o.Table)
 		}
 	}
@@ -163,7 +177,7 @@ func Rebuild(ctx context.Context, tx *sql.Tx, project string) error {
 			}
 		}
 	}
-	return Verify(ctx, tx)
+	return verify(ctx, tx, true, project)
 }
 
 // Check relationships against the complete shadow set, including when a damaged

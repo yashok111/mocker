@@ -960,7 +960,10 @@ manifests, owner-table replacement, counts/byte witnesses, foreign-key checks an
 Allow free disk space for both old and replacement tables plus new canonical data
 and WAL; no measured worst-case multiplier is claimed. Disk-full failure is safe,
 but free space before retrying. No automatic VACUUM, backup deletion, online GC or
-binary downgrade is performed.
+binary downgrade is performed. A binary refuses to start on a database whose
+schema version is newer than its own last migration (binaries built before
+this check do not have it, so never roll back past Store27 without restoring
+the backup).
 
 After stopping the application, use the matching new binary:
 
@@ -977,7 +980,10 @@ no REST/MCP arbitrary-path endpoint. `verify` checks the entire database and rol
 back its read transaction. `rebuild` stages projections, compares canonical counts,
 hashes and metadata, and switches them in one transaction. It restores the selected
 project and shared content-addressed observation blobs; other projects' rows retain
-their values. Repeating rebuild creates no semantic revision or receipt. Cancellation,
+their values, damaged or not, and are neither compared nor repaired by it (run
+`rebuild` once per damaged project; `verify` passes only after all of them).
+`--project` accepts any UUID spelling and uses its canonical lowercase form.
+Repeating rebuild creates no semantic revision or receipt. Cancellation,
 disk full or another write error rolls back to the previous indexes.
 
 A **derived storage** error permits rebuild after taking another backup. A

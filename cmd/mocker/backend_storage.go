@@ -26,9 +26,15 @@ func runBackendStorage(ctx context.Context, args []string, out, stderr io.Writer
 	}
 	rebuild := args[0] == "rebuild"
 	if rebuild {
-		if _, err := uuid.Parse(*project); err != nil {
+		id, err := uuid.Parse(*project)
+		if err != nil {
 			return fmt.Errorf("rebuild requires --project UUID")
 		}
+		// uuid.Parse accepts upper case, braces, urn:uuid: and bare hex, but
+		// projects are stored in the canonical lowercase form and looked up
+		// byte for byte. Passing the raw spelling on reported an existing
+		// project as "unknown project" (review 2026-10-06, F165).
+		*project = id.String()
 	} else if *project != "" {
 		return fmt.Errorf("verify checks the whole database; --project is only for rebuild")
 	}
