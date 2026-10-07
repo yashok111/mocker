@@ -26,65 +26,78 @@ func ApplyCommands(d Diagram, commands []Command) (Diagram, error) {
 	d.States = slices.Clone(d.States)
 	d.Transitions = slices.Clone(d.Transitions)
 	for _, c := range commands {
-		if c.Kind != "settings" && (c.Entity != nil || c.ClearEntity) {
-			return d, fmt.Errorf("привязку сущности меняет только команда settings")
-		}
-		switch c.Kind {
-		case "upsert_state":
-			if c.State == nil {
-				return d, fmt.Errorf("нужно state")
-			}
-			i := slices.IndexFunc(d.States, func(s State) bool { return s.ID == c.State.ID })
-			if i < 0 {
-				d.States = append(d.States, *c.State)
-			} else {
-				d.States[i] = *c.State
-			}
-		case "remove_state":
-			if !ValidID(c.ID) {
-				return d, fmt.Errorf("нужен id состояния")
-			}
-			d.States = slices.DeleteFunc(d.States, func(s State) bool { return s.ID == c.ID })
-			d.Transitions = slices.DeleteFunc(d.Transitions, func(tr Transition) bool { return tr.From == c.ID || tr.To == c.ID })
-			if d.InitialStateID == c.ID {
-				d.InitialStateID = ""
-			}
-		case "upsert_transition":
-			if c.Transition == nil {
-				return d, fmt.Errorf("нужно transition")
-			}
-			i := slices.IndexFunc(d.Transitions, func(tr Transition) bool { return tr.ID == c.Transition.ID })
-			if i < 0 {
-				d.Transitions = append(d.Transitions, *c.Transition)
-			} else {
-				d.Transitions[i] = *c.Transition
-			}
-		case "remove_transition":
-			if !ValidID(c.ID) {
-				return d, fmt.Errorf("нужен id перехода")
-			}
-			d.Transitions = slices.DeleteFunc(d.Transitions, func(tr Transition) bool { return tr.ID == c.ID })
-		case "settings":
-			if c.Entity != nil && c.ClearEntity {
-				return d, fmt.Errorf("entity и clearEntity нельзя задавать вместе")
-			}
-			if c.ClearEntity {
-				d.Entity = nil
-			}
-			if c.Entity != nil {
-				d.Entity = new(*c.Entity)
-			}
-			if c.Name != nil {
-				d.Name = *c.Name
-			}
-			if c.InitialStateID != nil {
-				d.InitialStateID = *c.InitialStateID
-			}
-		default:
-			return d, fmt.Errorf("неизвестная команда %q", c.Kind)
+		// The partially applied copy is still returned with the error, as before.
+		if err := applyCommand(&d, c); err != nil {
+			return d, err
 		}
 	}
 	return d, CheckStructure(d)
+}
+
+func applyCommand(d *Diagram, c Command) error {
+	if c.Kind != "settings" && (c.Entity != nil || c.ClearEntity) {
+		return fmt.Errorf("привязку сущности меняет только команда settings")
+	}
+	switch c.Kind {
+	case "upsert_state":
+		if c.State == nil {
+			return fmt.Errorf("нужно state")
+		}
+		i := slices.IndexFunc(d.States, func(s State) bool { return s.ID == c.State.ID })
+		if i < 0 {
+			d.States = append(d.States, *c.State)
+		} else {
+			d.States[i] = *c.State
+		}
+	case "remove_state":
+		if !ValidID(c.ID) {
+			return fmt.Errorf("нужен id состояния")
+		}
+		d.States = slices.DeleteFunc(d.States, func(s State) bool { return s.ID == c.ID })
+		d.Transitions = slices.DeleteFunc(d.Transitions, func(tr Transition) bool { return tr.From == c.ID || tr.To == c.ID })
+		if d.InitialStateID == c.ID {
+			d.InitialStateID = ""
+		}
+	case "upsert_transition":
+		if c.Transition == nil {
+			return fmt.Errorf("нужно transition")
+		}
+		i := slices.IndexFunc(d.Transitions, func(tr Transition) bool { return tr.ID == c.Transition.ID })
+		if i < 0 {
+			d.Transitions = append(d.Transitions, *c.Transition)
+		} else {
+			d.Transitions[i] = *c.Transition
+		}
+	case "remove_transition":
+		if !ValidID(c.ID) {
+			return fmt.Errorf("нужен id перехода")
+		}
+		d.Transitions = slices.DeleteFunc(d.Transitions, func(tr Transition) bool { return tr.ID == c.ID })
+	case "settings":
+		return applySettings(d, c)
+	default:
+		return fmt.Errorf("неизвестная команда %q", c.Kind)
+	}
+	return nil
+}
+
+func applySettings(d *Diagram, c Command) error {
+	if c.Entity != nil && c.ClearEntity {
+		return fmt.Errorf("entity и clearEntity нельзя задавать вместе")
+	}
+	if c.ClearEntity {
+		d.Entity = nil
+	}
+	if c.Entity != nil {
+		d.Entity = new(*c.Entity)
+	}
+	if c.Name != nil {
+		d.Name = *c.Name
+	}
+	if c.InitialStateID != nil {
+		d.InitialStateID = *c.InitialStateID
+	}
+	return nil
 }
 
 // UnmarshalJSON applies strict decoding even when a caller uses Unmarshal.

@@ -128,6 +128,27 @@ func (w *traversal) walk(v any, p, kind, schema, property string, depth int) err
 		}
 	}
 
+	if err := w.ownReferences(m, p, kind, schema, property); err != nil {
+		return err
+	}
+	if kind == "discriminator" {
+		return w.discriminator(m, p, schema, property)
+	}
+	for _, key := range slices.Sorted(maps.Keys(m)) {
+		rule := effectiveChildRule(kind, key)
+		if rule.kind == "" {
+			continue
+		}
+		if err := w.children(m[key], p, key, kind, schema, property, rule, depth); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// ownReferences records the node's own $ref and, for a schema, $dynamicRef;
+// root, components and discriminator objects carry no $ref of their own.
+func (w *traversal) ownReferences(m map[string]any, p, kind, schema, property string) error {
 	if kind != "root" && kind != "components" && kind != "discriminator" {
 		if err := w.add(m, "$ref", p+"/$ref", schema, property, false); err != nil {
 			return err
@@ -138,26 +159,9 @@ func (w *traversal) walk(v any, p, kind, schema, property string, depth int) err
 			return err
 		}
 	}
-	if kind == "discriminator" {
-		return w.discriminator(m, p, schema, property)
-	}
-	for _, key := range slices.Sorted(maps.Keys(m)) {
-		rule := childRules[kind][key]
-		if kind == "path" && isMethod(key) {
-			rule = childRule{"operation", ""}
-		}
-		if kind == "callback" && key != "$ref" && !strings.HasPrefix(key, "x-") {
-			rule = childRule{"path", ""}
-		}
-		if rule.kind == "" {
-			continue
-		}
-		if err := w.children(m[key], p, key, kind, schema, property, rule, depth); err != nil {
-			return err
-		}
-	}
 	return nil
 }
+
 func (w *traversal) children(child any, p, key, kind, schema, property string, rule childRule, depth int) error {
 	at := p + "/" + escape(key)
 	if rule.mode == "map" {

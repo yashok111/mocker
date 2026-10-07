@@ -144,6 +144,30 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 	if err := jsonx.Unmarshal(raw["kind"], &kind); err != nil {
 		return err
 	}
+	allowed, err := commandFields(kind)
+	if err != nil {
+		return err
+	}
+	if err := checkExactFields("", raw, allowed, "Поле не относится к команде"); err != nil {
+		return err
+	}
+	if kind == "upsert_resource" || kind == "upsert_relation" {
+		field := map[bool]string{true: "resource", false: "relation"}[kind == "upsert_resource"]
+		if err := checkReplacementObject(field, raw[field]); err != nil {
+			return err
+		}
+	}
+	type plain Command
+	var decoded plain
+	if err := jsonx.Unmarshal(data, &decoded); err != nil {
+		return err
+	}
+	*c = Command(decoded)
+	return validateCommand(*c)
+}
+
+// commandFields is the exact top-level field set of each command variant.
+func commandFields(kind string) (map[string]bool, error) {
 	allowed := map[string]bool{"kind": true}
 	switch kind {
 	case "auto_layout":
@@ -163,64 +187,51 @@ func (c *Command) UnmarshalJSON(data []byte) error {
 		allowed["x"] = true
 		allowed["y"] = true
 	default:
-		return fail("/kind", "Неизвестная команда")
+		return nil, fail("/kind", "Неизвестная команда")
 	}
+	return allowed, nil
+}
+
+// checkExactFields requires exactly the allowed keys, none of them null, in
+// that order of checks: unknown, then missing, then null.
+func checkExactFields(prefix string, raw map[string]jsonx.RawMessage, allowed map[string]bool, unknownMessage string) error {
 	for key := range raw {
 		if !allowed[key] {
-			return fail("/"+escape(key), "Поле не относится к команде")
+			return fail(prefix+"/"+escape(key), unknownMessage)
 		}
 	}
 	for key := range allowed {
 		if _, ok := raw[key]; !ok {
-			return fail("/"+escape(key), "Обязательное поле отсутствует")
+			return fail(prefix+"/"+escape(key), "Обязательное поле отсутствует")
 		}
 	}
 	for key, value := range raw {
 		if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-			return fail("/"+escape(key), "Поле не может быть null")
+			return fail(prefix+"/"+escape(key), "Поле не может быть null")
 		}
 	}
-	if kind == "upsert_resource" || kind == "upsert_relation" {
-		field := map[bool]string{true: "resource", false: "relation"}[kind == "upsert_resource"]
-		var nested map[string]jsonx.RawMessage
-		if err := jsonx.Unmarshal(raw[field], &nested); err != nil || nested == nil {
-			return fail("/"+field, "Ожидается объект")
-		}
-		keys := map[string]bool{}
-		if field == "resource" {
-			for _, k := range []string{"id", "name", "service", "description", "operationKeys", "x", "y"} {
-				keys[k] = true
-			}
-		} else {
-			for _, k := range []string{"id", "fromResourceId", "toResourceId", "label"} {
-				keys[k] = true
-			}
-		}
-		for key := range nested {
-			if !keys[key] {
-				return fail("/"+field+"/"+escape(key), "Неизвестное поле")
-			}
-		}
-		for key := range keys {
-			if _, ok := nested[key]; !ok {
-				return fail("/"+field+"/"+escape(key), "Обязательное поле отсутствует")
-			}
-		}
-		for key, value := range nested {
-			if bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
-				return fail("/"+field+"/"+escape(key), "Поле не может быть null")
-			}
-		}
-	}
-	type plain Command
-	var decoded plain
-	if err := jsonx.Unmarshal(data, &decoded); err != nil {
-		return err
-	}
-	*c = Command(decoded)
-	return validateCommand(*c)
+	return nil
 }
 
+// checkReplacementObject applies the same exact-field rule inside the
+// resource or relation object an upsert carries.
+func checkReplacementObject(field string, value jsonx.RawMessage) error {
+	var nested map[string]jsonx.RawMessage
+	if err := jsonx.Unmarshal(value, &nested); err != nil || nested == nil {
+		return fail("/"+field, "Ожидается объект")
+	}
+	keys := map[string]bool{}
+	if field == "resource" {
+		for _, k := range []string{"id", "name", "service", "description", "operationKeys", "x", "y"} {
+			keys[k] = true
+		}
+	} else {
+		for _, k := range []string{"id", "fromResourceId", "toResourceId", "label"} {
+			keys[k] = true
+		}
+	}
+	return checkExactFields("/"+field, nested, keys, "Неизвестное поле")
+}
 func validateCommand(c Command) error {
 	switch c.Kind {
 	case "auto_layout":
@@ -333,51 +344,8 @@ func readStored(root map[string]any) (stored, error) {
 	assignments := map[string]bool{}
 	for i, v := range rawResources {
 		at := fmt.Sprintf("%s/resources/%d", p, i)
-		obj := object(v)
-		if obj == nil {
-			return s, fail(at, "Ожидается объект")
-		}
-		r := Resource{}
-		for _, field := range []string{"id", "name", "service", "description"} {
-			value, ok := obj[field].(string)
-			if !ok {
-				return s, fail(at+"/"+field, "Ожидается строка")
-			}
-			switch field {
-			case "id":
-				r.ID = value
-			case "name":
-				r.Name = value
-			case "service":
-				r.Service = value
-			case "description":
-				r.Description = value
-			}
-		}
-		keys, ok := obj["operationKeys"].([]any)
-		if !ok {
-			return s, fail(at+"/operationKeys", "Ожидается массив")
-		}
-		r.OperationKeys = []string{}
-		for j, v := range keys {
-			key, ok := v.(string)
-			if !ok {
-				return s, fail(fmt.Sprintf("%s/operationKeys/%d", at, j), "Ожидается строка")
-			}
-			r.OperationKeys = append(r.OperationKeys, key)
-		}
-		for _, field := range []string{"x", "y"} {
-			f, ok := coordinate(obj[field])
-			if !ok {
-				return s, fail(at+"/"+field, "Некорректная координата")
-			}
-			if field == "x" {
-				r.X = f
-			} else {
-				r.Y = f
-			}
-		}
-		if err := validateResource(r, at); err != nil {
+		r, err := readStoredResource(v, at)
+		if err != nil {
 			return s, err
 		}
 		if resourceIDs[r.ID] {
@@ -396,28 +364,8 @@ func readStored(root map[string]any) (stored, error) {
 	pairs := map[string]bool{}
 	for i, v := range rawRelations {
 		at := fmt.Sprintf("%s/relations/%d", p, i)
-		obj := object(v)
-		if obj == nil {
-			return s, fail(at, "Ожидается объект")
-		}
-		r := Relation{}
-		for _, field := range []string{"id", "fromResourceId", "toResourceId", "label"} {
-			value, ok := obj[field].(string)
-			if !ok {
-				return s, fail(at+"/"+field, "Ожидается строка")
-			}
-			switch field {
-			case "id":
-				r.ID = value
-			case "fromResourceId":
-				r.FromResourceID = value
-			case "toResourceId":
-				r.ToResourceID = value
-			case "label":
-				r.Label = value
-			}
-		}
-		if err := validateRelation(r, at); err != nil {
+		r, err := readStoredRelation(v, at)
+		if err != nil {
 			return s, err
 		}
 		pair := r.FromResourceID + "\x00" + r.ToResourceID
@@ -429,6 +377,89 @@ func readStored(root map[string]any) (stored, error) {
 		s.Relations = append(s.Relations, r)
 	}
 	return s, nil
+}
+
+// readStoredResource decodes and validates one stored resource on its own;
+// uniqueness across resources stays with the caller.
+func readStoredResource(v any, at string) (Resource, error) {
+	obj := object(v)
+	if obj == nil {
+		return Resource{}, fail(at, "Ожидается объект")
+	}
+	r := Resource{}
+	for _, field := range []string{"id", "name", "service", "description"} {
+		value, ok := obj[field].(string)
+		if !ok {
+			return Resource{}, fail(at+"/"+field, "Ожидается строка")
+		}
+		switch field {
+		case "id":
+			r.ID = value
+		case "name":
+			r.Name = value
+		case "service":
+			r.Service = value
+		case "description":
+			r.Description = value
+		}
+	}
+	keys, ok := obj["operationKeys"].([]any)
+	if !ok {
+		return Resource{}, fail(at+"/operationKeys", "Ожидается массив")
+	}
+	r.OperationKeys = []string{}
+	for j, v := range keys {
+		key, ok := v.(string)
+		if !ok {
+			return Resource{}, fail(fmt.Sprintf("%s/operationKeys/%d", at, j), "Ожидается строка")
+		}
+		r.OperationKeys = append(r.OperationKeys, key)
+	}
+	for _, field := range []string{"x", "y"} {
+		f, ok := coordinate(obj[field])
+		if !ok {
+			return Resource{}, fail(at+"/"+field, "Некорректная координата")
+		}
+		if field == "x" {
+			r.X = f
+		} else {
+			r.Y = f
+		}
+	}
+	if err := validateResource(r, at); err != nil {
+		return Resource{}, err
+	}
+	return r, nil
+}
+
+// readStoredRelation decodes and validates one stored relation on its own;
+// uniqueness of IDs and directed pairs stays with the caller.
+func readStoredRelation(v any, at string) (Relation, error) {
+	obj := object(v)
+	if obj == nil {
+		return Relation{}, fail(at, "Ожидается объект")
+	}
+	r := Relation{}
+	for _, field := range []string{"id", "fromResourceId", "toResourceId", "label"} {
+		value, ok := obj[field].(string)
+		if !ok {
+			return Relation{}, fail(at+"/"+field, "Ожидается строка")
+		}
+		switch field {
+		case "id":
+			r.ID = value
+		case "fromResourceId":
+			r.FromResourceID = value
+		case "toResourceId":
+			r.ToResourceID = value
+		case "label":
+			r.Label = value
+		}
+	}
+	if err := validateRelation(r, at); err != nil {
+		return Relation{}, err
+	}
+	return r, nil
 }
 
 // ValidateStored checks a present extension without constraining ordinary documents.
@@ -463,11 +494,49 @@ func Project(root map[string]any) (Model, error) {
 	if err != nil {
 		return m, err
 	}
+	families, err := projectOperations(root, &m)
+	if err != nil {
+		return m, err
+	}
+	projectSchemaDependencies(root, &m)
+	resourceIDs, familyNames, err := projectResources(s, families, &m)
+	if err != nil {
+		return m, err
+	}
+	for _, r := range m.Resources {
+		if len(r.OperationKeys) == 0 {
+			m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "empty_resource", Severity: "info", Message: "Ресурс пока не содержит операций", ResourceID: r.ID})
+		}
+	}
+	for _, rel := range s.Relations {
+		m.Relations = append(m.Relations, rel)
+		if !resourceIDs[rel.FromResourceID] && !hasResource(m.Resources, rel.FromResourceID) || !resourceIDs[rel.ToResourceID] && !hasResource(m.Resources, rel.ToResourceID) {
+			m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "missing_relation_endpoint", Severity: "warning", Message: "Один из ресурсов связи не найден", RelationID: rel.ID})
+		}
+	}
+	for _, name := range familyNames {
+		if !hasCollectionGet(m.Operations, name) && hasCollectionPost(m.Operations, name) {
+			m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "consider_collection_get", Severity: "info", Message: "Для " + name + " есть POST без GET коллекции; рассмотрите чтение коллекции", ResourceID: familyID(name)})
+		}
+	}
+	return m, nil
+}
+
+// operationProjection carries the cross-path state of one Project call's
+// operation walk: families for inference, first sightings for diagnostics.
+type operationProjection struct {
+	m                   *Model
+	families            map[string][]string
+	operationIDs        map[string]string
+	shapes              map[string]string
+	pathItemDiagnostics int
+}
+
+// projectOperations walks every non-extension path in sorted order and
+// returns the operation keys grouped by resource family.
+func projectOperations(root map[string]any, m *Model) (map[string][]string, error) {
+	p := operationProjection{m: m, families: map[string][]string{}, operationIDs: map[string]string{}, shapes: map[string]string{}}
 	paths := object(root["paths"])
-	families := map[string][]string{}
-	operationIDs := map[string]string{}
-	shapes := map[string]string{}
-	pathItemDiagnostics := 0
 	for _, path := range slices.Sorted(maps.Keys(paths)) {
 		if strings.HasPrefix(path, "x-") {
 			continue
@@ -475,56 +544,82 @@ func Project(root map[string]any) (Model, error) {
 		item := object(paths[path])
 		pointer := "/paths/" + escape(path)
 		nodes, diagnostics := schemamodel.PathItems(root, item, pointer)
-		for _, diagnostic := range diagnostics {
-			pathItemDiagnostics++
-			if pathItemDiagnostics <= 100 {
-				m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: diagnostic.Code, Severity: "warning", Message: path + ": " + diagnostic.Message})
-			} else if pathItemDiagnostics == 101 {
-				m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "path_item_diagnostics_truncated", Severity: "warning", Message: "Есть дополнительные проблемы ссылок Path Item"})
-			}
-		}
+		p.pathDiagnostics(path, diagnostics)
 		for _, occurrence := range schemamodel.PathItemOperations(nodes) {
-			verb := occurrence.Method
-			op := object(occurrence.Value)
-			if op == nil {
-				continue
-			}
-			if len(m.Operations) >= MaxOperations {
-				return m, fail("/paths", "Редактор поддерживает не более 1000 операций")
-			}
-			key := text(op[OperationKey])
-			keyPointer := pointer + "/" + verb + "/" + OperationKey
-			source := ""
-			if occurrence.Pointer != pointer+"/"+verb {
-				key = text(object(item[PathOperationKeys])[verb])
-				keyPointer = pointer + "/" + PathOperationKeys + "/" + verb
-				source = occurrence.Pointer
-			}
-			if !validID(key) {
-				return m, fail(keyPointer, "Нужен стабильный ключ операции")
-			}
-			for _, old := range m.Operations {
-				if old.Key == key {
-					return m, fail(keyPointer, "Ключ операции повторяется")
-				}
-			}
-			m.Operations = append(m.Operations, Operation{Key: key, Method: strings.ToUpper(verb), Path: path, Summary: text(op["summary"]), Schemas: []string{}, SourcePointer: source})
-			families[family(path)] = append(families[family(path)], key)
-			if id := text(op["operationId"]); id != "" {
-				if first := operationIDs[id]; first != "" {
-					m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "duplicate_operation_id", Severity: "warning", Message: "operationId " + id + " повторяется у " + first, OperationKey: key})
-				} else {
-					operationIDs[id] = strings.ToUpper(verb) + " " + path
-				}
-			}
-			shape := verb + " " + normalizePath(path)
-			if first := shapes[shape]; first != "" && first != path {
-				m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "overlapping_path", Severity: "warning", Message: "Шаблон пути пересекается с " + first, OperationKey: key})
-			} else {
-				shapes[shape] = path
+			if err := p.operation(item, pointer, path, occurrence); err != nil {
+				return nil, err
 			}
 		}
 	}
+	return p.families, nil
+}
+
+// pathDiagnostics keeps the first 100 Path Item diagnostics and one marker.
+func (p *operationProjection) pathDiagnostics(path string, diagnostics []schemamodel.PathItemDiagnostic) {
+	for _, diagnostic := range diagnostics {
+		p.pathItemDiagnostics++
+		if p.pathItemDiagnostics <= 100 {
+			p.m.Diagnostics = append(p.m.Diagnostics, MapDiagnostic{Code: diagnostic.Code, Severity: "warning", Message: path + ": " + diagnostic.Message})
+		} else if p.pathItemDiagnostics == 101 {
+			p.m.Diagnostics = append(p.m.Diagnostics, MapDiagnostic{Code: "path_item_diagnostics_truncated", Severity: "warning", Message: "Есть дополнительные проблемы ссылок Path Item"})
+		}
+	}
+}
+
+func (p *operationProjection) operation(item map[string]any, pointer, path string, occurrence schemamodel.PathItemOperation) error {
+	verb := occurrence.Method
+	op := object(occurrence.Value)
+	if op == nil {
+		return nil
+	}
+	if len(p.m.Operations) >= MaxOperations {
+		return fail("/paths", "Редактор поддерживает не более 1000 операций")
+	}
+	key := text(op[OperationKey])
+	keyPointer := pointer + "/" + verb + "/" + OperationKey
+	source := ""
+	// An operation reached through a $ref'd Path Item keeps its key on the
+	// referring path, so aliases of one shared item stay distinct.
+	if occurrence.Pointer != pointer+"/"+verb {
+		key = text(object(item[PathOperationKeys])[verb])
+		keyPointer = pointer + "/" + PathOperationKeys + "/" + verb
+		source = occurrence.Pointer
+	}
+	if !validID(key) {
+		return fail(keyPointer, "Нужен стабильный ключ операции")
+	}
+	for _, old := range p.m.Operations {
+		if old.Key == key {
+			return fail(keyPointer, "Ключ операции повторяется")
+		}
+	}
+	p.m.Operations = append(p.m.Operations, Operation{Key: key, Method: strings.ToUpper(verb), Path: path, Summary: text(op["summary"]), Schemas: []string{}, SourcePointer: source})
+	p.families[family(path)] = append(p.families[family(path)], key)
+	p.overlaps(op, verb, path, key)
+	return nil
+}
+
+// overlaps reports a repeated operationId and a path template that shadows
+// another path with the same verb; the first sighting of each is remembered.
+func (p *operationProjection) overlaps(op map[string]any, verb, path, key string) {
+	if id := text(op["operationId"]); id != "" {
+		if first := p.operationIDs[id]; first != "" {
+			p.m.Diagnostics = append(p.m.Diagnostics, MapDiagnostic{Code: "duplicate_operation_id", Severity: "warning", Message: "operationId " + id + " повторяется у " + first, OperationKey: key})
+		} else {
+			p.operationIDs[id] = strings.ToUpper(verb) + " " + path
+		}
+	}
+	shape := verb + " " + normalizePath(path)
+	if first := p.shapes[shape]; first != "" && first != path {
+		p.m.Diagnostics = append(p.m.Diagnostics, MapDiagnostic{Code: "overlapping_path", Severity: "warning", Message: "Шаблон пути пересекается с " + first, OperationKey: key})
+	} else {
+		p.shapes[shape] = path
+	}
+}
+
+// projectSchemaDependencies attaches schema names to operations; analysis
+// failures degrade to warnings because the map stays usable without them.
+func projectSchemaDependencies(root map[string]any, m *Model) {
 	if dependencies, err := schemamodel.Project(root); err == nil {
 		byAddress := map[string][]string{}
 		for _, usage := range dependencies.Operations {
@@ -548,6 +643,11 @@ func Project(root map[string]any) (Model, error) {
 	} else if unsupportedRef != "" {
 		m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "schema_analysis_unavailable", Severity: "warning", Message: "Внешняя или якорная ссылка не анализируется без сети: " + unsupportedRef})
 	}
+}
+
+// projectResources lists the stored resources, then infers one resource per
+// family for the operations no stored resource claims, and sorts the result.
+func projectResources(s stored, families map[string][]string, m *Model) (map[string]bool, []string, error) {
 	knownOps := map[string]Operation{}
 	for _, op := range m.Operations {
 		knownOps[op.Key] = op
@@ -566,32 +666,12 @@ func Project(root map[string]any) (Model, error) {
 	}
 	familyNames := slices.Sorted(maps.Keys(families))
 	for i, name := range familyNames {
-		id := familyID(name)
-		remaining := []string{}
-		for _, key := range families[name] {
-			if !assigned[key] {
-				remaining = append(remaining, key)
-			}
+		if err := inferFamilyResource(m, i, name, families[name], assigned, resourceIDs); err != nil {
+			return nil, nil, err
 		}
-		if resourceIDs[id] {
-			for j := range m.Resources {
-				if m.Resources[j].ID == id {
-					m.Resources[j].OperationKeys = append(m.Resources[j].OperationKeys, remaining...)
-					break
-				}
-			}
-			continue
-		}
-		if len(remaining) == 0 {
-			continue
-		}
-		if utf8.RuneCountInString(name) > 200 {
-			return m, fail("/paths", "Автоматическое название ресурса длиннее 200 символов")
-		}
-		m.Resources = append(m.Resources, ResourceView{Resource: Resource{ID: id, Name: name, Service: "", Description: "", OperationKeys: remaining, X: float64(i%3) * 340, Y: float64(i/3) * 220}, Inferred: true})
 	}
 	if len(m.Resources) > MaxResources {
-		return m, fail("/"+Extension, "Редактор поддерживает не более 200 ресурсов")
+		return nil, nil, fail("/"+Extension, "Редактор поддерживает не более 200 ресурсов")
 	}
 	slices.SortFunc(m.Resources, func(a, b ResourceView) int {
 		if c := strings.Compare(a.Name, b.Name); c != 0 {
@@ -599,23 +679,37 @@ func Project(root map[string]any) (Model, error) {
 		}
 		return strings.Compare(a.ID, b.ID)
 	})
-	for _, r := range m.Resources {
-		if len(r.OperationKeys) == 0 {
-			m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "empty_resource", Severity: "info", Message: "Ресурс пока не содержит операций", ResourceID: r.ID})
+	return resourceIDs, familyNames, nil
+}
+
+// inferFamilyResource gives a family's unassigned operations to its stored
+// resource when one was saved under the family ID, else to a new inferred one
+// laid out on the default three-column grid.
+func inferFamilyResource(m *Model, i int, name string, keys []string, assigned, resourceIDs map[string]bool) error {
+	id := familyID(name)
+	remaining := []string{}
+	for _, key := range keys {
+		if !assigned[key] {
+			remaining = append(remaining, key)
 		}
 	}
-	for _, rel := range s.Relations {
-		m.Relations = append(m.Relations, rel)
-		if !resourceIDs[rel.FromResourceID] && !hasResource(m.Resources, rel.FromResourceID) || !resourceIDs[rel.ToResourceID] && !hasResource(m.Resources, rel.ToResourceID) {
-			m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "missing_relation_endpoint", Severity: "warning", Message: "Один из ресурсов связи не найден", RelationID: rel.ID})
+	if resourceIDs[id] {
+		for j := range m.Resources {
+			if m.Resources[j].ID == id {
+				m.Resources[j].OperationKeys = append(m.Resources[j].OperationKeys, remaining...)
+				break
+			}
 		}
+		return nil
 	}
-	for _, name := range familyNames {
-		if !hasCollectionGet(m.Operations, name) && hasCollectionPost(m.Operations, name) {
-			m.Diagnostics = append(m.Diagnostics, MapDiagnostic{Code: "consider_collection_get", Severity: "info", Message: "Для " + name + " есть POST без GET коллекции; рассмотрите чтение коллекции", ResourceID: familyID(name)})
-		}
+	if len(remaining) == 0 {
+		return nil
 	}
-	return m, nil
+	if utf8.RuneCountInString(name) > 200 {
+		return fail("/paths", "Автоматическое название ресурса длиннее 200 символов")
+	}
+	m.Resources = append(m.Resources, ResourceView{Resource: Resource{ID: id, Name: name, Service: "", Description: "", OperationKeys: remaining, X: float64(i%3) * 340, Y: float64(i/3) * 220}, Inferred: true})
+	return nil
 }
 func normalizePath(path string) string {
 	parts := strings.Split(path, "/")
@@ -670,61 +764,8 @@ func Apply(root map[string]any, commands []Command) (map[string]any, error) {
 		if err != nil {
 			return nil, err
 		}
-		switch c.Kind {
-		case "auto_layout":
-			if err := autoLayout(&s, model); err != nil {
-				return nil, err
-			}
-		case "upsert_resource":
-			j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.Resource.ID })
-			if j < 0 {
-				s.Resources = append(s.Resources, *c.Resource)
-			} else {
-				s.Resources[j] = *c.Resource
-			}
-		case "remove_resource":
-			j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.ResourceID })
-			if j < 0 {
-				return nil, fail("/resourceId", "Нельзя удалить не сохранённый ресурс")
-			}
-			s.Resources = slices.Delete(s.Resources, j, j+1)
-			s.Relations = slices.DeleteFunc(s.Relations, func(r Relation) bool { return r.FromResourceID == c.ResourceID || r.ToResourceID == c.ResourceID })
-		case "assign_operation":
-			if !slices.ContainsFunc(model.Operations, func(op Operation) bool { return op.Key == c.OperationKey }) {
-				return nil, fail("/operationKey", "Операция не найдена")
-			}
-			if c.ResourceID != "" {
-				if err := materialize(&s, model, c.ResourceID); err != nil {
-					return nil, err
-				}
-			}
-			for j := range s.Resources {
-				s.Resources[j].OperationKeys = slices.DeleteFunc(s.Resources[j].OperationKeys, func(key string) bool { return key == c.OperationKey })
-			}
-			if c.ResourceID != "" {
-				j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.ResourceID })
-				s.Resources[j].OperationKeys = append(s.Resources[j].OperationKeys, c.OperationKey)
-			}
-		case "upsert_relation":
-			j := slices.IndexFunc(s.Relations, func(r Relation) bool { return r.ID == c.Relation.ID })
-			if j < 0 {
-				s.Relations = append(s.Relations, *c.Relation)
-			} else {
-				s.Relations[j] = *c.Relation
-			}
-		case "remove_relation":
-			j := slices.IndexFunc(s.Relations, func(r Relation) bool { return r.ID == c.RelationID })
-			if j < 0 {
-				return nil, fail("/relationId", "Связь не найдена")
-			}
-			s.Relations = slices.Delete(s.Relations, j, j+1)
-		case "move_resource":
-			if err := materialize(&s, model, c.ResourceID); err != nil {
-				return nil, err
-			}
-			j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.ResourceID })
-			s.Resources[j].X = *c.X
-			s.Resources[j].Y = *c.Y
+		if err := applyCommand(&s, model, c); err != nil {
+			return nil, err
 		}
 		copyRoot[Extension] = storedObjectWithMetadata(s, object(copyRoot[Extension]))
 		if err := ValidateStored(copyRoot); err != nil {
@@ -738,6 +779,76 @@ func Apply(root map[string]any, commands []Command) (map[string]any, error) {
 	}
 	return copyRoot, nil
 }
+
+// applyCommand applies one validated command to the stored copy; model is
+// the projection of the document as it stood before this command.
+func applyCommand(s *stored, model Model, c Command) error {
+	switch c.Kind {
+	case "auto_layout":
+		if err := autoLayout(s, model); err != nil {
+			return err
+		}
+	case "upsert_resource":
+		j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.Resource.ID })
+		if j < 0 {
+			s.Resources = append(s.Resources, *c.Resource)
+		} else {
+			s.Resources[j] = *c.Resource
+		}
+	case "remove_resource":
+		j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.ResourceID })
+		if j < 0 {
+			return fail("/resourceId", "Нельзя удалить не сохранённый ресурс")
+		}
+		s.Resources = slices.Delete(s.Resources, j, j+1)
+		s.Relations = slices.DeleteFunc(s.Relations, func(r Relation) bool { return r.FromResourceID == c.ResourceID || r.ToResourceID == c.ResourceID })
+	case "assign_operation":
+		return assignOperation(s, model, c)
+	case "upsert_relation":
+		j := slices.IndexFunc(s.Relations, func(r Relation) bool { return r.ID == c.Relation.ID })
+		if j < 0 {
+			s.Relations = append(s.Relations, *c.Relation)
+		} else {
+			s.Relations[j] = *c.Relation
+		}
+	case "remove_relation":
+		j := slices.IndexFunc(s.Relations, func(r Relation) bool { return r.ID == c.RelationID })
+		if j < 0 {
+			return fail("/relationId", "Связь не найдена")
+		}
+		s.Relations = slices.Delete(s.Relations, j, j+1)
+	case "move_resource":
+		if err := materialize(s, model, c.ResourceID); err != nil {
+			return err
+		}
+		j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.ResourceID })
+		s.Resources[j].X = *c.X
+		s.Resources[j].Y = *c.Y
+	}
+	return nil
+}
+
+// assignOperation moves an operation to one resource, or unassigns it when
+// ResourceID is empty; an inferred target resource is saved first.
+func assignOperation(s *stored, model Model, c Command) error {
+	if !slices.ContainsFunc(model.Operations, func(op Operation) bool { return op.Key == c.OperationKey }) {
+		return fail("/operationKey", "Операция не найдена")
+	}
+	if c.ResourceID != "" {
+		if err := materialize(s, model, c.ResourceID); err != nil {
+			return err
+		}
+	}
+	for j := range s.Resources {
+		s.Resources[j].OperationKeys = slices.DeleteFunc(s.Resources[j].OperationKeys, func(key string) bool { return key == c.OperationKey })
+	}
+	if c.ResourceID != "" {
+		j := slices.IndexFunc(s.Resources, func(r Resource) bool { return r.ID == c.ResourceID })
+		s.Resources[j].OperationKeys = append(s.Resources[j].OperationKeys, c.OperationKey)
+	}
+	return nil
+}
+
 func materialize(s *stored, m Model, id string) error {
 	if slices.ContainsFunc(s.Resources, func(r Resource) bool { return r.ID == id }) {
 		return nil
