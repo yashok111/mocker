@@ -279,6 +279,14 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 		if err != nil {
 			return nil, err
 		}
+		// Everything below validates against this head (immutability, ref
+		// and evidence inheritance, architecture retention). A stale writer
+		// whose document is valid only against the base it read got a 400/422
+		// there instead of the 409 that tells it to reread or fork (review
+		// 2026-10-06, F101). The writer re-checks under the lock.
+		if m.previous.Pin.Version != m.expected {
+			return nil, diagramConflict()
+		}
 		if err = validateDiagramSave(m.previous, m.document); err != nil {
 			return nil, err
 		}

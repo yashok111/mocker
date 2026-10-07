@@ -136,7 +136,7 @@ func interactionItems(v *DiagramVersion, in DiagramQueryInput) ([]DiagramRow, er
 		}
 	}
 	if in.Section == "gaps" {
-		for _, gap := range v.Gaps {
+		for _, gap := range uniqueDiagramGaps(v.Gaps) { // F104: stored duplicates
 			if in.Search == "" || strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(in.Search)) {
 				items = append(items, DiagramRow{Gap: &gap})
 			}
