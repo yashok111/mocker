@@ -6,6 +6,7 @@ import (
 )
 
 type architectureProjection struct {
+	targetHash   string
 	identityKeys map[string]string
 	identityErr  error
 	memberSeen   map[string]map[string]bool

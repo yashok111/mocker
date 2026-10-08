@@ -25,6 +25,11 @@ func addBackendImportTools(s *sdk.Server, lb *loopback) {
 		name, route, description, schema string
 		readOnly, idempotent             bool
 	}{
+		{"query_backend_coverage", "POST /api/backend-projects/{id}/coverage/query", "Reads compact source-revision coverage summary or pinned snapshot/file/inventory/gap pages. No full source graph resolution. Files count snapshot/path entries, not unique current source files. Follow all cursors for complete details.", "", true, true},
+		{"get_backend_import_schema", "GET /api/backend-projects/import-schema", "Reads the focused wire schema for a selected profile and node/edge kind or evidence. Session/profile semantics still require validate_backend_import_batch. No source files or staging are read.", "", true, true},
+		{"validate_backend_import_batch", "POST /api/backend-projects/{id}/imports/{iid}/validate", "Validates exact-session batch records without staging or allocating identities. Returns at most 25 record diagnostics per pinned cursor. Does not replace READY graph closure, source audit or later Put CAS/quota checks.", "", true, true},
+		{"get_backend_storage_usage", "GET /api/backend-projects/{id}/storage/usage", "Reads active import staging, shared transient reservations, closed import history, canonical payload bytes and durable receipts separately. Remaining budget is a sampled estimate, not a reservation or database file size.", `{"type":"object","additionalProperties":false,"required":["projectId"],"properties":{"projectId":{"type":"string","format":"uuid"}}}`, true, true},
+		{"plan_backend_import", "POST /api/backend-projects/{id}/imports/plan", "Read-only pre-transfer admission estimate from final graph cardinalities and optional semantic bytes. Separates storage, Events whole-graph admission, scoped traversal, response and concurrency budgets. Does not stage or publish and cannot certify extraction quality.", "", true, true},
 		{"begin_backend_import", "POST /api/backend-projects/{id}/imports", "Begins legacy initial/reconcile import or explicit composed source6 sync. Pin capabilities and the matching guide first. Composed mode requires sourceScope and scopeStatus; whole-source-v1 and incremental-source-v1 are distinct. Incremental requires a current native6 provider partition and changeManifest, and cannot extend profiles. Source5 bootstrap with add_repository/add_provider retains existing partition profiles and adds a composed incoming partition. Whole-source reconcile upgrades only the selected eligible source5 partition, including one retained inside native6, with an explicit events-to-composed extension. Source IDs are durable; Begin leaves the active revision unchanged. Retry identical body/key after an unknown outcome.", "", false, true},
 		{"compare_backend_revisions", "POST /api/backend-projects/{id}/revisions/compare", "Compares two exact immutable revisions with pinned paging and summary. Read-only; pins remain in the request body.", `{"type":"object","additionalProperties":false,"required":["projectId","fromRevisionId","toRevisionId"],"properties":{"fromRevisionId":{"type":"string","format":"uuid"},"toRevisionId":{"type":"string","format":"uuid"},"recordType":{"type":"string","enum":["node","edge","evidence","source","identity","artifact"]},"changeKind":{"type":"string","enum":["added","removed","modified","identity_mapped","freshness_changed"]},"limit":{"type":"integer","minimum":1,"maximum":500,"default":100},"cursor":{"type":"string"},"projectId":{"type":"string","format":"uuid"}}}`, true, true},
 		{"get_backend_import_changes", "GET /api/backend-projects/{id}/imports/{iid}/changes", "Reads saved preview source changes and decisions at an exact previewVersion. Does not trigger preview.", `{"type":"object","additionalProperties":false,"required":["projectId","importId","previewVersion","recordType"],"properties":{"projectId":{"type":"string","format":"uuid"},"importId":{"type":"string","format":"uuid"},"previewVersion":{"type":"integer","format":"int64","minimum":1,"maximum":9223372036854775807},"recordType":{"type":"string","enum":["source","identity","deletion","assertion_conflict","claim_identity","migration"]},"limit":{"type":"integer","minimum":1,"maximum":500,"default":100},"cursor":{"type":"string"}}}`, true, true},
@@ -41,7 +46,7 @@ func addBackendImportTools(s *sdk.Server, lb *loopback) {
 		{"get_backend_coverage", "GET /api/backend-projects/{id}/revisions/{rid}/coverage", "Reads inventory, snapshots, coverage, stale counts and reconciliation gaps at one revisionId, legacy proposal, full changeProposal or current READY importCandidate. Preserve exact target/pins. Unknown denominator and partial coverage do not claim execution or test coverage.", `{"type":"object","additionalProperties":false,"required":["projectId","revisionId"],"properties":{"projectId":{"type":"string","format":"uuid"},"revisionId":{"type":"string","format":"uuid"}}}`, true, true},
 	} {
 		var inputSchema map[string]any
-		contract := map[string]string{"begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "query_backend_database": "QueryBackendDatabaseRequest", "query_backend_graph": "QueryBackendGraphRequest"}[spec.name]
+		contract := map[string]string{"query_backend_coverage": "QueryBackendCoverageRequest", "get_backend_import_schema": "GetBackendImportSchemaRequest", "validate_backend_import_batch": "ValidateBackendImportBatchRequest", "plan_backend_import": "PlanBackendImportRequest", "begin_backend_import": "BeginBackendImportRequest", "put_backend_import_batch": "PutBackendImportBatchRequest", "query_backend_database": "QueryBackendDatabaseRequest", "query_backend_graph": "QueryBackendGraphRequest"}[spec.name]
 		if contract != "" {
 			var err error
 			inputSchema, err = api.BackendSchema(contract)
@@ -49,6 +54,12 @@ func addBackendImportTools(s *sdk.Server, lb *loopback) {
 				panic(err)
 			}
 			ids := []string{"projectId"}
+			if spec.name == "get_backend_import_schema" {
+				ids = nil
+			}
+			if spec.name == "validate_backend_import_batch" {
+				ids = append(ids, "importId")
+			}
 			if spec.name == "put_backend_import_batch" {
 				ids = append(ids, "importId", "batchId")
 			}
@@ -78,6 +89,9 @@ func addBackendImportTool(s *sdk.Server, lb *loopback, tool *sdk.Tool, route str
 	s.AddTool(tool, func(ctx context.Context, req *sdk.CallToolRequest) (*sdk.CallToolResult, error) {
 		var in map[string]jsonx.RawMessage
 		if err := decodeDesignScenarioToolInput(req.Params.Arguments, &in, schema); err != nil {
+			if tool.Name == "put_backend_import_batch" || tool.Name == "validate_backend_import_batch" || tool.Name == "begin_backend_import" {
+				err = compactImportSchemaError(err)
+			}
 			return designScenarioToolErrorResult(fmt.Errorf("%s: invalid arguments: %w", tool.Name, err)), nil
 		}
 		// json-v2 additionally rejects duplicate members; retain original numeric bytes.
@@ -204,7 +218,7 @@ func backendImportKeyStaysInBody(name, key string) bool {
 		return name == "list_backend_findings"
 	case "revisionId":
 		// Source query revisionId pins the request body.
-		return name == "correlate_backend_observations" || slices.Contains([]string{"query_backend_graph", "query_backend_database", "query_backend_flow", "query_backend_lineage", "query_backend_events"}, name)
+		return name == "correlate_backend_observations" || slices.Contains([]string{"query_backend_graph", "query_backend_database", "query_backend_flow", "query_backend_lineage", "query_backend_events", "query_backend_coverage"}, name)
 	}
 	return false
 }

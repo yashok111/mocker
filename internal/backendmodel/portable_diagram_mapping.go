@@ -83,6 +83,26 @@ func (m *portableMapper) architectureMembers(parent string, d *ArchitecturePaylo
 		m.member("diagram_element", parent, &e.ParentID)
 		m.diagramOrigin(&e.Origin)
 		m.diagramRefs(e.Refs)
+		if e.Membership != nil {
+			for j := range e.Membership.NodeIDs {
+				m.id("node", &e.Membership.NodeIDs[j])
+			}
+		}
+		for j := range e.Navigation {
+			navigation := &e.Navigation[j]
+			if navigation.Diagram != nil {
+				destination := navigation.Diagram.ID
+				m.id("diagram", &navigation.Diagram.ID)
+				m.member("diagram_element", destination, &navigation.RootID)
+				m.member("diagram_element", destination, &navigation.FocusID)
+			}
+			if navigation.FlowID != "" {
+				m.id("node", &navigation.FlowID)
+			}
+			if navigation.Target != nil {
+				m.target(navigation.Target)
+			}
+		}
 	}
 	for i := range d.Links {
 		e := &d.Links[i]

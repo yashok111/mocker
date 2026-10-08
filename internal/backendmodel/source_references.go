@@ -5,6 +5,7 @@ import (
 	"encoding/json/v2"
 	"errors"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -378,7 +379,8 @@ func (n *sourcePayloadNormalizer) normalizeFacets() error {
 	if err != nil {
 		return err
 	}
-	for key, raw := range facets {
+	for _, key := range slices.Sorted(maps.Keys(facets)) {
+		raw := facets[key]
 		m, err := relationalObject(raw)
 		if err != nil {
 			return err

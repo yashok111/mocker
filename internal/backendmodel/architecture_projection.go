@@ -19,7 +19,14 @@ func ProjectArchitecture(ctx context.Context, v *DiagramVersion, g *EffectiveGra
 	if err != nil {
 		return nil, err
 	}
-	rows, err := architectureFilteredRows(p, in)
+	return architecturePage(ctx, v, p, in)
+}
+
+func architecturePage(ctx context.Context, v *DiagramVersion, p *architectureProjection, in DiagramQueryInput) (*DiagramPage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	rows, err := architectureFilteredRows(ctx, p, in)
 	if err != nil {
 		return nil, err
 	}
@@ -35,7 +42,11 @@ func ProjectArchitecture(ctx context.Context, v *DiagramVersion, g *EffectiveGra
 		return nil, err
 	}
 	end := min(len(rows), offset+in.Limit)
-	return &DiagramPage{Projection: &ArchitectureProjectionContext{Policy: "architecture-v1", Level: in.Level, RootID: in.RootID}, Pin: v.Pin, TargetHash: v.TargetHash, Total: len(rows), NextCursor: diagramNext(scope, end, len(rows)), Items: rows[offset:end], Gaps: p.gaps, Truncated: p.truncated}, nil
+	page := &DiagramPage{Projection: &ArchitectureProjectionContext{Policy: "architecture-v1", Level: in.Level, RootID: in.RootID}, Pin: v.Pin, TargetHash: v.TargetHash, Total: len(rows), NextCursor: diagramNext(scope, end, len(rows)), Items: rows[offset:end], Gaps: p.gaps, Truncated: p.truncated}
+	if err := compactDiagramPage(ctx, page, in); err != nil {
+		return nil, err
+	}
+	return page, ctx.Err()
 }
 func projectArchitecture(ctx context.Context, v *DiagramVersion, g *EffectiveGraphSnapshot, in DiagramQueryInput) (*architectureProjection, error) {
 	all := map[string]ArchitectureElement{}
@@ -56,13 +67,13 @@ func projectArchitecture(ctx context.Context, v *DiagramVersion, g *EffectiveGra
 		if _, ok := p.members[id]; !ok {
 			p.members[id] = []DiagramMember{}
 		}
-		for _, ref := range e.Refs {
+		for _, ref := range architectureElementRefs(e) {
 			p.addMember(id, DiagramMember{Ref: ref, Origin: e.Origin, TargetHash: v.TargetHash})
 		}
 	}
 	memberships := map[string][]string{}
 	for _, e := range v.Document.Payload.Elements {
-		for _, ref := range e.Refs {
+		for _, ref := range architectureElementRefs(e) {
 			if ref.Kind == "record" && ref.RecordType == "node" {
 				memberships[ref.ID] = append(memberships[ref.ID], e.ID)
 			}
@@ -82,6 +93,9 @@ func projectArchitecture(ctx context.Context, v *DiagramVersion, g *EffectiveGra
 	}
 	slices.SortFunc(p.gaps, func(a, b DiagramGap) int { return cmp.Compare(a.ID, b.ID) })
 	p.gaps = slices.CompactFunc(p.gaps, func(a, b DiagramGap) bool { return a.ID == b.ID })
+	if err := qualifyArchitectureGaps(ctx, p, g, in.GapScope); err != nil {
+		return nil, err
+	}
 	return p, nil
 }
 
@@ -224,7 +238,7 @@ func architectureRelations(ctx context.Context, p *architectureProjection, all m
 	return nil
 }
 
-func architectureFilteredRows(p *architectureProjection, in DiagramQueryInput) ([]DiagramRow, error) {
+func architectureFilteredRows(ctx context.Context, p *architectureProjection, in DiagramQueryInput) ([]DiagramRow, error) {
 	rows := []DiagramRow{}
 	accepts := func(label string, o DiagramOrigin) bool {
 		return (in.Origin == "all" || in.Origin == o.Kind) && strings.Contains(strings.ToLower(label), strings.ToLower(in.Search))
@@ -232,6 +246,9 @@ func architectureFilteredRows(p *architectureProjection, in DiagramQueryInput) (
 	switch in.Section {
 	case "elements":
 		for _, id := range slices.Sorted(maps.Keys(p.elements)) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			e := p.elements[id]
 			if accepts(e.Label, e.Origin) {
 				rows = append(rows, DiagramRow{ArchitectureElement: new(e)})
@@ -239,26 +256,21 @@ func architectureFilteredRows(p *architectureProjection, in DiagramQueryInput) (
 		}
 	case "links":
 		for _, id := range slices.Sorted(maps.Keys(p.links)) {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			e := p.links[id]
 			if accepts(e.Label, e.Origin) {
 				rows = append(rows, DiagramRow{ArchitectureLink: new(e)})
 			}
 		}
 	case "members":
-		if _, ok := p.members[in.SubjectID]; !ok {
-			return nil, notFound()
-		}
-		for _, m := range p.sortedMembers(in.SubjectID) {
-			label := m.Ref.ID
-			if label == "" {
-				label = m.Ref.RowID
-			}
-			if accepts(label, m.Origin) {
-				rows = append(rows, DiagramRow{Member: new(m)})
-			}
-		}
+		return architectureMemberRows(ctx, p, in, accepts)
 	case "gaps":
 		for _, gap := range p.gaps {
+			if err := ctx.Err(); err != nil {
+				return nil, err
+			}
 			if strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(in.Search)) {
 				rows = append(rows, DiagramRow{Gap: new(gap)})
 			}
@@ -266,6 +278,26 @@ func architectureFilteredRows(p *architectureProjection, in DiagramQueryInput) (
 	}
 
 	return rows, nil
+}
+
+func architectureMemberRows(ctx context.Context, p *architectureProjection, in DiagramQueryInput, accepts func(string, DiagramOrigin) bool) ([]DiagramRow, error) {
+	rows := []DiagramRow{}
+	if _, ok := p.members[in.SubjectID]; !ok {
+		return nil, notFound()
+	}
+	for _, m := range p.sortedMembers(in.SubjectID) {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		label := m.Ref.ID
+		if label == "" {
+			label = m.Ref.RowID
+		}
+		if accepts(label, m.Origin) {
+			rows = append(rows, DiagramRow{Member: new(m)})
+		}
+	}
+	return rows, ctx.Err()
 }
 
 // Source relations always come from the effective graph. A client's C4 link
@@ -329,6 +361,7 @@ func architectureSourceOrigins(g *EffectiveGraphSnapshot) (map[string][]Evidence
 
 func newArchitectureProjection(v *DiagramVersion) *architectureProjection {
 	p := &architectureProjection{elements: map[string]ArchitectureElement{}, links: map[string]ArchitectureLink{}, members: map[string][]DiagramMember{}, gaps: slices.Clone(v.Gaps)}
+	p.targetHash = v.TargetHash
 	p.identityKeys = map[string]string{}
 	for _, element := range v.Document.Payload.Elements {
 		p.identityKeys[element.ID] = "element:" + element.ID

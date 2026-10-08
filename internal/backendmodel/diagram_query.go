@@ -8,15 +8,17 @@ import (
 )
 
 type DiagramQueryInput struct {
-	Pin       DiagramPin `json:"pin"`
-	Level     string     `json:"level,omitempty"`
-	RootID    string     `json:"rootId,omitempty"`
-	Search    string     `json:"search"`
-	Origin    string     `json:"origin"`
-	Section   string     `json:"section"`
-	SubjectID string     `json:"subjectId,omitempty"`
-	Limit     int        `json:"limit"`
-	Cursor    string     `json:"cursor,omitempty"`
+	GapScope     *ArchitectureGapScope `json:"gapScope,omitzero"`
+	ResponseMode string                `json:"responseMode,omitempty"`
+	Pin          DiagramPin            `json:"pin"`
+	Level        string                `json:"level,omitempty"`
+	RootID       string                `json:"rootId,omitempty"`
+	Search       string                `json:"search"`
+	Origin       string                `json:"origin"`
+	Section      string                `json:"section"`
+	SubjectID    string                `json:"subjectId,omitempty"`
+	Limit        int                   `json:"limit"`
+	Cursor       string                `json:"cursor,omitempty"`
 }
 type ArchitectureProjectionContext struct {
 	Policy string `json:"policy"`
@@ -103,6 +105,7 @@ func (r DiagramRow) MarshalJSON() ([]byte, error) {
 }
 
 type DiagramPage struct {
+	GapSummary *DiagramGapSummary             `json:"gapSummary,omitzero"`
 	Projection *ArchitectureProjectionContext `json:"projection,omitzero"`
 	Pin        DiagramPin                     `json:"pin"`
 	TargetHash string                         `json:"targetHash"`
@@ -116,9 +119,15 @@ type DiagramPage struct {
 func (v *DiagramQueryInput) UnmarshalJSON(b []byte) error {
 	type plain DiagramQueryInput
 	*v = DiagramQueryInput{}
-	return strictAPIObject(b, []string{"pin", "search", "origin", "section", "limit"}, []string{"level", "rootId", "subjectId", "cursor"}, (*plain)(v))
+	return strictAPIObject(b, []string{"pin", "search", "origin", "section", "limit"}, []string{"level", "rootId", "subjectId", "cursor", "responseMode", "gapScope"}, (*plain)(v))
 }
 func (in DiagramQueryInput) Validate() error {
+	if err := validateArchitectureGapQuery(in); err != nil {
+		return err
+	}
+	if in.ResponseMode != "" && in.ResponseMode != "compact-v1" {
+		return invalid("responseMode", "Supported response mode is compact-v1")
+	}
 	if err := in.Pin.Validate(); err != nil {
 		return err
 	}
@@ -151,19 +160,36 @@ func (r *Repo) QueryDiagram(ctx context.Context, pid string, in DiagramQueryInpu
 		return nil, err
 	}
 	if v.Document.Kind == "business_map" {
-		return ProjectBusinessMap(ctx, v, in)
+		page, err := ProjectBusinessMap(ctx, v, in)
+		if err != nil {
+			return nil, err
+		}
+		if err := compactDiagramPage(ctx, page, in); err != nil {
+			return nil, err
+		}
+		return page, nil
 	}
 	if v.Document.Kind == "lifecycle" {
-		return ProjectLifecycle(ctx, v, in)
+		page, err := ProjectLifecycle(ctx, v, in)
+		if err != nil {
+			return nil, err
+		}
+		if err := compactDiagramPage(ctx, page, in); err != nil {
+			return nil, err
+		}
+		return page, nil
 	}
 	if v.Document.Kind == "interactions" {
-		return ProjectInteractions(ctx, v, in)
+		page, err := ProjectInteractions(ctx, v, in)
+		if err != nil {
+			return nil, err
+		}
+		if err := compactDiagramPage(ctx, page, in); err != nil {
+			return nil, err
+		}
+		return page, nil
 	}
-	graph, err := r.readArchitectureGraph(ctx, pid, v.Document.Target)
-	if err != nil {
-		return nil, err
-	}
-	return ProjectArchitecture(ctx, v, graph, in)
+	return r.queryArchitecture(ctx, pid, v, in)
 }
 
 type diagramCursor struct {

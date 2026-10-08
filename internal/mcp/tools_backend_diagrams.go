@@ -17,6 +17,7 @@ func addBackendDiagramTools(s *sdk.Server, lb *loopback) {
 		name, route, contract, summary string
 		read                           bool
 	}{
+		{"preview_backend_architecture", "POST /api/backend-projects/{id}/diagrams/architecture/preview", "PreviewBackendArchitectureRequest", "Previews exact architecture membership, relationships and gaps without saving, with cursors bound to the supplied document.", true},
 		{"build_backend_interactions", "POST /api/backend-projects/{id}/diagrams/interactions/build", "BuildBackendInteractionsRequest", "Builds an unsaved interactions diagram candidate from one exact source entrypoint, writing nothing.", true},
 		{"build_backend_lifecycle", "POST /api/backend-projects/{id}/diagrams/lifecycle/build", "BuildBackendLifecycleRequest", "Builds an unsaved lifecycle diagram candidate from one pinned state-diagram artifact row, writing nothing.", true},
 		{"create_backend_diagram", "POST /api/backend-projects/{id}/diagrams", "CreateBackendDiagramRequest", "Creates a new architecture, interactions, lifecycle or business_map diagram at version 1 from an explicit document.", false},

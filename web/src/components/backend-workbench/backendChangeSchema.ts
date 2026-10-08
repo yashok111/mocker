@@ -11827,6 +11827,47 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendDatabaseIdentity: {
+    description:
+      "Physical database name. Legacy strings retain their exact representation. Negotiate databaseIdentityFormats known-unknown-v1 before sending a typed value; never infer the physical name from a display label.",
+    oneOf: [
+      {
+        type: "string",
+        minLength: 1,
+        pattern: "\\S",
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["status", "value"],
+        properties: {
+          status: {
+            const: "known",
+          },
+          value: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S",
+          },
+        },
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        required: ["status", "reason"],
+        properties: {
+          status: {
+            const: "unknown",
+          },
+          reason: {
+            type: "string",
+            minLength: 1,
+            pattern: "\\S",
+          },
+        },
+      },
+    ],
+  },
   BackendDatastoreLegacyAttributes: {
     type: "object",
     additionalProperties: false,
@@ -12267,8 +12308,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           "Literal UTF-8 source text; at most 65536 UTF-8 bytes, enforced atomically by the domain.",
       },
       databaseName: {
-        type: "string",
-        minLength: 1,
+        $ref: "#/components/schemas/BackendDatabaseIdentity",
       },
     },
     required: [
@@ -13003,6 +13043,10 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       explanation: {
         type: "string",
         maxLength: 4096,
+      },
+      scope: {
+        type: "string",
+        enum: ["in_scope", "boundary", "unrelated", "collapsed_internal", "unqualified"],
       },
     },
     required: ["id", "subjectId", "code", "explanation"],

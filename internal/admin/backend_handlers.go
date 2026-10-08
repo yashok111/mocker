@@ -19,6 +19,9 @@ import (
 
 func (s *Server) backendError(w http.ResponseWriter, err error) {
 	if fault, ok := errors.AsType[*backendmodel.FaultError](err); ok {
+		if fault.Code == "backend_projection_busy" {
+			w.Header().Set("Retry-After", "1")
+		}
 		// Every retryable 429 is a full job queue (analysis, and replay since
 		// review 2026-10-06, F29), and both wait the same two seconds.
 		if fault.Status == 429 && fault.Retryable {
@@ -217,29 +220,34 @@ func (s *Server) handleGetBackendCapabilities(w http.ResponseWriter, r *http.Req
 		return
 	}
 	httpx.JSON(w, 200, map[string]any{
-		"installationId":           installation,
-		"observationSupport":       map[string]any{"documentVersion": "backend-observations-v1", "correlationPolicy": "backend-correlation-v1", "maxBatchRecords": 500, "maxBatchBytes": 1048576, "maxAdapterBytes": 4194304, "maxSpanLinks": 32},
-		"replaySupport":            map[string]any{"packageVersion": "backend-replay-v1", "protocolVersion": "orders-replay-v1", "checkerVersion": "orders-checker-v1", "queueLimit": 20, "workers": 2, "executionSeconds": 60, "paymentScope": "mocked", "persistenceScope": "actual_fixture", "requiresExplicitConsent": true},
-		"portableSupport":          map[string]any{"format": "backend-portable-v1", "sourceSchemaVersions": []string{"5", "6"}, "artifactContextVersion": "artifact-context-v3", "maxChunkBytes": 1048576, "maxChunkRecords": 500, "maxBundleBytes": 268435456, "maxArtifactMappings": 20, "importMode": "new_project", "previewPublishes": false},
-		"modelSchemaVersions":      backendmodel.SupportedModelSchemaVersions(),
-		"workflowVersions":         guide.BackendWorkflows(),
-		"features":                 backendCapabilityFeatures(),
-		"diagramSupport":           map[string]any{"documentVersion": "backend-diagram-v1", "viewDocumentVersion": "diagram-view-v1", "kinds": []string{"architecture", "interactions", "lifecycle", "business_map"}, "targets": []string{"revisionId", "changeProposal"}, "projectionPolicy": "architecture-v1", "levels": []string{"context", "containers", "components"}},
-		"analysisSupport":          map[string]any{"documentVersion": "backend-analysis-context-v1", "documentVersions": []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}, "inputDocumentVersions": []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}, "ruleSetVersions": []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}, "kinds": backendanalysis.Kinds(), "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": backendanalysis.ObservationModes(), "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
-		"providerProfiles":         []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile},
-		"supportedNodeKinds":       backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
-		"supportedEdgeKinds":       backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),
-		"guideSetId":               guide.CurrentGuideSetID(),
-		"viewSchemaVersions":       []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion, "backend-diagram-v1", "diagram-view-v1", "artifact-context-v3", "backend-portable-v1", "backend-replay-v1", "backend-observations-v1"},
-		"proposalDocumentVersions": []string{backendmodel.ProposalDocumentVersion, backendmodel.ChangeProposalDocumentVersion},
-		"changeProposalCommands":   backendChangeProposalCommands(),
-		"sourceScopes":             []string{"add_repository", "reconcile", "add_provider", "migrate_provider"},
-		"syncPolicies":             []string{backendmodel.WholeSourcePolicy, backendmodel.IncrementalSourcePolicy},
-		"readTargetSupport":        backendReadTargetSupport(),
-		"proposalCommands":         []map[string]string{{"type": "alter_column", "property": "nullable"}, {"type": "alter_constraint", "action": "create", "constraintKind": "foreign_key"}, {"type": "alter_constraint", "action": "update", "constraintKind": "foreign_key"}, {"type": "set_criteria"}},
-		"importModes":              []string{"initial", "reconcile", "composed"},
-		"importCommands":           []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion", "claim_identity", "resolve_assertion"},
-		"reconciliationProfile":    map[string]string{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
+		"installationId":                installation,
+		"observationSupport":            map[string]any{"documentVersion": "backend-observations-v1", "correlationPolicy": "backend-correlation-v1", "maxBatchRecords": 500, "maxBatchBytes": 1048576, "maxAdapterBytes": 4194304, "maxSpanLinks": 32},
+		"replaySupport":                 map[string]any{"packageVersion": "backend-replay-v1", "protocolVersion": "orders-replay-v1", "checkerVersion": "orders-checker-v1", "queueLimit": 20, "workers": 2, "executionSeconds": 60, "paymentScope": "mocked", "persistenceScope": "actual_fixture", "requiresExplicitConsent": true},
+		"portableSupport":               map[string]any{"format": "backend-portable-v1", "sourceSchemaVersions": []string{"5", "6"}, "artifactContextVersion": "artifact-context-v3", "maxChunkBytes": 1048576, "maxChunkRecords": 500, "maxBundleBytes": 268435456, "maxArtifactMappings": 20, "importMode": "new_project", "previewPublishes": false},
+		"modelSchemaVersions":           backendmodel.SupportedModelSchemaVersions(),
+		"workflowVersions":              guide.BackendWorkflows(),
+		"features":                      backendCapabilityFeatures(),
+		"diagramSupport":                map[string]any{"documentVersion": "backend-diagram-v1", "viewDocumentVersion": "diagram-view-v1", "kinds": []string{"architecture", "interactions", "lifecycle", "business_map"}, "targets": []string{"revisionId", "changeProposal"}, "projectionPolicy": "architecture-v1", "levels": []string{"context", "containers", "components"}, "responseModes": []string{"compact-v1"}, "maxConcurrentArchitectureReads": backendmodel.MaxArchitectureReadConcurrency, "maxArchitectureCacheBytes": backendmodel.MaxArchitectureCacheBytes, "membershipFormats": []string{backendmodel.ArchitectureMembershipVersion}, "maxElementMembers": backendmodel.MaxArchitectureElementMembers, "maxDocumentMembers": backendmodel.MaxArchitectureDocumentMembers, "navigationFormats": []string{backendmodel.ArchitectureNavigationVersion}, "gapScopeFormats": []string{"exact-node-scope-v1"}},
+		"analysisSupport":               map[string]any{"documentVersion": "backend-analysis-context-v1", "documentVersions": []string{"backend-analysis-context-v1", "backend-analysis-context-v2"}, "inputDocumentVersions": []string{"backend-analysis-input/v1", "backend-analysis-input/v2"}, "ruleSetVersions": []string{"b42-rules/v1", "b43-rules/v1", "diagnostics-v1"}, "kinds": backendanalysis.Kinds(), "targets": []string{"revisionId", "proposal", "changeProposal", "commandPreview"}, "observationModes": backendanalysis.ObservationModes(), "ruleSetVersion": "b42-rules/v1", "traversalVersion": "b42-traversal/v1"},
+		"providerProfiles":              []string{backendmodel.GraphProfile, backendmodel.RelationalProfile, backendmodel.RuntimeProfile, backendmodel.LineageProfile, backendmodel.EventsProfile, backendmodel.ComposedProfile},
+		"supportedNodeKinds":            backendmodel.SupportedNodeKindsForProfile(backendmodel.ComposedProfile),
+		"supportedEdgeKinds":            backendmodel.SupportedEdgeKindsForProfile(backendmodel.ComposedProfile),
+		"guideSetId":                    guide.CurrentGuideSetID(),
+		"viewSchemaVersions":            []string{backendmodel.ProposalDocumentVersion, backendmodel.SavedViewDocumentVersion, "api-artifact-pins-v1", backendmodel.EditorArtifactDocumentVersion, backendmodel.ChangeProposalDocumentVersion, "import-candidate-v1", backendmodel.SavedViewV2DocumentVersion, "backend-diagram-v1", "diagram-view-v1", "artifact-context-v3", "backend-portable-v1", "backend-replay-v1", "backend-observations-v1"},
+		"proposalDocumentVersions":      []string{backendmodel.ProposalDocumentVersion, backendmodel.ChangeProposalDocumentVersion},
+		"changeProposalCommands":        backendChangeProposalCommands(),
+		"sourceScopes":                  []string{"add_repository", "reconcile", "add_provider", "migrate_provider"},
+		"syncPolicies":                  []string{backendmodel.WholeSourcePolicy, backendmodel.IncrementalSourcePolicy},
+		"readTargetSupport":             backendReadTargetSupport(),
+		"proposalCommands":              []map[string]string{{"type": "alter_column", "property": "nullable"}, {"type": "alter_constraint", "action": "create", "constraintKind": "foreign_key"}, {"type": "alter_constraint", "action": "update", "constraintKind": "foreign_key"}, {"type": "set_criteria"}},
+		"importModes":                   []string{"initial", "reconcile", "composed"},
+		"importDiagnosticDetailFormats": []string{"json-chunks-v1"},
+		"importPreflightVersions":       []string{"import-preflight-v1"},
+		"storageUsageVersions":          []string{"backend-storage-usage-v1"},
+		"compactReadVersions":           []string{"coverage-details-v1", "database-compact-v1"},
+		"databaseIdentityFormats":       []string{"legacy-string", "known-unknown-v1"},
+		"importCommands":                []string{"upsert_node", "upsert_edge", "upsert_evidence", "remove", "map_identity", "delete_assertion", "claim_identity", "resolve_assertion"},
+		"reconciliationProfile":         map[string]string{"version": "1", "profile": backendmodel.GraphProfile, "scope": "whole-repository"},
 		"profileCapabilities": []map[string]any{
 			{"profile": backendmodel.GraphProfile, "modelSchemaVersions": []string{backendmodel.SchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.GraphProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.GraphProfile), "importModes": []string{"initial", "reconcile"}},
 			{"profile": backendmodel.RelationalProfile, "modelSchemaVersions": []string{backendmodel.RelationalSchemaVersion}, "nodeKinds": backendmodel.SupportedNodeKindsForProfile(backendmodel.RelationalProfile), "edgeKinds": backendmodel.SupportedEdgeKindsForProfile(backendmodel.RelationalProfile), "importModes": []string{"initial", "reconcile"}},

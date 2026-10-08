@@ -377,6 +377,10 @@ func TestBlobMigrationDiskFullAndOriginalSettings(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
+			want, versionErr := LatestSchemaVersion()
+			if versionErr != nil {
+				t.Fatal(versionErr)
+			}
 			err := db.Migrate(t.Context(), nil)
 			var version, foreign int
 			db.W.QueryRow("PRAGMA user_version").Scan(&version)
@@ -385,7 +389,7 @@ func TestBlobMigrationDiskFullAndOriginalSettings(t *testing.T) {
 				if err == nil || !strings.Contains(strings.ToLower(err.Error()), "full") || version != 26 || foreign != 1 {
 					t.Fatalf("diskfull rollback: v%d fk%d %v", version, foreign, err)
 				}
-			} else if err != nil || version != 28 || foreign != 0 {
+			} else if err != nil || version != want || foreign != 0 {
 				t.Fatalf("original settings: v%d fk%d %v", version, foreign, err)
 			}
 		})

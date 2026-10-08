@@ -31,6 +31,7 @@ type DiagramRef struct {
 	RowID             string                     `json:"rowId,omitempty"`
 }
 type DiagramGap struct {
+	Scope       string `json:"scope,omitempty"`
 	ID          string `json:"id"`
 	SubjectID   string `json:"subjectId"`
 	Code        string `json:"code"`

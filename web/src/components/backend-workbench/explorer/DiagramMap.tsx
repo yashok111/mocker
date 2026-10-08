@@ -20,6 +20,7 @@ import {
   architectureSearch,
   focusArchitecture,
   sourceRefIds,
+  explicitArchitectureSearch,
 } from "./architectureNavigation";
 import { useObservedLayer } from "./observedLayer";
 import { ReadOnlyValue } from "./Results";
@@ -275,6 +276,9 @@ export function DiagramMap({
     saved?.selection?.id;
   const selected = data.nodes.find((n) => n.id === selection);
   const selectedEdge = data.edges.find((e) => e.id === selection);
+  const destinations = (id: string) =>
+    architecture ? (doc.payload.elements.find((e) => e.id === id)?.navigation ?? []) : [];
+  const selectedDestinations = selection ? destinations(selection) : [];
   const members = useDiagramPage(
     projectId,
     {
@@ -305,6 +309,12 @@ export function DiagramMap({
     );
   };
   const enter = (n: MapNode) => {
+    const entries = destinations(n.id);
+    if (entries.length) {
+      if (entries.length === 1) onNavigate(explicitArchitectureSearch(entries[0]!));
+      else select(n.id);
+      return;
+    }
     if (n.kind === "software_system" || n.kind === "application") {
       onNavigate({
         ...diagramSearch(diagram.pin, {
@@ -617,6 +627,16 @@ export function DiagramMap({
           edge={selectedEdge}
           onNavigate={onNavigate}
           onEnter={enter}
+          canEnter={selectedDestinations.length ? false : undefined}
+          navigationActions={selectedDestinations.map((destination, index) => (
+            <Button
+              key={index}
+              variant="light"
+              onClick={() => onNavigate(explicitArchitectureSearch(destination))}
+            >
+              {destination.label}
+            </Button>
+          ))}
           enterLabel={
             architecture && selected?.kind === "component" ? "Компонент и его связи" : undefined
           }

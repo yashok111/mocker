@@ -4,6 +4,7 @@ import userEvent from "@testing-library/user-event";
 import { renderWithProviders } from "@/test/render";
 import { json } from "@/test/http";
 import { BackendImportReview } from "./BackendImportReview";
+import type { BackendImportPreflight } from "@/api/generated/schemas";
 
 const projectId = "0197aaf9-5555-7000-8000-000000000001";
 const revisionId = "0197aaf9-5555-7000-8000-000000000002";
@@ -46,6 +47,7 @@ const session = {
   updatedAt: "2026-09-30T10:00:00Z",
 };
 const preview = {
+  preflight: undefined as BackendImportPreflight | undefined,
   sessionId,
   version: 3,
   state: "ready",
@@ -57,10 +59,17 @@ const preview = {
   identityDecisionCount: 0,
   deletionDecisionCount: 0,
 };
-function server(options: { lost?: boolean; replay?: boolean; conflict?: boolean } = {}) {
+function server(
+  options: {
+    lost?: boolean;
+    replay?: boolean;
+    conflict?: boolean;
+    preflight?: BackendImportPreflight;
+  } = {},
+) {
   let status = {
     session: { ...session },
-    preview: { ...preview },
+    preview: { ...preview, preflight: options.preflight },
     committedRevisionId: null as string | null,
     acceptedBatches: [],
     nextCursor: "",
@@ -194,6 +203,36 @@ it("reads saved preview without writing and disables ready action after a new ba
     expectedImportVersion: 4,
     baseRevisionId: revisionId,
   });
+});
+
+it("shows unavailable Events separately from ready storage before commit", async () => {
+  const { fetchMock } = server({
+    preflight: {
+      version: "import-preflight-v1",
+      basis: "candidate",
+      profile: "events-service-v1",
+      counts: { nodes: 25228, edges: 100001, evidence: 106398 },
+      semanticBytes: 140000000,
+      storage: { status: "within_limits", reasons: [], limits: {} },
+      consumers: [
+        {
+          surface: "events",
+          status: "blocked",
+          reasons: ["edge_limit"],
+          remedy: "Keep source complete",
+          admission: { maxTotalEdges: 100000 },
+          traversal: {},
+          response: {},
+          concurrency: {},
+        },
+      ],
+    },
+  });
+  await open();
+  expect(await screen.findByText("События и задания: недоступно")).toBeInTheDocument();
+  expect(screen.getByText(/100001.*100000/)).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Commit" })).toBeEnabled();
+  expect(fetchMock.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
 });
 it("recovers the original committed revision after lost response and newer head", async () => {
   const { fetchMock } = server({ lost: true });

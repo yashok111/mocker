@@ -72,7 +72,7 @@ func diagramBases(d DiagramDocument) map[string]struct {
 		out[e.ID] = struct {
 			origin DiagramOrigin
 			refs   []DiagramRef
-		}{e.Origin, e.Refs}
+		}{e.Origin, architectureElementRefs(e)}
 	}
 	for _, e := range d.Payload.Links {
 		out[e.ID] = struct {
@@ -225,7 +225,14 @@ func resolveDiagramArtifact(g *EffectiveGraphSnapshot, request *EditorArtifactRe
 
 func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, oldRefs []DiagramRef, nodes, edges map[string]bool) ([]DiagramGap, error) {
 	gaps := []DiagramGap{}
+	inheritedRefs, err := diagramReferenceIndex(resolver.ctx, oldRefs)
+	if err != nil {
+		return nil, err
+	}
 	for _, ref := range refs {
+		if err := resolver.ctx.Err(); err != nil {
+			return nil, err
+		}
 		exists := false
 		// A namespaced ref whose namespace/pin is not in this target is, like a
 		// plain artifact ref whose pin left it, "not here": the inherited rule
@@ -257,13 +264,7 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 			continue
 		}
 		digest, _ := requestDigest(ref)
-		inherited := false
-		for _, r := range oldRefs {
-			hash, _ := requestDigest(r)
-			if hash == digest {
-				inherited = true
-			}
-		}
+		inherited := inheritedRefs[digest]
 		if !inherited && outside != nil {
 			return nil, outside
 		}
@@ -274,6 +275,23 @@ func diagramReferenceGaps(resolver *diagramArtifactResolver, id string, refs, ol
 	}
 
 	return gaps, nil
+}
+
+// Index historical membership once, including on a fork that retains thousands
+// of unavailable exact refs. This remains cancelable without quadratic hashing.
+func diagramReferenceIndex(ctx context.Context, refs []DiagramRef) (map[string]bool, error) {
+	index := make(map[string]bool, len(refs))
+	for _, ref := range refs {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
+		digest, err := requestDigest(ref)
+		if err != nil {
+			return nil, err
+		}
+		index[digest] = true
+	}
+	return index, nil
 }
 
 func diagramEvidenceGaps(id string, proofs, oldProofs []DiagramEvidenceRef, evidence map[DiagramEvidenceRef]bool, previous *DiagramVersion, targetMoved bool) ([]DiagramGap, error) {
@@ -303,6 +321,7 @@ func diagramEvidenceGaps(id string, proofs, oldProofs []DiagramEvidenceRef, evid
 // One owner snapshot budget and exact-ref cache cover the entire diagram write,
 // including different rows and repeated refs across C4 elements.
 type diagramArtifactResolver struct {
+	ctx            context.Context
 	installationID string
 	graph          *EffectiveGraphSnapshot
 	request        *EditorArtifactRequest
@@ -310,7 +329,7 @@ type diagramArtifactResolver struct {
 }
 
 func newDiagramArtifactResolver(ctx context.Context, g *EffectiveGraphSnapshot) *diagramArtifactResolver {
-	out := &diagramArtifactResolver{graph: g, known: map[string]bool{}}
+	out := &diagramArtifactResolver{ctx: ctx, graph: g, known: map[string]bool{}}
 	if service, ok := ctx.Value(diagramArtifactsKey{}).(*ArtifactService); ok && service != nil {
 		out.installationID = service.diagramInstallationID(ctx)
 		out.request = NewEditorArtifactRequest(ctx, service.api, service.scenarios)

@@ -44,6 +44,9 @@ func normalizeDiagram(d DiagramDocument) (DiagramDocument, error) {
 	}
 	for i := range out.Payload.Elements {
 		e := &out.Payload.Elements[i]
+		if e.Membership != nil {
+			slices.Sort(e.Membership.NodeIDs)
+		}
 		normalize(&e.Origin, e.Refs)
 	}
 	for i := range out.Payload.Links {

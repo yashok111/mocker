@@ -76,6 +76,11 @@ func (r *Repo) importPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *Diagr
 		return err
 	}
 	v.Gaps = append(gaps, extra...)
+	navigationGaps, err := resolveArchitectureNavigation(ctx, tx, v.ProjectID, graph, v.Document, previous)
+	if err != nil {
+		return err
+	}
+	v.Gaps = append(v.Gaps, navigationGaps...)
 	v.ProvenanceHash, err = requestDigest(v.Provenance)
 	return err
 }
@@ -83,6 +88,13 @@ func (r *Repo) importPortableDiagramTx(ctx context.Context, tx *sql.Tx, v *Diagr
 // rebindPortableDiagramArchitecture points a document's architecture pins
 // at the local versions imported before it.
 func rebindPortableDiagramArchitecture(d *DiagramDocument, known map[DiagramPin]DiagramPin) error {
+	for i := range d.Payload.Elements {
+		for j := range d.Payload.Elements[i].Navigation {
+			if err := replacePortableDiagramPin(d.Payload.Elements[i].Navigation[j].Diagram, known, DiagramPin{}, DiagramPin{}); err != nil {
+				return err
+			}
+		}
+	}
 	if d.Interactions != nil {
 		if err := replacePortableDiagramPin(d.Interactions.Architecture, known, DiagramPin{}, DiagramPin{}); err != nil {
 			return err

@@ -22,6 +22,7 @@ import {
 } from "./model";
 import { Contracts } from "./Contracts";
 import { diagramArtifactLink } from "./artifactLinks";
+import { nativeSources } from "./nativeSources";
 import styles from "./Explorer.module.css";
 export function Inspector({
   projectId,
@@ -39,6 +40,7 @@ export function Inspector({
   canEnter,
   enterLabel,
   referencesStatus,
+  navigationActions,
 }: {
   targetHash?: string;
   extraRefs?: BackendDiagramRef[];
@@ -46,6 +48,7 @@ export function Inspector({
   canEnter?: boolean;
   enterLabel?: string;
   referencesStatus?: ReactNode;
+  navigationActions?: ReactNode;
   projectId: string;
   target: BackendReadTarget;
   search: BackendWorkspaceSearch;
@@ -157,13 +160,10 @@ export function Inspector({
     }),
   });
   const title = selected?.name ?? edge?.label ?? "Выбранный объект";
-  const nativeValue =
-    raw && "attributes" in raw
-      ? (raw.attributes as Record<string, unknown>).nativeText
-      : selected?.attributes.nativeText;
-  const nativeText =
-    typeof nativeValue === "string" && nativeValue.trim() ? nativeValue : undefined;
-  const showSource = !!nativeText || selected?.kind === "flow_step";
+  const snippets = nativeSources(
+    raw && "attributes" in raw ? raw.attributes : selected?.attributes,
+  );
+  const showSource = snippets.length > 0 || selected?.kind === "flow_step";
   const evidence = useQuery({
     queryKey: ["workbench-evidence", projectId, backendReadTargetKey(evidenceTarget), id],
     enabled: source && (tab === "sources" || showSource),
@@ -220,6 +220,7 @@ export function Inspector({
       )}
       {selected && (
         <div className={styles.inspectorActions}>
+          {navigationActions}
           {selected.change !== "removed" &&
             (canEnter ??
               (selected.childCount > 0 ||
@@ -340,23 +341,25 @@ export function Inspector({
               Файл и строки не указаны.
             </Text>
           )}
-          {nativeText && (
+          {snippets.map(({ field, label, text }) => (
             <details
-              key={`${id}:${backendReadTargetKey(evidenceTarget)}`}
+              key={`${id}:${backendReadTargetKey(evidenceTarget)}:${field}`}
               className={styles.sourceCodeDetails}
             >
-              <summary>Показать код</summary>
+              <summary>
+                {snippets.length === 1 ? "Показать код" : `Показать код · ${label}`}
+              </summary>
               {/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- The bounded code pane must support keyboard scrolling. */}
               <pre
                 className={styles.sourceCodeBlock}
                 tabIndex={0}
                 aria-label="Фрагмент исходного кода"
               >
-                <code>{nativeText}</code>
+                <code>{text}</code>
               </pre>
               {/* oxlint-enable jsx-a11y/no-noninteractive-tabindex */}
             </details>
-          )}
+          ))}
         </section>
       )}
       {selected?.details && (

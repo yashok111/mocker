@@ -15,6 +15,9 @@ import (
 )
 
 type graphCandidate struct {
+	// Admission measures complete retained source6 content; its candidate JSON
+	// contains commitments only and is not the graph's semantic byte footprint.
+	semanticBytes      int64
 	ArtifactContextV3  *ArtifactContextV3  `json:"artifactContextV3,omitzero"`
 	Composed           *composedCandidate  `json:"-"`
 	ArtifactPins       []ArtifactPin       `json:"artifactPins,omitempty"`
@@ -94,6 +97,7 @@ func prepareGraph(ctx context.Context, q importReader, s *ImportSession) (*graph
 	if revisionOverLimits(g, semantic) {
 		return nil, nil, limitFault("Revision semantic limit exceeded")
 	}
+	g.semanticBytes = int64(len(semantic))
 	sortImportDiagnostics(pr.d)
 	return g, pr.d, nil
 }
@@ -606,12 +610,14 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 		}
 		s.CandidateHash = nil
 		s.State = "needs_resolution"
+		var semanticBytes *int64
 		if len(diagnostics) == 0 {
 			b, err := candidateJSON(s, g)
 			if err != nil {
 				return err
 			}
 			s.CandidateHash = new(hashBytes(b))
+			semanticBytes = new(g.semanticBytes)
 			s.State = "ready"
 		}
 		s.UpdatedAt = time.Now().UTC()
@@ -619,6 +625,11 @@ func (r *Repo) PreviewImport(ctx context.Context, pid, sid string, in PreviewImp
 		if g.Composed != nil {
 			result.AffectedScope = g.Composed.IncrementalScope
 		}
+		result.Preflight, err = PlanImport(ImportPreflightInput{Profile: selectedProfile(s.Profile), Counts: ImportCardinalities{Nodes: result.Summary.Nodes, Edges: result.Summary.Edges, Evidence: result.Summary.Evidence}, SemanticBytes: semanticBytes, Surfaces: []string{"graph", "events", "data_access", "lineage", "architecture"}})
+		if err != nil {
+			return err
+		}
+		result.Preflight.Basis = "candidate"
 		if err := saveSession(ctx, tx, s); err != nil {
 			return err
 		}

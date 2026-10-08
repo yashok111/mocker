@@ -12,6 +12,55 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+it("shows candidate consumer admission in the source import details", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      return json(
+        200,
+        url.includes(`/imports/${changeTestID}`)
+          ? {
+              session: {
+                id: changeTestID,
+                projectId: changeTestID,
+                state: "ready",
+                manifest: { repositoryName: "Source fixture" },
+                inventory: [],
+              },
+              preview: {
+                preflight: {
+                  version: "import-preflight-v1",
+                  counts: { nodes: 25000, edges: 100001, evidence: 100000 },
+                  consumers: [
+                    {
+                      surface: "events",
+                      status: "blocked",
+                      reasons: ["edge_limit"],
+                      admission: { maxTotalEdges: 100000 },
+                      traversal: {},
+                    },
+                  ],
+                },
+              },
+            }
+          : { items: [], nextCursor: "" },
+      );
+    }),
+  );
+  renderWithProviders(
+    <Results
+      projectId={changeTestID}
+      target={{ revisionId: changeTestID }}
+      search={{ wbPanel: "sources", wbResult: changeTestID, wbResultKind: "import" }}
+      onNavigate={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText("Доступность после импорта")).toBeVisible();
+  expect(screen.getByText(/События и задания: недоступно/)).toBeVisible();
+  expect(screen.getByText(/предел этого представления/)).toHaveTextContent("100000");
+});
+
 it.each([undefined, 1])(
   "offers the completed report without advancing opened version %s",
   async (opened) => {

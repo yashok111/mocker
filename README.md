@@ -973,6 +973,36 @@ mocker backend-storage rebuild --db /absolute/path/mocker.db --project PROJECT_U
 mocker backend-storage verify --db /absolute/path/mocker.db
 ```
 
+For accidental sensitive uploads, Store29 adds an explicit **offline project
+erasure** workflow. Stop Mocker first and use the matching binary. The preview
+prints table counts, removable/shared payload bytes and the exact confirmation
+hash; it never prints stored evidence or credential values:
+
+```sh
+mocker backend-storage preview-purge --db /absolute/path/mocker.db --project PROJECT_UUID
+mocker backend-storage purge-project --db /absolute/path/mocker.db --project PROJECT_UUID --confirmation PREVIEW_HASH
+```
+
+The confirmed operation erases the selected project's retained revisions,
+canonical payload membership, unshared blobs, staging, dependent views and
+receipts. It verifies storage and foreign keys in the exclusive transaction and
+leaves a nonsensitive, replayable erasure receipt. Any changed planned row makes
+the old confirmation invalid. Repeating the original command recovers the same
+receipt after an uncertain result. SQLite secure_delete is enabled for erasure
+and a final VACUUM removes historical freelist contents before WAL
+checkpoint/truncation. Keep free disk space for SQLite's compacted copy. If this
+final phase fails, the project is already logically erased; replay the same
+confirmation to finish it and recover the receipt.
+
+This is a project lifecycle operation, not a corrected import. It preserves
+other projects and shared payloads they still own. Downloaded exports/client
+captures, independent portable copies, materialized API/scenario artifacts,
+external backups and filesystem snapshots are outside this operation and require
+their own remediation. The preview names that boundary; the command does not
+claim forensic erasure of external copies or the underlying storage device.
+Ordinary APIs retain their immutable-history rules. Maintenance never migrates
+a database or starts its application.
+
 These commands require an existing Store27 file and SQLite exclusive maintenance
 ownership, including against readers. Busy ownership fails without changing rows;
 stop the other process and retry. They do not migrate or start a server and expose

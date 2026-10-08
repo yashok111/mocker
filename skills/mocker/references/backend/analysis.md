@@ -119,7 +119,7 @@ SQL or migrations run. API fields retain source operation/selector identity;
 manual API associations preserve exact external refs without establishing live
 behavior, backend impact or conformance.
 
-Source5 route enumeration uses complete-scan-admission: more than20000 total
+Source5 route enumeration uses complete-scan-admission: more than100000 total
 edges yields an empty pinned diagnostic, examinedEdgeCount0/edge_limit, not an
 absence claim. Item5000/auxiliary20000/witness256 and ownership_depth bounds
 remain visible. complete refers to bounded enumeration, never runtime delivery.

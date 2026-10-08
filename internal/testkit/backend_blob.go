@@ -162,6 +162,12 @@ func rebuildStore26Shape(ctx context.Context, tx *sql.Tx) error {
 			return err
 		}
 	}
+	// The fixture deliberately returns to Store26 before running real upgrades.
+	// Store29's independent table must not survive that test-only rewind or its
+	// migration would be applied twice. Production downgrade remains unsupported.
+	if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS backend_project_purge_receipts"); err != nil {
+		return err
+	}
 	_, err := tx.ExecContext(ctx, "PRAGMA user_version=26")
 	return err
 }

@@ -352,12 +352,12 @@ func putComposedCommands(
 	}
 	result.Identities = []RecordIdentity{}
 	result.DecisionIDs = []string{}
-	for _, command := range commands {
+	for i, command := range commands {
 		if err := ctx.Err(); err != nil {
 			return err
 		}
 		if err := batch.put(ctx, command); err != nil {
-			return err
+			return importCommandError(err, i, command)
 		}
 	}
 	return nil

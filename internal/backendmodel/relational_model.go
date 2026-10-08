@@ -29,7 +29,7 @@ type relationalFacetCommon struct {
 }
 type relationalFacet struct {
 	relationalFacetCommon
-	DatabaseName        string                      `json:"databaseName,omitzero"`
+	DatabaseName        jsontext.Value              `json:"databaseName,omitzero"`
 	QualifiedName       string                      `json:"qualifiedName,omitzero"`
 	NativeDefinition    *string                     `json:"nativeDefinition,omitzero"`
 	ConstraintsStatus   string                      `json:"constraintsStatus,omitzero"`

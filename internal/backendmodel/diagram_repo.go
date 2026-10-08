@@ -300,6 +300,11 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 		return nil, err
 	}
 	m.gaps = append(m.gaps, businessGaps...)
+	navigationGaps, err := resolveArchitectureNavigation(ctx, r.db.R, m.pid, m.graph, m.document, m.previous)
+	if err != nil {
+		return nil, err
+	}
+	m.gaps = append(m.gaps, navigationGaps...)
 	var out *DiagramVersion
 	err = r.db.Write(ctx, func(tx *sql.Tx) error {
 		out, err = r.writeDiagramMutation(ctx, tx, m)

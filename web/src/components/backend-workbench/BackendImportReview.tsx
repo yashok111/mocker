@@ -34,6 +34,7 @@ import { describeApiFailureDetailed } from "@/api/errors";
 import { BackendRecordInspector, LoadState, Pages } from "./BackendGraphInventory";
 import { ComparisonSummary } from "./BackendRevisionCompare";
 import { BackendIncrementalSync } from "./BackendIncrementalSync";
+import { BackendImportPreflight } from "./BackendImportPreflight";
 import type { ImportCandidateTarget } from "./backendImportAttempts";
 
 const wrap = { overflowWrap: "anywhere" as const, whiteSpace: "pre-wrap" as const };
@@ -519,6 +520,7 @@ function SavedPreview({
         {preview.identityDecisionCount ?? 0} · удаления {preview.deletionDecisionCount ?? 0}
       </Text>
       {preview.comparisonSummary && <ComparisonSummary summary={preview.comparisonSummary} />}
+      {preview.preflight && <BackendImportPreflight value={preview.preflight} />}
       {preview.diagnostics.map((item, i) => (
         <Alert key={i} color="yellow" style={wrap}>
           {item.code} · {item.path}: {item.message}

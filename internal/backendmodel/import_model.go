@@ -234,6 +234,7 @@ type ImportDiagnostic struct {
 	Message string `json:"message"`
 }
 type ImportPreview struct {
+	Preflight             *ImportPreflight          `json:"preflight,omitzero"`
 	AffectedScope         *IncrementalAffectedScope `json:"affectedScope,omitzero"`
 	ModelSchemaVersion    string                    `json:"modelSchemaVersion"`
 	ProfileExtension      *ImportProfileExtension   `json:"profileExtension,omitzero"`

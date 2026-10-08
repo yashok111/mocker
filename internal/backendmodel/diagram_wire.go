@@ -76,7 +76,7 @@ func (v *DiagramRef) UnmarshalJSON(b []byte) error {
 func (v *ArchitectureElement) UnmarshalJSON(b []byte) error {
 	type plain ArchitectureElement
 	*v = ArchitectureElement{}
-	return strictAPIObject(b, []string{"id", "label", "origin", "refs", "role", "responsibility", "technology"}, []string{"parentId"}, (*plain)(v))
+	return strictAPIObject(b, []string{"id", "label", "origin", "refs", "role", "responsibility", "technology"}, []string{"parentId", "membership", "navigation"}, (*plain)(v))
 }
 func (v *ArchitectureLink) UnmarshalJSON(b []byte) error {
 	type plain ArchitectureLink

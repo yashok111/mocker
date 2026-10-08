@@ -22,6 +22,26 @@ pointer or substitute an artifact head. Authorship comes from authentication.
 
 ## Public sequence
 
+When `diagramSupport.membershipFormats` includes `exact-node-members-v1`, a
+responsibility element may add `membership:{format:"exact-node-members-v1",
+nodeIds:[...exactNodeUUIDs]}`. This is an immutable exact set in that diagram
+version, not inferred descendants. Its1–5000 node IDs must be unique and disjoint
+from the element's inline node refs. At most20000 membership IDs fit one document;
+the existing1MiB document limit still applies. Inline refs remain bounded at100.
+Membership participates in ownership, relationship projection, evidence resolution,
+portable identity remapping and paginated `section:"members"` reads. Old versions
+keep their original sets. Use the actual responsibility boundary; do not invent
+extra applications merely to fit refs.
+
+Before saving, call `preview_backend_architecture {projectId,document,level,
+rootId,section:"elements",origin:"all",search:"",limit:100}`. Repeat for links,
+members (subjectId required) and gaps, following every cursor. The preview returns
+documentHash and targetHash, counts, bounded gap summary and paginated rows; it
+creates no diagram or saved view and exposes no saved pin. Keep the same document,
+level/root and filters across pages. Changing membership or any document field
+invalidates the cursor. Inspect ambiguity, missing proof and unresolved neighbors
+before create. Preview is subject to the same read admission/cache budgets.
+
 1. Read the exact source nodes/dependencies and their evidence. Keep their IDs;
    identical names do not establish correspondence. For Orders, explicitly map
    Customer, Orders and Payments systems, Orders API/worker/DB, and
@@ -63,6 +83,47 @@ saved-view cursors. Changed catalogs or projection filters reject stale cursors;
 restart listing explicitly. Query/compare POSTs are read-only.
 
 ## Recovery and bounds
+
+When `diagramSupport.gapScopeFormats` advertises `exact-node-scope-v1`, compact
+query/preview may include `gapScope:{format:"exact-node-scope-v1",nodeIds:[...]}`
+with1–20000 unique source-node IDs present at the exact target. This is the
+explicit intended scope, independent of current membership. It binds the cache
+and all cursors. Gap details gain scope and summaries gain byScope: in_scope
+(both endpoints), boundary (one endpoint), unrelated (neither), collapsed_internal
+(inspectable internal aggregates), or unqualified (no exact edge to classify).
+All gaps and evidence remain present. Without explicit scope no inventory is
+automatically called unrelated. Keep the same ordered scope list across pages.
+
+When `diagramSupport.navigationFormats` advertises `architecture-navigation-v1`,
+an element may carry up to eight authored `navigation` entries. A diagram entry
+is `{format:"architecture-navigation-v1",kind:"diagram",label,diagram:exactPin,
+level,rootId,focusId?}`; a Flow entry is `{format:"architecture-navigation-v1",
+kind:"flow",label,flowId,target:exactReadTarget}` on the document's exact target. At most128 distinct
+destination pins fit one document. Validate actual destination roles and ownership;
+never derive a correspondence from labels or C4 parentage. Diagram dependencies
+travel with portable closure, and source/element IDs are remapped explicitly.
+Inherited historical destinations remain visibly gapped on fork; their pins never
+advance. The explorer follows a sole explicit destination on entry, offers
+multiple labelled choices in the inspector, and retains browser back navigation.
+Source inspection reveals preserved native code and individual facet definitions
+behind keyboard-accessible disclosure controls, alongside file/line evidence.
+
+When capabilities advertise `diagramSupport.responseModes:["compact-v1"]`, set
+`responseMode:"compact-v1"` on ordinary and `section:"gaps"` queries. The response
+then carries `gaps:[]` and `gapSummary:{total,byCode}` for the entire pinned
+projection; the empty array does not mean complete coverage. Read all gap records
+as paginated rows of `section:"gaps"`. Keep the same response mode, exact pin,
+level/root and filters for every cursor. Omitted mode keeps the legacy envelope.
+
+Architecture cache misses admit one graph/projection builder per server Repo.
+Excess concurrent misses return retryable `backend_projection_busy` (HTTP503,
+Retry-After1s) before graph allocation. Retry the same exact pinned read. The
+server retains at most one projection whose serialized data fits8MiB; native
+graphs and snippets are not cached. Pins include project, document/version/hash,
+target/provenance hashes, level/root and policy. Cache hits still check target
+visibility. These bounds are admission/cache budgets, not a measured process-RSS
+or latency SLO. Unmapped gaps remain unresolved unless explicit evidence supports
+a different classification; a focused view does not automatically excuse them.
 
 Unknown mutation outcome: replay the identical operation, resource ID, key and
 body. Replay precedes CAS/quota/ownership changes; a changed body with the same

@@ -103,13 +103,13 @@ UUID ordering is deterministic pagination order, not execution order.
 
 ## Bounded enumeration and diagnostic pages
 
-Limits: examine20000 total revision edges, construct5000 items, admit20000
+Limits: examine100000 total revision edges, construct5000 items, admit20000
 auxiliary records, and retain256 graph IDs and256 evidence IDs per witness;
 page50default/100max. Dispatch, related routes and control witness lists also
 report witness_limit. These are work budgets, not a whole-response byte/RSS bound.
 
 `scanPolicy:"complete-scan-admission"` is conservative: a revision with more
-than20000 total edges returns empty items, truthful totalEdgeCount,
+than100000 total edges returns empty items, truthful totalEdgeCount,
 examinedEdgeCount0, complete:false, truncated:true and edge_limit. It performs no
 partial adjacency/tuple discovery. At admitted size each distinct edge is
 scanned once; reserve tuple/auxiliary slots before allocation. Ownership tracing

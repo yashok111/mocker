@@ -104,17 +104,17 @@ func validateEventsAttributeValues(a map[string]jsontext.Value, edge, persisted 
 	}
 	if d, ok := a["description"]; ok {
 		if err := lineageText(d); err != nil {
-			return err
+			return importAttributeError(err, "description")
 		}
 	}
 	for _, key := range scalar {
 		if err := runtimeScalar(a[key], true); err != nil {
-			return err
+			return importAttributeError(err, key)
 		}
 	}
 	for _, key := range text {
 		if err := lineageText(a[key]); err != nil {
-			return err
+			return importAttributeError(err, key)
 		}
 	}
 	for _, key := range refs {

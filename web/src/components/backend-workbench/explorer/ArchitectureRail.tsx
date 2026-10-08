@@ -6,7 +6,7 @@ import {
   architecturePlace,
   architectureSearch,
   architectureSourceSearch,
-  sourceRefIds,
+  architectureMemberIds,
 } from "./architectureNavigation";
 import { readArchitectureChoices } from "./architectureReads";
 import { readExploreNodes } from "./reads";
@@ -63,7 +63,7 @@ function ArchitectureTree({
       (!saved?.origin || saved.origin === "all" || saved.origin === e.origin.kind),
   );
   const focus = place.focus;
-  const ids = sourceRefIds(focus?.refs);
+  const ids = architectureMemberIds(focus);
   const related = useQuery({
     queryKey: [
       "workbench-catalog",

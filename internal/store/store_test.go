@@ -174,8 +174,12 @@ func TestMigrate_backfillsEmptyBaseScopeAndServes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("schema version: %v", err)
 	}
-	if v != 28 {
-		t.Fatalf("schema version = %d, want 28", v)
+	want, err := store.LatestSchemaVersion()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v != want {
+		t.Fatalf("schema version = %d, want %d", v, want)
 	}
 
 	for _, id := range entIDs {

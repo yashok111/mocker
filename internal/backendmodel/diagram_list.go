@@ -114,8 +114,8 @@ func (r *Repo) ListDiagrams(ctx context.Context, pid string, in DiagramListInput
 		return nil, err
 	}
 
-	from := ` FROM backend_diagrams d JOIN backend_diagram_versions_documents v ON v.project_id=d.project_id AND v.diagram_id=d.id AND v.version=d.version WHERE d.project_id=? AND (?='' OR d.kind=?) AND (?='' OR v.target_hash=?) AND (?='' OR EXISTS (SELECT 1 FROM json_tree(v.document,'$.document.payload') ref WHERE CASE WHEN ref.type='object' THEN json_extract(ref.value,'$.kind')='record' AND json_extract(ref.value,'$.id')=? ELSE 0 END))`
-	args := []any{pid, in.Kind, in.Kind, in.TargetHash, in.TargetHash, in.SubjectID, in.SubjectID}
+	from := ` FROM backend_diagrams d JOIN backend_diagram_versions_documents v ON v.project_id=d.project_id AND v.diagram_id=d.id AND v.version=d.version WHERE d.project_id=? AND (?='' OR d.kind=?) AND (?='' OR v.target_hash=?) AND (?='' OR EXISTS (SELECT 1 FROM json_tree(v.document,'$.document.payload') ref WHERE CASE WHEN ref.type='object' THEN json_extract(ref.value,'$.kind')='record' AND json_extract(ref.value,'$.id')=? ELSE 0 END) OR EXISTS (SELECT 1 FROM json_each(v.document,'$.document.payload.elements') element, json_each(element.value,'$.membership.nodeIds') member WHERE member.type='text' AND member.value=?))`
+	args := []any{pid, in.Kind, in.Kind, in.TargetHash, in.TargetHash, in.SubjectID, in.SubjectID, in.SubjectID}
 	var total int
 	if err = tx.QueryRowContext(ctx, `SELECT count(*)`+from, args...).Scan(&total); err != nil {
 		return nil, err

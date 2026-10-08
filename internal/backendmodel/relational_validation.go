@@ -5,9 +5,11 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"strings"
+	"unicode"
 	"unicode/utf8"
 )
 
@@ -46,17 +48,18 @@ func relationalObject(raw jsontext.Value) (map[string]jsontext.Value, error) {
 	return m, nil
 }
 func relationalFields(m map[string]jsontext.Value, required, optional []string) error {
-	for k, v := range m {
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		v := m[k]
 		if !slices.Contains(required, k) && !slices.Contains(optional, k) {
-			return semantic(k, "Unknown relational member")
+			return semantic(jsonPointerSegment(k), "Unknown relational member")
 		}
 		if !v.IsValid() {
-			return semantic(k, "Invalid JSON value")
+			return semantic(jsonPointerSegment(k), "Invalid JSON value")
 		}
 	}
 	for _, k := range required {
 		if m[k] == nil {
-			return semantic(k, "Required relational member is missing")
+			return semantic(jsonPointerSegment(k), "Required relational member is missing")
 		}
 	}
 	return nil
@@ -74,6 +77,9 @@ func relationalText(raw jsontext.Value, nullable, native bool) error {
 			return limitFault("Relational native UTF-8 byte limit exceeded")
 		}
 	} else if !nonblank(s) {
+		if strings.ContainsFunc(s, unicode.IsControl) {
+			return semantic("attributes", "Control characters are not allowed in this text field")
+		}
 		return semantic("attributes", "Expected a nonblank string")
 	}
 	return nil
@@ -184,7 +190,8 @@ func validateRelationalAttributesMode(kind string, attrs map[string]jsontext.Val
 	if kind == "symbol" {
 		allowed = []string{"databaseRoutine", "language", "qualifiedName", "description"}
 	}
-	for k, v := range attrs {
+	for _, k := range slices.Sorted(maps.Keys(attrs)) {
+		v := attrs[k]
 		if !slices.Contains(allowed, k) {
 			return semantic("attributes/"+k, "Unknown relational attribute")
 		}
@@ -204,7 +211,8 @@ func validateRelationalAttributesMode(kind string, attrs map[string]jsontext.Val
 	if len(fs) > MaxRelationalFacets {
 		return limitFault("Relational facet limit exceeded")
 	}
-	for key, raw := range fs {
+	for _, key := range slices.Sorted(maps.Keys(fs)) {
+		raw := fs[key]
 		if !externalKey(key) {
 			return semantic("facets", "Invalid facet key")
 		}
@@ -375,7 +383,12 @@ func relationalFacetProof(m map[string]jsontext.Value, f *relationalFacet, persi
 }
 
 func relationalFacetTexts(m map[string]jsontext.Value) error {
-	for _, key := range []string{"qualifiedName", "databaseName", "targetReason"} {
+	if value, ok := m["databaseName"]; ok {
+		if err := relationalDatabaseName(value); err != nil {
+			return err
+		}
+	}
+	for _, key := range []string{"qualifiedName", "targetReason"} {
 		if v, ok := m[key]; ok {
 			if err := relationalText(v, false, false); err != nil {
 				return err
@@ -388,6 +401,26 @@ func relationalFacetTexts(m map[string]jsontext.Value) error {
 				return err
 			}
 		}
+	}
+	return nil
+}
+
+// Legacy strings stay strings, preserving historical property hashes. Unknown
+// physical names require an explicit reason instead of a guessed display label.
+func relationalDatabaseName(raw jsontext.Value) error {
+	value := bytes.TrimSpace(raw)
+	if len(value) > 0 && value[0] == '"' {
+		return relationalText(value, false, false)
+	}
+	if err := relationalScalarValue(value, "string", false); err != nil {
+		return err
+	}
+	fields, err := relationalObject(value)
+	if err != nil {
+		return err
+	}
+	if known, ok := fields["value"]; ok {
+		return relationalText(known, false, false)
 	}
 	return nil
 }
@@ -626,7 +659,8 @@ func relationalReferencesMode(kind string, attrs map[string]jsontext.Value, edge
 	if err != nil {
 		return nil, err
 	}
-	for fk, raw := range fs {
+	for _, fk := range slices.Sorted(maps.Keys(fs)) {
+		raw := fs[fk]
 		f, err := decodeRelationalFacetMode(kind, raw, persisted, sourceAdmission)
 		if err != nil {
 			return nil, err

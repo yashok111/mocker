@@ -345,7 +345,7 @@ func (p *databaseProjection) projectRelationship(item RelationshipItem, e Edge) 
 	node := p.nodes[e.From]
 	f, err := effectiveProposalFacet(*target.proposal, new(target.draft.ID), e.ID, e.Kind, e.Attributes, target.overlay(e.ID))
 	if err != nil { // Persisted overlays were validated before publication.
-		p.limitation("Proposal relationship projection unavailable for " + e.ID)
+		p.limitation(e.ID, "proposal_projection_unavailable", "Proposal relationship projection unavailable for "+e.ID)
 	}
 	item.EffectiveFacet, item.Status, item.RuntimeStatus = f, "proposed", "unverified"
 	if target.overlay(e.ID) != nil {

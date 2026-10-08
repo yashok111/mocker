@@ -16,6 +16,29 @@ import (
 // Migrate and never creates a database. SQLite EXCLUSIVE locking mode in WAL
 // acquires exclusive ownership against other connections, including readers.
 func BackendStorage(ctx context.Context, path, project string, rebuild bool) (err error) {
+	return backendMaintenance(ctx, path, rebuild, false, func(tx *sql.Tx) error {
+		if rebuild {
+			return backendblob.Rebuild(ctx, tx, project)
+		}
+		return backendblob.Verify(ctx, tx)
+	})
+}
+
+// BackendRemediation previews or erases one project only while the application
+// is stopped. Confirmation is bound to every planned stored row, not its label.
+func BackendRemediation(ctx context.Context, path, project, confirmation string) (out any, err error) {
+	err = backendMaintenance(ctx, path, confirmation != "", true, func(tx *sql.Tx) error {
+		if confirmation == "" {
+			out, err = backendblob.PreviewProjectPurge(ctx, tx, project)
+		} else {
+			out, err = backendblob.PurgeProject(ctx, tx, project, confirmation)
+		}
+		return err
+	})
+	return out, err
+}
+
+func backendMaintenance(ctx context.Context, path string, write, erasure bool, operation func(*sql.Tx) error) (err error) {
 	path, err = filepath.EvalSymlinks(path)
 	if err != nil {
 		return err
@@ -46,6 +69,11 @@ func BackendStorage(ctx context.Context, path, project string, rebuild bool) (er
 	if _, err = conn.ExecContext(ctx, "PRAGMA foreign_keys=OFF"); err != nil {
 		return err
 	}
+	if erasure {
+		if _, err = conn.ExecContext(ctx, "PRAGMA secure_delete=ON"); err != nil {
+			return err
+		}
+	}
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("exclusive maintenance ownership unavailable (stop application): %w", err)
@@ -57,21 +85,46 @@ func BackendStorage(ctx context.Context, path, project string, rebuild bool) (er
 			err = errors.Join(err, fmt.Errorf("rollback backend storage maintenance: %w", rollbackErr))
 		}
 	}()
+	if err = backendMaintenanceVersion(ctx, tx, erasure); err != nil {
+		return err
+	}
+	err = operation(tx)
+	if err != nil {
+		return err
+	}
+	if err = verifyBackendMaintenance(ctx, tx); err != nil {
+		return err
+	}
+	if !write {
+		return tx.Rollback()
+	}
+	if err = tx.Commit(); err != nil {
+		return err
+	}
+	if erasure {
+		return finishBackendErasure(ctx, conn)
+	}
+
+	return nil
+}
+
+func backendMaintenanceVersion(ctx context.Context, tx *sql.Tx, erasure bool) error {
+	var err error
 	var version int
 	if err = tx.QueryRowContext(ctx, "PRAGMA user_version").Scan(&version); err != nil {
 		return err
 	}
-	if version != 27 && version != 28 {
-		return fmt.Errorf("backend storage requires Store27 or Store28, got %d; maintenance never migrates", version)
-	}
-	if rebuild {
-		err = backendblob.Rebuild(ctx, tx, project)
-	} else {
-		err = backendblob.Verify(ctx, tx)
-	}
+	latest, err := LatestSchemaVersion()
 	if err != nil {
 		return err
 	}
+	if version < 27 || version > latest || erasure && version < 29 {
+		return fmt.Errorf("unsupported Store%d for this maintenance operation; erasure requires Store29 or newer and maintenance never migrates", version)
+	}
+	return nil
+}
+func verifyBackendMaintenance(ctx context.Context, tx *sql.Tx) error {
+	var err error
 	if err = checkMigration21ForeignKeys(ctx, tx); err != nil {
 		return err
 	}
@@ -82,8 +135,24 @@ func BackendStorage(ctx context.Context, path, project string, rebuild bool) (er
 	if integrity != "ok" {
 		return fmt.Errorf("integrity: %s", integrity)
 	}
-	if !rebuild {
-		return tx.Rollback()
+	return nil
+}
+
+func finishBackendErasure(ctx context.Context, conn *sql.Conn) error {
+	var err error
+	// secure_delete only clears pages freed by this operation. VACUUM also
+	// removes old freelist contents left by earlier updates/deletions. The
+	// receipt was committed already, so repeating its exact confirmation can
+	// finish this phase after cancellation, disk-full or a lost response.
+	if _, err = conn.ExecContext(ctx, "VACUUM"); err != nil {
+		return fmt.Errorf("erasure committed; database compaction failed, replay the original confirmation: %w", err)
 	}
-	return tx.Commit()
+	var busy, log, checkpointed int
+	if err = conn.QueryRowContext(ctx, "PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &log, &checkpointed); err != nil {
+		return fmt.Errorf("erasure committed; WAL checkpoint failed, replay the original confirmation: %w", err)
+	}
+	if busy != 0 {
+		return fmt.Errorf("erasure committed; WAL checkpoint busy, replay the original confirmation")
+	}
+	return nil
 }

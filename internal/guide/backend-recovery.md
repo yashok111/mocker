@@ -7,6 +7,27 @@ owner tuple/contentHash. Use it from the selected set before commit
 and whenever a response is lost, a session resumes, or CAS fails. Recheck selected
 workflow identity after a server change without discarding original receipts.
 
+## Sensitive historical uploads: explicit offline erasure
+
+A corrected import or replacement project does not erase previous evidence.
+With a Store29-or-newer matching binary, stop Mocker and use
+`mocker backend-storage preview-purge --db PATH --project UUID`. Inspect its
+per-table closure, shared payload accounting and outsideScope before confirming
+with `mocker backend-storage purge-project --db PATH --project UUID --confirmation HASH`.
+This erases the entire selected project under exclusive offline ownership;
+it is not a batch import API or selective rewrite of an immutable revision.
+Changed stored inputs invalidate the preview. Preserve the nonsensitive receipt;
+replay the original project/hash to recover an uncertain completed outcome.
+Final VACUUM removes historical SQLite freelist bytes, followed by WAL truncation.
+If compaction fails after logical erasure, replay the same confirmation to finish
+it; do not create a replacement request or claim the maintenance succeeded.
+
+Other projects/shared payloads survive. External backups, filesystem snapshots,
+client requests/receipts, downloaded exports, independent portable copies and
+materialized API/scenario artifacts require separate remediation. Never claim
+their erasure from this receipt, and never execute this destructive command
+without the owner's explicit authorization for that exact project.
+
 ## Composed and full-proposal recovery
 
 Persist an exact pending request before transport, including Begin/Create before a server session/proposal ID exists. Keep its project, original source base and scope discoverable after restart even when the current head changes. A browser restore waits for explicit retry. Storage failure or invalid recovery must be visible; do not silently send from memory alone or replace an unknown request with a new key.
@@ -22,6 +43,63 @@ Import Preview itself advances the session version and has no idempotency key/re
 Full proposal accepted command IDs remain consumed after no-op, criteria-only or overwritten writes, restore and restart. A fresh request key with one of those IDs gets backend_change_command_conflict409 at valid current CAS. Exact old receipt replay still wins. Continue unchanged local IDs and explicitly copy as new edits are separate choices; no automatic regeneration. See change5 for the complete protocol and project2 for annotation cursor/CAS recovery.
 
 ## Save complete requests before sending
+
+### Language-neutral file client
+
+The repository ships `scripts/backend_import_client.py` (Python3.11+, POSIX file
+permissions; no dependencies) for inspected JSON from any language/provider.
+It performs no source analysis and never runs the inspected application.
+
+A `mocker-import-transfer-v1` plan contains projectId, the selected installationId
+and guideSetId, `begin` (the complete original Begin body excluding projectId),
+and `commandsFile` (a relative or absolute NDJSON file, one command per line).
+Use exact observed pins, manifest/inventory and original idempotency key. Optional
+source-ID placeholders are objects `{"$importBinding":"repositoryId"}` or
+`{"$importBinding":"snapshotId"}` in structured command fields. Strings/native
+text are never substituted. Existing qualified base refs stay exact.
+
+Run from the Mocker checkout, with the token supplied through the named environment
+variable, never as a command-line argument:
+
+```sh
+python3 scripts/backend_import_client.py stage --plan plan.json --journal private-journal --url https://mocker.local:8443/mcp
+python3 scripts/backend_import_client.py audit-binding --plan plan.json --journal private-journal --url https://mocker.local:8443/mcp
+python3 scripts/backend_import_client.py commit --plan plan.json --journal private-journal --url https://mocker.local:8443/mcp --audit audit.json
+```
+
+Default token variable is MOCKER_MCP_KEY; `--token-env NAME` selects another.
+`--ca-file PATH` adds the installation's CA; certificate verification stays on.
+Plain HTTP is admitted only on loopback. The private journal must have0700
+permissions; command captures, exact requests and checksummed receipts use0600
+and atomic/fsynced publication. Keep these source-bearing artifacts private.
+
+Stage binds original inputs and server identity, snapshots NDJSON bytes, enforces
+advertised command/body limits, uploads sequentially and ends at saved Preview.
+It does not Commit. Rerun the same command and journal after interruption: saved
+receipts are checked, and pending Begin/Batch/Commit use their original body/key.
+A lost Preview is recovered only from the exact saved session/version/base tuple;
+the client never raises CAS opportunistically. Changed source command bytes,
+endpoint, installation or guide set stop transfer for review. A definitive rejected
+batch requires repair through the documented import workflow, not journal editing.
+
+Commit requires a private audit JSON containing result:"pass", projectId, importId,
+candidateHash, previewVersion, baseRevisionId, expectedVersion, journalHash (from
+audit-binding), and the independently established findings. The client checks
+these bindings; it does not perform or certify the source audit. Follow the full
+audit protocol before writing that conclusion. A pass label or hash alone is not
+source evidence. Progress output contains counters/receipt IDs, not native text.
+
+### Storage and remaining budget
+
+`get_backend_storage_usage {projectId}` reports activeStagingBytes,
+transientReservedBytes and remainingStagingBytes using the actual shared import,
+proposal/rebase and analysis reservation namespace. Closed imports remain in
+closedImportBytes; retainedLogicalBytes/distinct payload bytes and
+durableReceiptBytes are reported independently. These measures overlap (active
+batch receipts also count in staging) and are not an additive database-file total.
+This read-time sample is not a reservation. Closing a session releases active
+staging without deleting immutable revisions or exact replay receipts. Retention
+is explicit; historical erasure uses the separate confirmed offline workflow.
 
 Keep projectId/importId, source manifest/inventory, original base, every command
 and UUID mapping. Persist entire mutation inputs and their original keys:

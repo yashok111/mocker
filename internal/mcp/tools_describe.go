@@ -30,6 +30,7 @@ import (
 // way every raw tool here validates them: a schema compiled once from the
 // registered input schema, unknown members refused.
 func addDescribeTools(s *sdk.Server, catalog *toolCatalog) {
+	addImportDiagnosticTool(s, catalog)
 	tool := &sdk.Tool{
 		Name: "describe_tool",
 		Description: "Returns one tool's full description and argument schema; tools/list carries only a one-sentence summary and top-level argument names. " +

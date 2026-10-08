@@ -106,6 +106,7 @@ var toolRoutes = map[string][]string{
 	"apply_backend_api_pins":                   {"POST /api/backend-projects/{id}/api-artifacts/commands"},
 	"get_api_artifact_snapshot":                {"GET /api/designs/{id}/revisions/{rid}/artifact-snapshot"},
 	"build_backend_interactions":               {"POST /api/backend-projects/{id}/diagrams/interactions/build"},
+	"preview_backend_architecture":             {"POST /api/backend-projects/{id}/diagrams/architecture/preview"},
 	"build_backend_lifecycle":                  {"POST /api/backend-projects/{id}/diagrams/lifecycle/build"},
 	"create_backend_diagram":                   {"POST /api/backend-projects/{id}/diagrams"},
 	"save_backend_diagram":                     {"POST /api/backend-projects/{id}/diagrams/{did}/save"},
@@ -143,6 +144,11 @@ var toolRoutes = map[string][]string{
 	"get_backend_import":                       {"GET /api/backend-projects/{id}/imports/{iid}"},
 	"put_backend_import_batch":                 {"PUT /api/backend-projects/{id}/imports/{iid}/batches/{bid}"},
 	"preview_backend_import":                   {"POST /api/backend-projects/{id}/imports/{iid}/preview"},
+	"plan_backend_import":                      {"POST /api/backend-projects/{id}/imports/plan"},
+	"get_backend_storage_usage":                {"GET /api/backend-projects/{id}/storage/usage"},
+	"get_backend_import_schema":                {"GET /api/backend-projects/import-schema"},
+	"query_backend_coverage":                   {"POST /api/backend-projects/{id}/coverage/query"},
+	"validate_backend_import_batch":            {"POST /api/backend-projects/{id}/imports/{iid}/validate"},
 	"commit_backend_import":                    {"POST /api/backend-projects/{id}/imports/{iid}/commit"},
 	"abort_backend_import":                     {"POST /api/backend-projects/{id}/imports/{iid}/abort"},
 	"query_backend_database":                   {"POST /api/backend-projects/{id}/database/query"},
@@ -383,6 +389,8 @@ var toolRoutes = map[string][]string{
 	// F23: one tool's full description and schemas, read from the server's
 	// own registry (tools_describe.go) — [noRoute].
 	"describe_tool": noRoute,
+	// Validates the registry's import wire schemas; never dispatches a command.
+	"diagnose_backend_import_request": noRoute,
 	// A11: the entity read's two write siblings.
 	"set_resource_entity":    {"PUT /api/workspaces/{id}/resources/{family}/entities/{key}"},
 	"delete_resource_entity": {"DELETE /api/workspaces/{id}/resources/{family}/entities/{key}"},

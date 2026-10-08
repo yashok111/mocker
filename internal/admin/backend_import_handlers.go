@@ -74,6 +74,44 @@ func (s *Server) handleBeginBackendImport(w http.ResponseWriter, r *http.Request
 	httpx.JSON(w, 200, out)
 }
 
+func (s *Server) handlePlanBackendImport(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireUser(w, r); !ok {
+		return
+	}
+	if !s.backendNoQuery(w, r) {
+		return
+	}
+	var in backendmodel.ImportPreflightInput
+	if !s.backendImportBody(w, r, &in, s.cfg.MaxBody) {
+		return
+	}
+	if _, err := s.backendRepo.Get(r.Context(), r.PathValue("id")); err != nil {
+		s.backendError(w, err)
+		return
+	}
+	out, err := backendmodel.PlanImport(in)
+	if err != nil {
+		s.backendError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+
+func (s *Server) handleBackendStorageUsage(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireUser(w, r); !ok {
+		return
+	}
+	if !s.backendNoQuery(w, r) {
+		return
+	}
+	out, err := s.backendRepo.StorageUsage(r.Context(), r.PathValue("id"))
+	if err != nil {
+		s.backendError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+
 func (s *Server) handlePutBackendImportBatch(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireUser(w, r); !ok {
 		return

@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
-  manifestHash: "sha256:4c7d20df64ed90dd74d794334df66b29bd2fc23e14f3e0c4e3b7fb42a36c6a0c"
+  guideSetId: "sha256:c096364a99a6c7f21e25f57466ba5967398f3189ea5048bbdcc66f9fff7aa714"
+  manifestHash: "sha256:c096364a99a6c7f21e25f57466ba5967398f3189ea5048bbdcc66f9fff7aa714"
 ---
 
 # Prepare a full graph proposal
@@ -24,6 +24,20 @@ Read the chosen source revision explicitly. Source5 is supported with source5 vo
 Create using `create_backend_change_proposal {projectId,name,baseRevisionId,idempotencyKey}`. Save this exact input before sending, even before proposalId is known. List with `list_backend_change_proposals {projectId,baseRevisionId?,status:"draft"?,limit?,cursor?}`. `get_backend_change_proposal` may resolve a draft once when proposalRevisionId is omitted; downstream reads always use the returned immutable revision ID. Historical requests supply both proposalId and proposalRevisionId.
 
 ## Build ordered typed commands
+
+For presentation-only localization, an exact-baseline full proposal is the
+supported authored layer. Use `rename` for labels, sending only the record ID and
+new name. For explanatory descriptions, use the selected kind's complete typed
+attribute group, preserving native definitions, expressions, topology and identity
+fields; inspect its desired schema rather than copying source-proof metadata into
+an authored group. Preview and audit the diff before Apply. Do not reimport all
+unchanged evidence just to translate presentation, and do not claim the authored
+label is a new source assertion. Read/share the exact proposal target or a saved
+view pinned to it; existing source revisions/views retain their old presentation.
+
+Source6 incremental sync is a different path: it requires an eligible composed
+partition and an exact source change manifest with dependency closure. A translation
+with unchanged source hashes does not by itself satisfy those requirements.
 
 Every command includes a new canonical commandId and a nonblank reason. Keep command order. References use exact UUIDs from the selected baseline/draft or explicit new client IDs. Desired attributes are complete typed groups; there is no arbitrary JSON patch, source owner edit or manufactured evidence.
 

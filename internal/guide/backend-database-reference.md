@@ -86,8 +86,16 @@ means no DEFAULT; it is not an unknown default. Omission is not a third state.
 | migration | Wrapped nullable nonnegative-int64 order; parentKeys; definition; changes; derivationStatus complete/partial/unsupported. |
 | symbol.databaseRoutine | routineKind procedure/function/trigger; qualifiedName; definition; dependencyKeys; bodyStatus complete/partial/unsupported and gaps when incomplete. Existing language/qualifiedName/description remain allowed. |
 
-Only column fields, constraint expression/deferrability, index unique/predicate/
-method and migration order use the scalar wrapper. Other listed values are direct.
+Column fields, constraint expression/deferrability, index unique/predicate/method
+and migration order use the scalar wrapper. When `databaseIdentityFormats`
+advertises `known-unknown-v1`, databaseName also accepts
+`{"status":"known","value":"orders"}` or
+`{"status":"unknown","reason":"Physical name is configured at deployment"}`.
+Legacy string names remain valid and retain their original representation. A
+physical name must never be inferred from a display label; null, omission, empty
+known values and unknown without a reason are invalid. This does not change
+datastore UUIDs, qualifiedName, dialect or source coverage. Other listed values
+are direct. Portable copies containing this extension require a compatible reader.
 The typeFamily enum is boolean/integer/decimal/float/string/binary/date/time/
 timestamp/json/uuid/array/other. Native type remains independent of an unknown
 family. No PK/FK is required for a valid table; incomplete lists never prove
@@ -424,3 +432,23 @@ remain unchanged; source1–3 keep their supported reads.
 Source5 column→message fields delegates to inspect13/backend-events with full
 node+endpoint+edge route refs and explicit transport. Source2/3/proposals never
 acquire contextual event lineage through schema or name matching.
+
+
+## Compact coverage and database reads
+
+For a source revision, `query_backend_coverage {projectId,revisionId,
+section:"summary",limit:100}` returns bounded counts without repeating manifests.
+Use sections `snapshots`, `files`, `inventory` and `gaps` for complete detail;
+follow every nextCursor with the same revision/hash, section, snapshot filter and
+limit. This extension advertises `coverage-details-v1` in compactReadVersions.
+It is source-revision-only; other targets keep their existing coverage routes.
+Detail pages are bounded to1MiB; an oversized single record is explicitly refused,
+not truncated, and remains readable through the legacy full coverage endpoint.
+
+For database queries on supported exact targets, select `responseMode:"compact-v1"`
+when compactReadVersions includes `database-compact-v1`. `section:"data"` preserves
+data rows and pins while returning coverageSummary and limitationSummary instead
+of repeated complete manifests/prose. Read `section:"limitations"` with otherwise
+identical selectors and follow every cursor for full normalized limitation codes,
+subject IDs and messages. Empty compatibility fields in compact mode do not prove
+complete coverage. Omitting responseMode preserves the legacy response envelope.

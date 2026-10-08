@@ -1,5 +1,7 @@
 import type {
   BackendArchitectureDocument,
+  BackendArchitectureNavigation,
+  BackendArchitectureElement,
   BackendDiagramPin,
   BackendDiagramRef,
   BackendDiagramVersion,
@@ -52,19 +54,38 @@ export type ArchitectureDestination = {
   description: string;
   search: BackendWorkspaceSearch;
 };
+export function explicitArchitectureSearch(
+  entry: BackendArchitectureNavigation,
+): BackendWorkspaceSearch {
+  return entry.kind === "diagram"
+    ? architectureSearch(entry.diagram, entry.level, entry.rootId, entry.focusId)
+    : {
+        ...resolvedTargetSearch(entry.target),
+        wbView: "scenarios",
+        wbMode: "flow",
+        flowId: entry.flowId,
+      };
+}
 export function sourceRefIds(refs: BackendDiagramRef[] = []) {
   return [
     ...new Set(refs.flatMap((r) => (r.kind === "record" && r.recordType === "node" ? [r.id] : []))),
   ].sort();
 }
+export function architectureMemberIds(element?: BackendArchitectureElement) {
+  return [
+    ...new Set([...sourceRefIds(element?.refs), ...(element?.membership?.nodeIds ?? [])]),
+  ].sort();
+}
 export function architectureDestinations(
-  diagram: BackendDiagramVersion,
+  diagram: Pick<BackendDiagramVersion, "pin" | "document">,
   subjects: string[],
 ): ArchitectureDestination[] {
   if (diagram.document.kind !== "architecture") return [];
   const doc = diagram.document;
   const matches = subjects.length
-    ? doc.payload.elements.filter((e) => sourceRefIds(e.refs).some((id) => subjects.includes(id)))
+    ? doc.payload.elements.filter((e) =>
+        architectureMemberIds(e).some((id) => subjects.includes(id)),
+      )
     : doc.payload.elements.filter((e) => e.id === doc.payload.primarySystemId);
   return matches.flatMap((e) => {
     const level =

@@ -150,7 +150,7 @@ function fixture() {
         constructedItemCount: items.length,
         auxiliaryRecordCount: 6,
         limits: {
-          maxExaminedEdges: 20000,
+          maxExaminedEdges: 100000,
           maxItems: 5000,
           maxAuxiliaryRecords: 20000,
           maxWitnessRecords: 256,

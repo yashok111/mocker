@@ -47,11 +47,20 @@ func (r *Repo) CompareDiagrams(ctx context.Context, pid string, in DiagramCompar
 	if before.Document.Kind != after.Document.Kind {
 		return nil, diagramUnsupported()
 	}
-	oldGraph, err := r.ResolveEffectiveGraph(ctx, pid, before.Document.Target)
+	release, err := r.architectureReads.admit(ctx)
 	if err != nil {
 		return nil, err
 	}
-	newGraph, err := r.ResolveEffectiveGraph(ctx, pid, after.Document.Target)
+	defer release()
+	readGraph := r.ResolveEffectiveGraph
+	if before.Document.Kind == "architecture" {
+		readGraph = r.readArchitectureGraph
+	}
+	oldGraph, err := readGraph(ctx, pid, before.Document.Target)
+	if err != nil {
+		return nil, err
+	}
+	newGraph, err := readGraph(ctx, pid, after.Document.Target)
 	if err != nil {
 		return nil, err
 	}

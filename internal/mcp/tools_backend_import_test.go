@@ -17,6 +17,10 @@ import (
 func TestBackendImportToolsRawRoutes(t *testing.T) {
 	const ids = `"projectId":"` + backendTestID + `","importId":"` + backendTestID + `"`
 	for _, tt := range []struct{ name, args, method, path string }{
+		{"query_backend_coverage", `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","section":"summary","limit":100}`, "POST", "/coverage/query"},
+		{"get_backend_storage_usage", `{"projectId":"` + backendTestID + `"}`, "GET", "/storage/usage"},
+		{"validate_backend_import_batch", `{` + ids + `,"expectedImportVersion":9007199254740993,"payloadHash":"` + strings.Repeat("a", 64) + `","commands":[{"op":"remove","remove":{"recordType":"node","externalKey":"x"}}]}`, "POST", "/imports/" + backendTestID + "/validate"},
+		{"plan_backend_import", `{"projectId":"` + backendTestID + `","profile":"events-service-v1","counts":{"nodes":25228,"edges":32348,"evidence":106398},"surfaces":["events"]}`, "POST", "/imports/plan"},
 		{"list_backend_imports", `{"projectId":"` + backendTestID + `"}`, "GET", "/imports"},
 		{"get_backend_import", `{` + ids + `,"limit":500}`, "GET", "/imports/" + backendTestID + "?limit=500"},
 		{"preview_backend_import", `{` + ids + `,"expectedImportVersion":9007199254740993,"baseRevisionId":"` + backendTestID + `"}`, "POST", "/imports/" + backendTestID + "/preview"},

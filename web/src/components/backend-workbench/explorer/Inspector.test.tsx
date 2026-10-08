@@ -79,3 +79,29 @@ it.each([true, false])(
     expect(screen.getAllByText(step.name)).toHaveLength(1);
   },
 );
+
+it.each([
+  { nativeDefinition: nativeText },
+  { facets: { sql: { definition: nativeText } } },
+  { facets: { declared: { nativeDefinition: nativeText } } },
+  { relational: { facets: { effective: { nativeDefinition: nativeText } } } },
+  { databaseRoutine: { facets: { declared: { nativeDefinition: nativeText } } } },
+])("reveals exact native definitions without a language parser: %j", async (attributes) => {
+  workspaceHTTP();
+  renderWithProviders(
+    <Inspector
+      projectId={projectId}
+      target={{ revisionId }}
+      search={{ revisionId }}
+      id={nodeId}
+      node={{ ...step, kind: "database_routine", attributes }}
+      onClose={vi.fn()}
+      onEnter={vi.fn()}
+      onNavigate={vi.fn()}
+    />,
+  );
+  const source = await screen.findByRole("region", { name: "Исходный код" });
+  expect(source.querySelector("pre")).not.toBeVisible();
+  await userEvent.click(screen.getByText("Показать код", { exact: true }));
+  expect(source.querySelector("code")?.textContent).toBe(nativeText);
+});

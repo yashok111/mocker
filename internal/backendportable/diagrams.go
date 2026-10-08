@@ -116,6 +116,11 @@ func diagramDependencies(v *bm.DiagramVersion) []bm.DiagramPin {
 			deps = append(deps, *p)
 		}
 	}
+	for _, element := range v.Document.Payload.Elements {
+		for _, navigation := range element.Navigation {
+			add(navigation.Diagram)
+		}
+	}
 	if v.Document.Interactions != nil {
 		add(v.Document.Interactions.Architecture)
 	}

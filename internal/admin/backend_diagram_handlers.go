@@ -378,6 +378,23 @@ func (s *Server) handleBuildBackendInteractions(w http.ResponseWriter, r *http.R
 	httpx.JSON(w, 200, out)
 }
 
+func (s *Server) handlePreviewBackendArchitecture(w http.ResponseWriter, r *http.Request) {
+	ctx, ok := s.diagramContext(w, r.Context(), r)
+	if !ok {
+		return
+	}
+	var in backendmodel.ArchitecturePreviewInput
+	if !s.diagramBody(w, r, &in, 1<<20) {
+		return
+	}
+	out, err := s.backendRepo.PreviewArchitecture(ctx, r.PathValue("id"), in)
+	if err != nil {
+		s.diagramError(w, err)
+		return
+	}
+	httpx.JSON(w, 200, out)
+}
+
 func (s *Server) handleBuildBackendLifecycle(w http.ResponseWriter, r *http.Request) {
 	ctx, ok := s.diagramContext(w, r.Context(), r)
 	if !ok {

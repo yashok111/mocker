@@ -5,6 +5,7 @@ import (
 	"encoding/json/jsontext"
 	"encoding/json/v2"
 	"fmt"
+	"maps"
 	"path"
 	"slices"
 	"strings"
@@ -132,9 +133,10 @@ func validateAttributes(kind string, a map[string]jsontext.Value, edge bool) err
 		return semantic("attributes", "Attributes must be an object")
 	}
 	allowed, required := foundationAttributeSchema(kind, edge)
-	for k, raw := range a {
+	for _, k := range slices.Sorted(maps.Keys(a)) {
+		raw := a[k]
 		if !slices.Contains(allowed, k) {
-			return semantic("attributes/"+k, "Unknown attribute for this kind")
+			return semantic("attributes/"+jsonPointerSegment(k), "Unknown attribute for this kind")
 		}
 		if err := validateFoundationAttribute(kind, k, raw, slices.Contains(required, k)); err != nil {
 			return err

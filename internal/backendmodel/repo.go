@@ -17,7 +17,10 @@ import (
 	"github.com/yashok111/mocker/internal/store"
 )
 
-type Repo struct{ db *store.DB }
+type Repo struct {
+	db                *store.DB
+	architectureReads architectureReadCache
+}
 
 func NewRepo(db *store.DB) *Repo { return &Repo{db: db} }
 

@@ -105,7 +105,7 @@ const page = {
   semanticHash: hash,
   policy: "source-events-projection-v1",
   limits: {
-    maxExaminedEdges: 20000,
+    maxExaminedEdges: 100000,
     maxItems: 5000,
     maxAuxiliaryRecords: 20000,
     maxWitnessRecords: 256,

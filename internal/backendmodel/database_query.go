@@ -12,6 +12,8 @@ import (
 )
 
 type DatabaseQueryInput struct {
+	ResponseMode                string                     `json:"responseMode,omitempty"`
+	Section                     string                     `json:"section,omitempty"`
 	ChangeProposal              *ProposalReadTarget        `json:"changeProposal,omitzero"`
 	ImportCandidate             *ImportCandidateReadTarget `json:"importCandidate,omitzero"`
 	RevisionID                  string                     `json:"revisionId,omitempty"`
@@ -35,10 +37,16 @@ func (in *DatabaseQueryInput) UnmarshalJSON(b []byte) error {
 	}
 	type input DatabaseQueryInput
 	var decoded input
-	if err := decodeReadQuery(b, []string{"datastoreId", "facetKey", "recordType"}, []string{"search", "tableId", "limit", "cursor"}, &decoded); err != nil {
+	if err := decodeReadQuery(b, []string{"datastoreId", "facetKey", "recordType"}, []string{"search", "tableId", "limit", "cursor", "responseMode", "section"}, &decoded); err != nil {
 		return err
 	}
 	*in = DatabaseQueryInput(decoded)
+	if _, present := m["responseMode"]; present && in.ResponseMode == "" {
+		return invalid("responseMode", "Explicit responseMode cannot be empty")
+	}
+	if _, present := m["section"]; present && in.Section == "" {
+		return invalid("section", "Explicit section cannot be empty")
+	}
 	_, in.searchPresent = m["search"]
 	_, in.tablePresent = m["tableId"]
 	return nil
@@ -100,39 +108,43 @@ type RelationshipItem struct {
 	TargetReason      *string              `json:"targetReason"`
 }
 type DatabasePage struct {
-	Target            *BackendReadTarget  `json:"target,omitzero"`
-	Pins              *EffectiveGraphPins `json:"pins,omitzero"`
-	ViewSchemaVersion string              `json:"viewSchemaVersion,omitempty"`
-	ProposalPins      *ProposalReadPins   `json:"proposalPins,omitzero"`
-	ProjectID         string              `json:"projectId"`
-	RevisionID        string              `json:"revisionId"`
-	SemanticHash      string              `json:"semanticHash"`
-	DatastoreID       string              `json:"datastoreId"`
-	FacetKey          string              `json:"facetKey"`
-	RecordType        string              `json:"recordType"`
-	Coverage          RevisionCoverage    `json:"coverage"`
-	FacetStatus       string              `json:"facetStatus"`
-	Limitations       []string            `json:"limitations"`
-	TableItems        []TableItem         `json:"tableItems"`
-	RelationshipItems []RelationshipItem  `json:"relationshipItems"`
-	NextCursor        string              `json:"nextCursor"`
+	CoverageSummary   *CoverageSummary           `json:"coverageSummary,omitzero"`
+	LimitationSummary *DatabaseLimitationSummary `json:"limitationSummary,omitzero"`
+	LimitationItems   []DatabaseLimitation       `json:"limitationItems,omitempty"`
+	Target            *BackendReadTarget         `json:"target,omitzero"`
+	Pins              *EffectiveGraphPins        `json:"pins,omitzero"`
+	ViewSchemaVersion string                     `json:"viewSchemaVersion,omitempty"`
+	ProposalPins      *ProposalReadPins          `json:"proposalPins,omitzero"`
+	ProjectID         string                     `json:"projectId"`
+	RevisionID        string                     `json:"revisionId"`
+	SemanticHash      string                     `json:"semanticHash"`
+	DatastoreID       string                     `json:"datastoreId"`
+	FacetKey          string                     `json:"facetKey"`
+	RecordType        string                     `json:"recordType"`
+	Coverage          RevisionCoverage           `json:"coverage"`
+	FacetStatus       string                     `json:"facetStatus"`
+	Limitations       []string                   `json:"limitations"`
+	TableItems        []TableItem                `json:"tableItems"`
+	RelationshipItems []RelationshipItem         `json:"relationshipItems"`
+	NextCursor        string                     `json:"nextCursor"`
 }
 
 type databaseProjection struct {
-	effective     *EffectiveGraphSnapshot
-	source        *SourceGraphSnapshot
-	sourceProof   map[*relationalFacet]lineageProof
-	proposal      *resolvedBackendTarget
-	in            DatabaseQueryInput
-	nodes         map[string]Node
-	children      map[string][]Node
-	facets        map[string]map[string]*relationalFacet
-	evidence      map[string]Evidence
-	stores        map[string]string
-	page          *DatabasePage
-	observed      map[string]bool
-	limitations   map[string]bool
-	uniqueResults map[string]databaseUniqueness
+	limitationDetails map[string]DatabaseLimitation
+	effective         *EffectiveGraphSnapshot
+	source            *SourceGraphSnapshot
+	sourceProof       map[*relationalFacet]lineageProof
+	proposal          *resolvedBackendTarget
+	in                DatabaseQueryInput
+	nodes             map[string]Node
+	children          map[string][]Node
+	facets            map[string]map[string]*relationalFacet
+	evidence          map[string]Evidence
+	stores            map[string]string
+	page              *DatabasePage
+	observed          map[string]bool
+	limitations       map[string]bool
+	uniqueResults     map[string]databaseUniqueness
 }
 type databaseUniqueness struct {
 	unique, complete bool
@@ -140,14 +152,16 @@ type databaseUniqueness struct {
 }
 
 func (p *databaseProjection) selected(id string) *relationalFacet { return p.facets[id][p.in.FacetKey] }
-func (p *databaseProjection) limitation(message string) {
+func (p *databaseProjection) limitation(subject, code, message string) {
+	p.recordLimitation(subject, code, message)
 	if !p.limitations[message] {
 		p.limitations[message] = true
 		p.page.Limitations = append(p.page.Limitations, message)
 	}
 	p.page.FacetStatus = "unknown"
 }
-func (p *databaseProjection) stale(message string) {
+func (p *databaseProjection) stale(subject, code, message string) {
+	p.recordLimitation(subject, code, message)
 	if !p.limitations[message] {
 		p.limitations[message] = true
 		p.page.Limitations = append(p.page.Limitations, message)
@@ -163,7 +177,7 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 	}
 	p.observed[id] = true
 	if f == nil {
-		p.limitation("Missing selected facet proof for " + id)
+		p.limitation(id, "missing_facet", "Missing selected facet proof for "+id)
 		return nil
 	}
 	if p.source != nil || p.effective != nil {
@@ -177,17 +191,17 @@ func (p *databaseProjection) observe(id string) *relationalFacet {
 		return f
 	}
 	if f.Freshness != nil && f.Freshness.Status == "stale" {
-		p.stale("Stale selected facet for " + id)
+		p.stale(id, "stale_facet", "Stale selected facet for "+id)
 	}
 	if f.AnalysisStatus != "complete" || f.ColumnsStatus != "" && f.ColumnsStatus != "complete" || f.ConstraintsStatus != "" && f.ConstraintsStatus != "complete" {
-		p.limitation("Incomplete selected analysis for " + id + ": " + strings.Join(f.Gaps, "; "))
+		p.limitation(id, "incomplete_analysis", "Incomplete selected analysis for "+id+": "+strings.Join(f.Gaps, "; "))
 	}
 	for _, proofID := range f.EvidenceIDs {
 		e, ok := p.evidence[proofID]
 		if !ok || e.Status != "explicit" || e.Source.SnapshotID != f.SourceSnapshotID {
-			p.limitation("Missing or inferred selected proof " + proofID + " for " + id)
+			p.limitation(id, "missing_evidence", "Missing or inferred selected proof "+proofID+" for "+id)
 		} else if e.Freshness != nil && e.Freshness.Status == "stale" {
-			p.stale("Stale selected proof " + proofID + " for " + id)
+			p.stale(id, "stale_evidence", "Stale selected proof "+proofID+" for "+id)
 		}
 	}
 	return f
@@ -246,6 +260,9 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
+	if err := validateDatabaseCompactInput(in); err != nil {
+		return nil, err
+	}
 	target, effective, err := r.resolveDatabaseTarget(ctx, pid, in, effective)
 	if err != nil {
 		return nil, err
@@ -267,11 +284,12 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 	if err := p.index(ctx, state); err != nil {
 		return nil, err
 	}
-	coverage, err := r.RevisionCoverage(ctx, pid, in.RevisionID)
+	coverage, summary, err := r.databaseReadCoverage(ctx, pid, in)
 	if err != nil {
 		return nil, err
 	}
 	p.page = &DatabasePage{ProjectID: pid, RevisionID: in.RevisionID, SemanticHash: state.Revision.SemanticHash, DatastoreID: in.DatastoreID, FacetKey: in.FacetKey, RecordType: in.RecordType, Coverage: *coverage, FacetStatus: "current", Limitations: []string{}, TableItems: []TableItem{}, RelationshipItems: []RelationshipItem{}}
+	p.page.CoverageSummary = summary
 	if effective != nil {
 		p.page.Target = new(effective.Target)
 		p.page.Pins = new(effective.Pins)
@@ -298,14 +316,7 @@ func (r *Repo) queryDatabaseWithEffective(ctx context.Context, pid string, in Da
 	if err != nil {
 		return nil, err
 	}
-	limit, after, err := decodeGraphPage(in.Limit, in.Cursor, "database", pid, scope, true)
-	if err != nil {
-		return nil, err
-	}
-	p.paginate(pid, scope, limit, after)
-	slices.Sort(p.page.Limitations)
-	p.page.Limitations = slices.Compact(p.page.Limitations)
-	return p.page, nil
+	return p.finishDatabasePage(ctx, pid, scope)
 }
 
 // resolveDatabaseTarget picks the graph a database read projects: a composed
@@ -677,7 +688,9 @@ func databaseCursorScope(pid string, in DatabaseQueryInput, semanticHash string,
 		RecordType   string `json:"recordType"`
 		Search       string `json:"search"`
 		TableID      string `json:"tableId"`
-	}{pid, in.RevisionID, semanticHash, in.DatastoreID, in.FacetKey, in.RecordType, in.Search, in.TableID})
+		ResponseMode string `json:"responseMode,omitempty"`
+		Section      string `json:"section,omitempty"`
+	}{pid, in.RevisionID, semanticHash, in.DatastoreID, in.FacetKey, in.RecordType, in.Search, in.TableID, in.ResponseMode, in.Section})
 	if err != nil {
 		return "", err
 	}
@@ -728,7 +741,7 @@ func (p *databaseProjection) relationship(e Edge, f, cf *relationalFacet) Relati
 		if item.TargetReason == nil {
 			item.TargetReason = new("Missing selected source, target or column proof")
 		}
-		p.limitation("Unresolved selected relationship " + e.ID + ": " + *item.TargetReason)
+		p.limitation(e.ID, "unresolved_relationship", "Unresolved selected relationship "+e.ID+": "+*item.TargetReason)
 	}
 	if item.Status != "explicit" || !currentColumns || !p.proofCurrent(p.selected(item.SourceTableID)) || item.TargetTableID != nil && !p.proofCurrent(p.selected(*item.TargetTableID)) {
 		limitation := "Current explicit selected FK/table/column proof unavailable for " + e.ID
@@ -1027,9 +1040,9 @@ func (p *databaseProjection) observeSourceFacet(id string, f *relationalFacet) *
 	if proof.status == "desired" {
 		p.page.FacetStatus = "desired"
 	} else if proof.status == "stale" {
-		p.stale("Stale selected source property for " + id)
+		p.stale(id, "stale_property", "Stale selected source property for "+id)
 	} else if proof.status != "explicit" {
-		p.limitation("Missing explicit selected source property proof for " + id)
+		p.limitation(id, "missing_property", "Missing explicit selected source property proof for "+id)
 	}
 	for reason := range proof.reasons {
 		if reason == "desired_structure" {
@@ -1037,13 +1050,13 @@ func (p *databaseProjection) observeSourceFacet(id string, f *relationalFacet) *
 			continue
 		}
 		if proof.status == "stale" {
-			p.stale(reason)
+			p.stale(id, "stale_property", reason)
 		} else {
-			p.limitation(reason)
+			p.limitation(id, "property_limitation", reason)
 		}
 	}
 	if f.AnalysisStatus != "complete" || f.ColumnsStatus != "" && f.ColumnsStatus != "complete" || f.ConstraintsStatus != "" && f.ConstraintsStatus != "complete" {
-		p.limitation("Incomplete selected analysis for " + id)
+		p.limitation(id, "incomplete_analysis", "Incomplete selected analysis for "+id)
 	}
 	return f
 }

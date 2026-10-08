@@ -25,6 +25,7 @@ import styles from "./Explorer.module.css";
 import { resolvedTargetSearch } from "./navigation";
 import { isObserved } from "./observedLayer";
 import { materializationArtifactLink } from "./artifactLinks";
+import { BackendImportPreflight } from "../BackendImportPreflight";
 export function Results({
   projectId,
   target,
@@ -505,6 +506,9 @@ function ResultDetail({
           <h3>Импорт источников</h3>
           <Badge>{value.data.session.state}</Badge>
           <Text>{value.data.session.manifest.repositoryName}</Text>
+          {value.data.preview?.preflight && (
+            <BackendImportPreflight value={value.data.preview.preflight} />
+          )}
           <ReadOnlyValue value={value.data.session.inventory} />
           <details>
             <summary>Точные сведения об импорте</summary>

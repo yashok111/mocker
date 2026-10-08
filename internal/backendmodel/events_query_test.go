@@ -264,6 +264,27 @@ func TestEventsQueryNodeAndScanBoundaryAdmission(t *testing.T) {
 	}
 }
 
+func TestEventsQueryAdmitsOneHundredThousandEdges(t *testing.T) {
+	s := eventsQueryState(t)
+	for len(s.Edges) < 100000 {
+		s.Edges = append(s.Edges, Edge{ID: runtimeQueryID(10000 + len(s.Edges)), Kind: "derived_from", From: runtimeQueryID(1), To: runtimeQueryID(1)})
+	}
+	for _, view := range []string{"routes", "jobs", "service_calls"} {
+		page := eventsQueryPage(t, s, EventsQueryInput{View: view})
+		if !page.Complete || page.Truncated || page.ExaminedEdgeCount != 100000 || page.Limits.MaxExaminedEdges != 100000 {
+			t.Fatalf("%s refused the requested budget: %+v", view, page)
+		}
+		if view == "routes" && len(page.Items) != 1 {
+			t.Fatal("known route lost after raising admission")
+		}
+	}
+	s.Edges = append(s.Edges, Edge{ID: runtimeQueryID(200001)})
+	page := eventsQueryPage(t, s, EventsQueryInput{View: "routes"})
+	if page.Complete || page.ExaminedEdgeCount != 0 || page.TotalEdgeCount != 100001 || !slices.Contains(page.TruncationReasons, "edge_limit") {
+		t.Fatal("100001 edges bypassed complete-scan admission")
+	}
+}
+
 func TestEventsQueryPartialDispatchKeepsKnownFlow(t *testing.T) {
 	s := eventsQueryState(t)
 	s.Nodes[6].Attributes = runtimeQueryAttrs(t, map[string]any{"dispatchStatus": "partial", "dispatchReason": "Dynamic remainder", "analysisStatus": "partial", "gaps": []string{"Runtime handler remainder"}})

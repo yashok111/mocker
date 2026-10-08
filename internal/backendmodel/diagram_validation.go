@@ -131,14 +131,24 @@ func (d DiagramDocument) Validate() error {
 }
 func validateArchitectureDocument(d DiagramDocument) error {
 	p := d.Payload
+	if err := validateArchitectureNavigation(p.Elements); err != nil {
+		return err
+	}
 	if p.Elements == nil || p.Links == nil || len(p.Elements) > 1000 || len(p.Links) > 3000 {
 		return invalid("payload", "Required arrays exceed architecture limits")
 	}
 	elements := map[string]ArchitectureElement{}
 	ids := map[string]bool{}
+	memberCount := 0
 	for _, e := range p.Elements {
 		if err := validateDiagramBase(e.ID, e.Label, e.Origin, e.Refs); err != nil {
 			return err
+		}
+		if err := validateArchitectureMembership(e); err != nil {
+			return err
+		}
+		if e.Membership != nil {
+			memberCount += len(e.Membership.NodeIDs)
 		}
 		if ids[e.ID] {
 			return invalid("id", "Duplicate semantic identity")
@@ -148,6 +158,9 @@ func validateArchitectureDocument(d DiagramDocument) error {
 		if !validAPIText(e.Responsibility, 0, 4096) || !validAPIText(e.Technology, 0, 4096) {
 			return invalid("element", "Architecture text exceeds limits")
 		}
+	}
+	if memberCount > MaxArchitectureDocumentMembers {
+		return &FaultError{Status: 413, Code: "backend_diagram_limit", Message: "Exact architecture membership exceeds the document budget", Details: map[string]any{"count": memberCount, "limit": MaxArchitectureDocumentMembers}}
 	}
 	if err := validateArchitectureParents(p, elements); err != nil {
 		return err

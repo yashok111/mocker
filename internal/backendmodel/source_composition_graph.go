@@ -701,7 +701,8 @@ func (p *composedGraphPreparation) validateLimits(contentBytes int) error {
 	if err != nil {
 		return err
 	}
-	tooManyBytes := contentBytes+graph.legacyBasisBytes+artifactBytes+incrementalBytes > MaxRevisionBytes
+	g.semanticBytes = int64(contentBytes + graph.legacyBasisBytes + artifactBytes + incrementalBytes)
+	tooManyBytes := g.semanticBytes > MaxRevisionBytes
 	if tooManyNodes || tooManyEdges || tooMuchEvidence || tooManyBytes {
 		return limitFault("Composed claims and effective revision exceed semantic limits")
 	}

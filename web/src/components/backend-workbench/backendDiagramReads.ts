@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { ApiFailure } from "@/api/client";
 import {
   getBackendDiagram,
   queryBackendDiagram,
@@ -43,7 +44,11 @@ export function useDiagramPage(
   return useQuery({
     queryKey: key,
     enabled,
-    retry: false,
+    // Parallel sections can meet the server's bounded projection builder.
+    // Retry only admission refusals, preserving the exact immutable query.
+    retry: (count, error) =>
+      count < 6 && error instanceof ApiFailure && error.code === "backend_projection_busy",
+    retryDelay: (attempt) => Math.min(1000 * 2 ** attempt, 10000),
     staleTime: Infinity,
     queryFn: async ({ signal }) => {
       const readPage = async (cursor?: string) => {

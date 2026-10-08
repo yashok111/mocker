@@ -92,6 +92,71 @@ preview below. That audit is a required transition before the first commit send.
 Historical retained proof stays at its original snapshot; do not recheck it as
 current source or assign it new capture hashes.
 
+## Consumer-aware planning before transfer
+
+### Focused schemas and read-only validation
+
+`get_backend_import_schema {profile,recordType:"node"|"edge"|"evidence",kind?}`
+returns one reference-free wire schema. Node/edge require kind; evidence omits it.
+Source6 reference syntax stays distinct from source1–5. The selected profile's
+allowed kinds are checked; session-dependent attribute/reference rules are still
+validated by `validate_backend_import_batch`, not proved by a wire schema.
+
+For an existing session, call `validate_backend_import_batch {projectId,importId,
+expectedImportVersion,payloadHash,commands,cursor?}` before staging unfamiliar
+record shapes. It uses the same record validators as Put but allocates no IDs,
+writes nothing and leaves the import version unchanged. `valid:false` returns one
+violation per invalid command with index, externalKey/kind and exact JSON pointer.
+At most25 diagnostics are returned; repeat the identical batch/version/hash with
+nextCursor for the rest. Changed input invalidates that cursor. Fix reported
+violations and validate again. A valid result is `record-validation-v1`, not READY
+graph closure, source correctness, an identity reservation or a quota guarantee.
+
+MCP schema failures use bounded `import-diagnostics-v1` output, selecting relevant
+discriminator arms instead of printing unrelated oneOf variants. Invalid input
+values are not echoed. Control-character refusals identify that constraint and
+the affected field; do not normalize native source text to repair prose metadata.
+
+For complete wire diagnostics, call `diagnose_backend_import_request {name:
+"put_backend_import_batch"|"begin_backend_import"|"validate_backend_import_batch",
+arguments:originalArguments,cursor?}`. This validates only the registered schema;
+it never dispatches that command. Concatenate every `detailChunk` string until
+nextCursor is empty, then parse the resulting JSON diagnostic array. The cursor
+binds the exact request and schema, and all relevant discriminator-arm violations
+are retained. Each chunk contains at most2048 UTF-8 bytes.
+
+When `importDiagnosticDetailFormats` advertises `json-chunks-v1`, semantic
+validation also accepts `responseMode:"json-chunks-v1"`. Use the same original
+batch, session version and hash; concatenate its detailChunk pages in the same
+way. These contain the complete first violation per record, including full field
+paths and external keys shortened in ordinary responses. It remains a sequence
+of record checks: repair each first violation and validate again for further
+semantic violations. No input values are echoed by wire diagnostics; private
+diagnostic artifacts and journals must still be handled as project data.
+
+If capabilities advertise `importPreflightVersions:["import-preflight-v1"]`, call
+`plan_backend_import {projectId,profile,counts:{nodes,edges,evidence},semanticBytes?,
+surfaces:["graph","events","data_access","lineage","architecture"]}` before
+Begin/staging. Counts describe the complete intended final graph, including
+retained source6 partitions; they are not the number of commands in the next batch.
+This read-only call creates no session and labels its basis `declared`. Omit byte
+estimates you have not computed; `byte_estimate_required` is not admission.
+
+Storage and each consumer have separate statuses and named admission, traversal,
+response and concurrency budgets. Events currently refuses more than100000 total
+edges even with small pages/service filters; preserve the complete source and
+report that consumer unavailable. Generic graph access is not Events acceptance.
+Data-access and lineage budgets depend on the chosen scope and cannot be predicted
+from record totals alone. Their `scope_check_required` status requires a real
+pinned read. Architecture requires explicit membership preview, not a count-based
+coverage claim. No unsupported continuation or lossy graph reduction is a remedy.
+
+New READY/needs_resolution previews carry `preflight` with basis `candidate` and
+actual candidate cardinalities; READY also has exact semantic bytes. This metadata
+does not replace candidate validation or the independent source audit, and does
+not block storage solely because an optional consumer is unavailable. Old saved
+previews may omit it and must not be rewritten or reported as checked.
+
 ## Legacy source1–5 Begin
 
 `begin_backend_import` takes this input (projectId is the MCP path argument):

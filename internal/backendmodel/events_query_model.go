@@ -4,7 +4,7 @@ import "encoding/json/jsontext"
 
 const (
 	EventsQueryPolicy         = "source-events-projection-v1"
-	EventsMaxExaminedEdges    = 20000
+	EventsMaxExaminedEdges    = 100000
 	EventsMaxItems            = 5000
 	EventsMaxAuxiliaryRecords = 20000
 	EventsMaxWitnessRecords   = 256

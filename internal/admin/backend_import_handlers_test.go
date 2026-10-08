@@ -50,6 +50,19 @@ func TestBackendImportReadsAndStrictTransport(t *testing.T) {
 		t.Fatal(err)
 	}
 	base := "/api/backend-projects/" + p.ID
+	call("GET", "/api/backend-projects/import-schema?profile=events-service-v1&recordType=node&kind=job", "", 200)
+	call("GET", "/api/backend-projects/import-schema?profile=foundation-graph-v1&recordType=node&kind=job", "", 400)
+	call("GET", base+"/storage/usage", "", 200)
+	call("POST", base+"/coverage/query", `{"revisionId":"`+p.CurrentRevisionID+`","section":"summary","limit":100}`, 200)
+	plan := call("POST", base+"/imports/plan", `{"profile":"events-service-v1","counts":{"nodes":25228,"edges":100001,"evidence":106398},"semanticBytes":140000000,"surfaces":["events","data_access"]}`, 200)
+	var preflight backendmodel.ImportPreflight
+	if err := json.Unmarshal(plan, &preflight); err != nil || preflight.Consumers[0].Status != "blocked" {
+		t.Fatalf("missing Events refusal: %s %v", plan, err)
+	}
+	var imports backendmodel.ImportPage
+	if err := json.Unmarshal(call("GET", base+"/imports", "", 200), &imports); err != nil || len(imports.Items) != 0 {
+		t.Fatal("preflight created import staging")
+	}
 	call("GET", base+"/imports", "", 200)
 	call("POST", base+"/graph/query", `{"revisionId":"`+p.CurrentRevisionID+`","recordType":"nodes"}`, 200)
 	for _, limit := range []string{"0", "-1", "501"} {

@@ -160,20 +160,29 @@ const openSessionFilter = `s.project_id=? AND s.state NOT IN ('committed','abort
 // made the cap a lifetime one, and an open session's begin receipt is a copy
 // of the session document that is already counted here.
 func stagingBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
+	return importSessionBytes(ctx, tx, pid, false)
+}
+
+func importSessionBytes(ctx context.Context, tx *sql.Tx, pid string, closed bool) (int64, error) {
+	stateFilter := openSessionFilter
+	if closed {
+		stateFilter = `s.project_id=? AND s.state IN ('committed','aborted')`
+	}
+
 	var n int64
 	err := tx.QueryRowContext(ctx, `SELECT
- (SELECT COALESCE(SUM(length(CAST(s.document AS BLOB))),0) FROM backend_import_sessions s WHERE `+openSessionFilter+`) +
- (SELECT COALESCE(SUM(length(CAST(r.document AS BLOB))),0) FROM backend_import_records r JOIN backend_import_sessions s ON s.id=r.session_id WHERE `+openSessionFilter+`) +
- (SELECT COALESCE(SUM(length(CAST(b.receipt AS BLOB))+length(b.batch_id)+256),0) FROM backend_import_batches b JOIN backend_import_sessions s ON s.id=b.session_id WHERE `+openSessionFilter+`) +
- (SELECT COALESCE(SUM(length(CAST(i.external_key AS BLOB))+length(i.id)+64),0) FROM backend_import_identities i JOIN backend_import_sessions s ON s.id=i.session_id WHERE `+openSessionFilter+`)`, pid, pid, pid, pid).Scan(&n)
+ (SELECT COALESCE(SUM(length(CAST(s.document AS BLOB))),0) FROM backend_import_sessions s WHERE `+stateFilter+`) +
+ (SELECT COALESCE(SUM(length(CAST(r.document AS BLOB))),0) FROM backend_import_records r JOIN backend_import_sessions s ON s.id=r.session_id WHERE `+stateFilter+`) +
+ (SELECT COALESCE(SUM(length(CAST(b.receipt AS BLOB))+length(b.batch_id)+256),0) FROM backend_import_batches b JOIN backend_import_sessions s ON s.id=b.session_id WHERE `+stateFilter+`) +
+ (SELECT COALESCE(SUM(length(CAST(i.external_key AS BLOB))+length(i.id)+64),0) FROM backend_import_identities i JOIN backend_import_sessions s ON s.id=i.session_id WHERE `+stateFilter+`)`, pid, pid, pid, pid).Scan(&n)
 	if err != nil {
 		return n, err
 	}
 	var extra int64
 	err = tx.QueryRowContext(ctx, `SELECT
-      (SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))),0) FROM backend_import_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE `+openSessionFilter+`) +
-      (SELECT COALESCE(SUM(length(CAST(p.document AS BLOB))+length(CAST(p.details AS BLOB))),0) FROM backend_import_previews p JOIN backend_import_sessions s ON s.id=p.session_id WHERE `+openSessionFilter+`) +
-      (SELECT COALESCE(SUM(length(a.external_key)+length(a.source_key)+128),0) FROM backend_import_aliases a JOIN backend_import_sessions s ON s.id=a.session_id WHERE `+openSessionFilter+`)`, pid, pid, pid).Scan(&extra)
+      (SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))),0) FROM backend_import_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE `+stateFilter+`) +
+      (SELECT COALESCE(SUM(length(CAST(p.document AS BLOB))+length(CAST(p.details AS BLOB))),0) FROM backend_import_previews p JOIN backend_import_sessions s ON s.id=p.session_id WHERE `+stateFilter+`) +
+      (SELECT COALESCE(SUM(length(a.external_key)+length(a.source_key)+128),0) FROM backend_import_aliases a JOIN backend_import_sessions s ON s.id=a.session_id WHERE `+stateFilter+`)`, pid, pid, pid).Scan(&extra)
 	if err != nil {
 		return 0, err
 	}
@@ -183,7 +192,7 @@ func stagingBytes(ctx context.Context, tx *sql.Tx, pid string) (int64, error) {
 	}
 	var sourceBytes int64
 	if exists != 0 {
-		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))+length(CAST(d.decision_key AS BLOB))+length(d.decision_id)+length(d.input_hash)+128),0) FROM backend_import_source_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE `+openSessionFilter, pid).Scan(&sourceBytes)
+		err = tx.QueryRowContext(ctx, `SELECT COALESCE(SUM(length(CAST(d.document AS BLOB))+length(CAST(d.decision_key AS BLOB))+length(d.decision_id)+length(d.input_hash)+128),0) FROM backend_import_source_decisions d JOIN backend_import_sessions s ON s.id=d.session_id WHERE `+stateFilter, pid).Scan(&sourceBytes)
 	} else {
 		var version int
 		if err := tx.QueryRowContext(ctx, `PRAGMA user_version`).Scan(&version); err != nil {
@@ -320,9 +329,9 @@ func (r *Repo) putImportBatchTx(ctx context.Context, tx *sql.Tx, pid, sid, bid s
 	}
 	var prior, response string
 	if s.Mode == "composed" {
-		for _, command := range in.Commands {
+		for i, command := range in.Commands {
 			if err := validateComposedWireMembers(command); err != nil {
-				return err
+				return importCommandError(err, i, command)
 			}
 		}
 	}
@@ -344,6 +353,11 @@ func (r *Repo) putImportBatchTx(ctx context.Context, tx *sql.Tx, pid, sid, bid s
 	}
 	if err := requireCollectible(s); err != nil {
 		return err
+	}
+	for i, c := range in.Commands {
+		if err := validateCommand(c, s); err != nil {
+			return importCommandError(err, i, c)
+		}
 	}
 	var base *RevisionState
 	if s.Mode == "reconcile" {
@@ -400,14 +414,14 @@ func stageImportCommands(ctx context.Context, tx *sql.Tx, s *ImportSession, sid 
 	seen := map[string]bool{}
 	identities := newBatchIdentities(base)
 	result.Identities = []RecordIdentity{}
-	for _, c := range commands {
+	for i, c := range commands {
 		typ, key, err := commandAddress(c)
 		if err != nil {
-			return err
+			return importCommandError(err, i, c)
 		}
 		address := typ + "\x00" + key
 		if seen[address] {
-			return semantic("commands", "Duplicate addressed command in one batch")
+			return importCommandError(semantic("commands", "Duplicate addressed command in one batch"), i, c)
 		}
 		seen[address] = true
 		if err := validateCommand(c, s); err != nil {
@@ -418,7 +432,7 @@ func stageImportCommands(ctx context.Context, tx *sql.Tx, s *ImportSession, sid 
 		}
 		id, err := reserveIdentity(ctx, tx, s, c, typ, key, identities)
 		if err != nil {
-			return err
+			return importCommandError(err, i, c)
 		}
 		if id != "" { // "" = remove of an unknown key (F87)
 			result.Identities = append(result.Identities, RecordIdentity{RecordType: typ, ExternalKey: key, ID: id})
