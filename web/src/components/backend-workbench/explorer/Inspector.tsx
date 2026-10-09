@@ -1,32 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { ActionIcon, Alert, Badge, Button, Group, Loader, Stack, Tabs, Text } from "@mantine/core";
+import { useQuery } from "@tanstack/react-query";
+import { ActionIcon, Alert, Badge, Button, Group, Loader, Text } from "@mantine/core";
 import { IconArrowRight, IconCopy, IconX } from "@tabler/icons-react";
-import type { BackendReadTarget, BackendDiagramRef } from "@/api/generated/schemas";
-import {
-  listBackendDiagrams,
-  getBackendDiagramView,
-} from "@/api/generated/backend-projects/backend-projects";
-import { diagramSearch } from "../backendWorkspaceSearch";
-import { ok } from "./catalogs";
-import { diagramKindNames } from "./model";
+import type { BackendReadTarget } from "@/api/generated/schemas";
 import { readBackendNode, readBackendEvidence, readBackendGraph } from "../backendGraphReads";
 import { backendReadTargetKey } from "../backendReadTargets";
 import type { BackendWorkspaceSearch } from "../backendWorkspaceSearch";
-import { readExplore, readExploreNodes, nodeOf } from "./reads";
+import { nodeOf } from "./reads";
 import { resolvedTargetSearch } from "./navigation";
-import {
-  kindName,
-  nodeSubtitle,
-  relationNames,
-  sourceNode,
-  type MapNode,
-  type MapEdge,
-} from "./model";
-import { Contracts } from "./Contracts";
-import { diagramArtifactLink } from "./artifactLinks";
+import { kindName, nodeSubtitle, type MapNode, type MapEdge } from "./model";
 import { nativeSources } from "./nativeSources";
-import { readArchitectureChoices } from "./architectureReads";
 import styles from "./Explorer.module.css";
 export function Inspector({
   projectId,
@@ -39,19 +22,13 @@ export function Inspector({
   onNavigate,
   onEnter,
   targetHash,
-  extraRefs,
-  moreRefs,
   canEnter,
   enterLabel,
-  referencesStatus,
   navigationActions,
 }: {
   targetHash?: string;
-  extraRefs?: BackendDiagramRef[];
-  moreRefs?: () => void;
   canEnter?: boolean;
   enterLabel?: string;
-  referencesStatus?: ReactNode;
   navigationActions?: ReactNode;
   projectId: string;
   target: BackendReadTarget;
@@ -63,7 +40,6 @@ export function Inspector({
   onNavigate: (s: BackendWorkspaceSearch) => void;
   onEnter: (n: MapNode) => void;
 }) {
-  const queryClient = useQueryClient();
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (
@@ -79,7 +55,6 @@ export function Inspector({
     return () => window.removeEventListener("keydown", closeOnEscape);
   }, [onClose]);
   const evidenceTarget = node?.evidenceTarget ?? providedEdge?.evidenceTarget ?? target;
-  const [tab, setTab] = useState<string | null>("relations");
   const [copied, setCopied] = useState(false);
   const synthetic = id.includes(":");
   const source = !targetHash && !node?.refs && !providedEdge?.refs && !synthetic;
@@ -116,93 +91,6 @@ export function Inspector({
   });
   const raw = detail.data && ("node" in detail.data ? detail.data.node : detail.data);
   const selected = node ?? (raw && "attributes" in raw && "kind" in raw ? nodeOf(raw) : undefined);
-  const references = [
-    ...new Map(
-      [...(selected?.refs ?? edge?.refs ?? []), ...(extraRefs ?? [])].map((ref) => [
-        JSON.stringify(ref),
-        ref,
-      ]),
-    ).values(),
-  ];
-  const relations = useQuery({
-    queryKey: ["workbench-relations", projectId, backendReadTargetKey(evidenceTarget), id],
-    enabled: source && search.recordType !== "edge" && tab === "relations",
-    retry: false,
-    staleTime: Infinity,
-    queryFn: ({ signal }) =>
-      readExplore(
-        projectId,
-        { target: evidenceTarget, mode: "neighborhood", scopeId: id, limit: 40 },
-        signal,
-      ),
-  });
-  const ref = references.find((ref) => ref.kind === "record" && ref.recordType === "node");
-  const relatedID = source ? id : ref?.kind === "record" ? ref.id : undefined;
-  const relatedHash = targetHash ?? relations.data?.targetHash;
-  const maps = useQuery({
-    queryKey: ["workbench-related-maps", projectId, relatedHash, relatedID],
-    enabled: !!relatedHash && !!relatedID && tab === "relations",
-    retry: false,
-    queryFn: async ({ signal }) =>
-      ok(
-        await listBackendDiagrams(
-          projectId,
-          { subjectId: relatedID, targetHash: relatedHash, limit: 20, order: "desc" },
-          { signal },
-        ),
-      ),
-  });
-  const architectureMaps = useQuery({
-    queryKey: ["workbench-related-architecture", projectId, relatedHash, relatedID],
-    enabled:
-      !!relatedID &&
-      tab === "relations" &&
-      !!maps.data?.items.some((item) => item.kind === "architecture"),
-    retry: false,
-    queryFn: ({ signal }) =>
-      readArchitectureChoices(
-        projectId,
-        evidenceTarget,
-        relatedHash,
-        [relatedID!],
-        signal,
-        undefined,
-        (viewId, version) =>
-          queryClient.fetchQuery({
-            queryKey: ["workbench-architecture-view-name", projectId, viewId, version],
-            staleTime: Infinity,
-            queryFn: async ({ signal: viewSignal }) => {
-              const view = ok(
-                await getBackendDiagramView(projectId, viewId, version, { signal: viewSignal }),
-              );
-              if (view.id !== viewId || view.version !== version)
-                throw new Error("Получен другой сохранённый вид.");
-              return {
-                id: view.id,
-                version: view.version,
-                name: view.name,
-                state: {
-                  diagram: view.state.diagram,
-                  level: view.state.level,
-                  rootId: view.state.rootId,
-                },
-              };
-            },
-          }),
-      ),
-  });
-  const sourceRefs = references.flatMap((r) =>
-    r.kind === "record" && r.recordType === "node" ? [r.id] : [],
-  );
-  const refNames = useQuery({
-    queryKey: ["workbench-ref-names", projectId, backendReadTargetKey(evidenceTarget), sourceRefs],
-    enabled: !source && sourceRefs.length > 0 && tab === "relations",
-    retry: false,
-    staleTime: Infinity,
-    queryFn: async ({ signal }) => ({
-      nodes: await readExploreNodes(projectId, evidenceTarget, sourceRefs, signal),
-    }),
-  });
   const title = selected?.name ?? edge?.label ?? "Выбранный объект";
   const snippets = nativeSources(
     raw && "attributes" in raw ? raw.attributes : selected?.attributes,
@@ -210,7 +98,7 @@ export function Inspector({
   const showSource = snippets.length > 0 || selected?.kind === "flow_step";
   const evidence = useQuery({
     queryKey: ["workbench-evidence", projectId, backendReadTargetKey(evidenceTarget), id],
-    enabled: source && (tab === "sources" || showSource),
+    enabled: source && showSource,
     retry: false,
     staleTime: Infinity,
     queryFn: ({ signal }) =>
@@ -222,14 +110,6 @@ export function Inspector({
     ).values(),
   ];
   const pin = resolvedTargetSearch(evidenceTarget);
-  const jump = (n: MapNode) =>
-    onNavigate({
-      ...pin,
-      wbView: ["table", "column", "datastore"].includes(n.kind) ? "data" : "structure",
-      wbMode: "neighborhood",
-      wbScope: n.id,
-      recordId: n.id,
-    });
   return (
     <aside className={styles.inspector} aria-label="Сведения об объекте">
       <Group justify="space-between" align="flex-start" wrap="nowrap">
@@ -487,235 +367,6 @@ export function Inspector({
           )}
         </div>
       )}
-      <Tabs value={tab} onChange={setTab} mt="xl">
-        <Tabs.List grow>
-          <Tabs.Tab value="relations">Связи</Tabs.Tab>
-          <Tabs.Tab value="sources">Источники</Tabs.Tab>
-          {source && search.recordType !== "edge" && (
-            <Tabs.Tab value="contracts">Контракты</Tabs.Tab>
-          )}
-        </Tabs.List>
-      </Tabs>
-      <div className={styles.inspectorSection}>
-        {tab === "contracts" ? (
-          <Contracts projectId={projectId} target={evidenceTarget} nodeId={id} />
-        ) : tab === "relations" ? (
-          <Stack gap="xs">
-            {referencesStatus}
-            {architectureMaps.isError && (
-              <Text size="xs" c="dimmed">
-                Названия архитектурных видов недоступны. Доступны точные ссылки на схемы.
-              </Text>
-            )}
-            {maps.isError && (
-              <Text size="xs" c="red">
-                Связанные схемы недоступны.{" "}
-                <Button size="compact-xs" variant="subtle" onClick={() => void maps.refetch()}>
-                  Повторить
-                </Button>
-              </Text>
-            )}
-            {architectureMaps.data?.map((choice) => (
-              <Button
-                key={choice.key}
-                variant="light"
-                size="compact-sm"
-                onClick={() => onNavigate(choice.search)}
-              >
-                {choice.name} · Архитектура
-              </Button>
-            ))}
-            {maps.data?.items
-              .filter(
-                (map) => !architectureMaps.data?.some((choice) => choice.diagramId === map.id),
-              )
-              .map((map) => (
-                <Button
-                  key={map.id}
-                  variant="light"
-                  size="compact-sm"
-                  onClick={() =>
-                    onNavigate({
-                      ...diagramSearch(map.pin),
-                      wbView:
-                        map.kind === "architecture"
-                          ? "structure"
-                          : map.kind === "lifecycle"
-                            ? "data"
-                            : "scenarios",
-                    })
-                  }
-                >
-                  {map.name ?? diagramKindNames[map.kind]} · {diagramKindNames[map.kind]}
-                  {map.kind === "architecture"
-                    ? ` · ${map.pin.id.slice(-8)} · v${map.pin.version}`
-                    : ""}
-                </Button>
-              ))}
-            {synthetic && (
-              <Text size="sm">
-                Коллекция для навигации по импортированным объектам. Не обозначает отдельный сервис.
-              </Text>
-            )}
-            {relations.isPending && source && <Loader size="sm" />}
-            {relations.isError && (
-              <Text size="sm" c="red">
-                Связи недоступны.{" "}
-                <Button size="compact-xs" variant="subtle" onClick={() => void relations.refetch()}>
-                  Повторить
-                </Button>
-              </Text>
-            )}
-            {relations.data?.edges
-              .filter((e) => e.from === id || e.to === id)
-              .map((e) => {
-                const other = relations.data!.nodes.find(
-                  (n) => n.id === (e.from === id ? e.to : e.from),
-                );
-                return (
-                  <div key={e.id}>
-                    <Text size="xs" c="dimmed">
-                      {relationNames[e.kind] ?? e.kind}
-                      {e.to === id ? " · входящая связь" : ""}
-                    </Text>
-                    {other ? (
-                      <Button
-                        variant="subtle"
-                        size="compact-sm"
-                        onClick={() => jump(sourceNode(other))}
-                      >
-                        {other.name}
-                      </Button>
-                    ) : (
-                      <Text size="xs">Связанный объект вне этой страницы</Text>
-                    )}
-                    {e.kind === "callback_argument" &&
-                      e.from === id &&
-                      other &&
-                      ["symbol", "handler"].includes(other.kind) && (
-                        <Stack gap="xs">
-                          <Text size="xs" c="dimmed">
-                            Тело известно по исходникам. Выполнение callback и границы транзакции не
-                            подтверждены.
-                          </Text>
-                          <Button
-                            variant="light"
-                            size="compact-sm"
-                            onClick={() =>
-                              onNavigate({
-                                ...pin,
-                                wbView: "scenarios",
-                                wbMode: "flow",
-                                entrypointId: other.id,
-                              })
-                            }
-                          >
-                            Открыть тело callback
-                          </Button>
-                        </Stack>
-                      )}
-                  </div>
-                );
-              })}
-            {relations.data?.edges.length === 0 && !synthetic && (
-              <Text size="sm" c="dimmed">
-                В этой области нет извлечённых связей. Это не доказывает отсутствие обращений к
-                данным или другим сервисам.
-              </Text>
-            )}
-            {references.map((ref, i) =>
-              ref.kind === "record" ? (
-                <Button
-                  key={i}
-                  variant="subtle"
-                  onClick={() =>
-                    onNavigate({
-                      ...pin,
-                      wbMode: ref.recordType === "node" ? "neighborhood" : "overview",
-                      wbScope: ref.recordType === "node" ? ref.id : undefined,
-                      recordId: ref.id,
-                      recordType: ref.recordType === "node" ? "node" : "edge",
-                    })
-                  }
-                >
-                  {refNames.data?.nodes.find((n) => n.id === ref.id)?.name ??
-                    `Связанный ${ref.recordType === "node" ? "объект" : "переход"} ${i + 1}`}
-                </Button>
-              ) : diagramArtifactLink(projectId, evidenceTarget, ref) ? (
-                <Button
-                  key={i}
-                  component="a"
-                  href={diagramArtifactLink(projectId, evidenceTarget, ref)}
-                  variant="subtle"
-                  size="compact-sm"
-                >
-                  Открыть точную модель
-                </Button>
-              ) : (
-                <Text key={i} size="xs">
-                  Точный артефакт этой установки недоступен; его исходный pin сохранён в
-                  подробностях.
-                </Text>
-              ),
-            )}
-            {moreRefs && (
-              <Button variant="subtle" size="compact-xs" onClick={moreRefs}>
-                Ещё связанные объекты
-              </Button>
-            )}
-            {relations.data?.nextCursor && (
-              <Button
-                variant="subtle"
-                onClick={() =>
-                  onNavigate({ ...pin, wbMode: "neighborhood", wbScope: id, wbList: true })
-                }
-              >
-                Все связи
-              </Button>
-            )}
-          </Stack>
-        ) : (
-          <Stack gap="sm">
-            <Text size="sm">
-              {selected?.origin ?? edge?.origin ?? "Импортированная модель"}. Наличие схемы не
-              подтверждает выполнение в среде.
-            </Text>
-            {evidence.isFetching && <Loader size="sm" />}
-            {evidence.isError && (
-              <Text c="red" size="sm">
-                Не удалось загрузить доказательства.
-              </Text>
-            )}
-            {evidence.data?.items.map((e) => (
-              <div key={e.id}>
-                <Text size="xs" fw={600}>
-                  {e.source.file}
-                </Text>
-                <Text size="xs" c="dimmed">
-                  {e.method} · {e.status}
-                </Text>
-                <Text size="sm">{e.explanation}</Text>
-                {e.snippet && (
-                  <details className={styles.details}>
-                    <summary>Фрагмент исходника</summary>
-                    <pre>{e.snippet}</pre>
-                  </details>
-                )}
-              </div>
-            ))}
-            <details className={styles.details}>
-              <summary>Технические сведения</summary>
-              <dl className={styles.metadata}>
-                <dt>Идентификатор</dt>
-                <dd>{id}</dd>
-                <dt>Версия</dt>
-                <dd>{target.revisionId ?? target.changeProposal?.proposalRevisionId}</dd>
-              </dl>
-              <pre>{JSON.stringify(raw ?? selected ?? edge, null, 2)}</pre>
-            </details>
-          </Stack>
-        )}
-      </div>
       <Button
         variant="subtle"
         size="compact-sm"

@@ -217,7 +217,13 @@
       "topic": "backend-interactions",
       "source": "references/backend/interactions.md",
       "embedded": "backend-interactions.md",
-      "workflowId": "mocker-backend-inspect"
+      "workflowId": "mocker-backend-inspect",
+      "copies": [
+        {
+          "package": "mocker-backend-explain",
+          "path": "references/interactions.md"
+        }
+      ]
     },
     {
       "topic": "backend-lifecycle",

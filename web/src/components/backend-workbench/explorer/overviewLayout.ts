@@ -7,6 +7,7 @@ import type { DiagramLayoutResult } from "../../diagram/elkLayout";
 export function sourceOverviewLayout(
   nodes: MapNode[],
   edges: MapEdge[] = [],
+  heights: ReadonlyMap<string, number> = new Map(),
 ): DiagramLayoutResult | undefined {
   const roots = nodes.filter((n) => n.kind === "system");
   const apps = nodes.filter((n) => n.kind === "service");
@@ -37,18 +38,25 @@ export function sourceOverviewLayout(
     )
   )
     return;
+  const rowHeight = Math.max(146, ...nodes.map((n) => heights.get(n.id) ?? 146)) + 34;
   const rows = Math.max(1, Math.ceil(members.length / 2));
   const centerRow = (rows - 1) / 2;
   const width = 1120;
   const positions = [
-    { id: root.id, x: 0, y: 0, width, height: 80 + rows * 180 },
-    { id: app.id, x: 436, y: 80 + centerRow * 180, width: 248, height: 146 },
+    { id: root.id, x: 0, y: 0, width, height: 80 + rows * rowHeight },
+    {
+      id: app.id,
+      x: 436,
+      y: 80 + centerRow * rowHeight,
+      width: 248,
+      height: heights.get(app.id) ?? 146,
+    },
     ...members.map((n, i) => ({
       id: n.id,
       x: i % 2 === 0 ? 32 : 840,
-      y: 80 + Math.floor(i / 2) * 180,
+      y: 80 + Math.floor(i / 2) * rowHeight,
       width: 248,
-      height: 146,
+      height: heights.get(n.id) ?? 146,
     })),
   ];
   const placed = new Map(positions.map((p) => [p.id, p]));
@@ -111,6 +119,7 @@ export function sourceOverviewLayout(
 export function architectureOverviewLayout(
   nodes: MapNode[],
   edges: MapEdge[],
+  heights: ReadonlyMap<string, number> = new Map(),
 ): DiagramLayoutResult | undefined {
   const roots = nodes.filter((n) => n.boundary);
   if (roots.length !== 1 || nodes.length > 12 || nodes.some((n) => n.x !== undefined)) return;
@@ -118,25 +127,26 @@ export function architectureOverviewLayout(
   const inside = nodes.filter((n) => n.parentId === root.id);
   const outside = nodes.filter((n) => n.id !== root.id && n.parentId !== root.id);
   if (!inside.length || outside.some((n) => n.parentId)) return;
+  const rowHeight = Math.max(146, ...nodes.map((n) => heights.get(n.id) ?? 146)) + 34;
   const columns = Math.min(inside.length, 2),
     rows = Math.ceil(inside.length / columns);
   const width = columns * 248 + (columns - 1) * 180 + 80,
-    height = rows * 180 + 100;
+    height = rows * rowHeight + 100;
   const positions = [
     { id: root.id, x: 0, y: 0, width, height },
     ...inside.map((n, i) => ({
       id: n.id,
       x: 40 + (i % columns) * 428,
-      y: 80 + Math.floor(i / columns) * 180,
+      y: 80 + Math.floor(i / columns) * rowHeight,
       width: 248,
-      height: 146,
+      height: heights.get(n.id) ?? 146,
     })),
     ...outside.map((n, i) => ({
       id: n.id,
       x: width + 100,
-      y: 80 + i * 180,
+      y: 80 + i * rowHeight,
       width: 248,
-      height: 146,
+      height: heights.get(n.id) ?? 146,
     })),
   ];
   const placed = new Map(positions.map((n) => [n.id, n]));

@@ -25,7 +25,7 @@ afterEach(() => {
 });
 
 it.each([true, false])(
-  "keeps exact diagram backlinks when architecture names fail or only link refs match (failure=%s)",
+  "omits related diagrams regardless of architecture availability (failure=%s)",
   async (failure) => {
     const diagramId = "0197aaf9-5555-7000-8000-000000000011";
     const pin = { id: diagramId, version: 1, contentHash: "c".repeat(64) };
@@ -90,17 +90,17 @@ it.each([true, false])(
         onNavigate={navigate}
       />,
     );
-    const backlink = await screen.findByRole("button", { name: /Architecture · Архитектура/ });
-    await userEvent.click(backlink);
-    expect(navigate).toHaveBeenCalledWith(
-      expect.objectContaining({ diagramId, diagramVersion: 1, diagramHash: pin.contentHash }),
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Architecture · Архитектура/ }),
+    ).not.toBeInTheDocument();
+    expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/diagrams"))).toBe(
+      false,
     );
-    if (failure)
-      expect(await screen.findByText(/Названия архитектурных видов недоступны/)).toBeVisible();
   },
 );
 
-it("opens a callback body as source inspection without carrying the caller's execution scope", async () => {
+it("omits callback relations and does not load the removed neighborhood section", async () => {
   const callback = {
     ...step,
     id: "0197aaf9-5555-7000-8000-000000000009",
@@ -143,16 +143,11 @@ it("opens a callback body as source inspection without carrying the caller's exe
       onNavigate={navigate}
     />,
   );
-  await userEvent.click(await screen.findByRole("button", { name: "Открыть тело callback" }));
-  expect(navigate).toHaveBeenCalledWith({
-    revisionId,
-    wbView: "scenarios",
-    wbMode: "flow",
-    entrypointId: callback.id,
-  });
-  expect(
-    screen.getByText(/Выполнение callback и границы транзакции не подтверждены/),
-  ).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Открыть тело callback" })).not.toBeInTheDocument();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes("/explore/query"))).toBe(
+    false,
+  );
+  expect(navigate).not.toHaveBeenCalled();
 });
 
 it.each([true, false])(
@@ -206,7 +201,7 @@ it.each([true, false])(
     expect(source.querySelector("pre")).toBeVisible();
     expect(source.querySelector("code")?.textContent).toBe(nativeText);
     expect(source.querySelector("kernel")).toBeNull();
-    expect(screen.getByRole("tab", { name: "Связи" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
     expect(screen.getAllByText(step.name)).toHaveLength(1);
   },
 );

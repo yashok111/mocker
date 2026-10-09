@@ -6,14 +6,15 @@ metadata:
   workflowVersion: "8"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\",\"backend-events-import\",\"backend-events-query\",\"backend-source-sync\",\"backend-representations\"]"
-  guideSetId: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
-  manifestHash: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
+  guideSetId: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
+  manifestHash: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
 ---
 
 # Source graph import and reconciliation
 
-Import one repository's source snapshot, reconcile the same provider's next snapshot, or compare exact committed revisions. Foundation assertions and relational SQL/ORM/migration facets are source claims with evidence, not runtime observations. Relational import retains native definitions, ordered keys/FKs, unknowns and contradictions without choosing a truth by name. This workflow does not execute the inspected application, package scripts, SQL, migrations or bodies. Runtime source flows/query accesses use schema3/4/5; field lineage uses source4/5. Source5 adds evidence-backed events/jobs/service calls and contextual fields. DB edits remain separate draft proposals. The legacy procedure below does not provide incremental scopes or provider migration; select sync2 for those composed-source operations. Durable static diff/impact uses change5/backend-analysis-jobs in the same guide set. No source claim is executed application behavior.
+For imports or diagrams intended for human understanding, apply the **Human-readable modeling contract** in `backend-interactions` under the selected inspect owner before bulk work. Deliver authored goal/action/outcome scenarios with exact evidence alongside faithful source capture; raw Flow, translated code statements and generated candidates do not satisfy that task. The `mocker-backend-explain` skill orchestrates this editorial work; source-only requests remain source-only.
 
+Import one repository's source snapshot, reconcile the same provider's next snapshot, or compare exact committed revisions. Foundation assertions and relational SQL/ORM/migration facets are source claims with evidence, not runtime observations. Relational import retains native definitions, ordered keys/FKs, unknowns and contradictions without choosing a truth by name. This workflow does not execute the inspected application, package scripts, SQL, migrations or bodies. Runtime source flows/query accesses use schema3/4/5; field lineage uses source4/5. Source5 adds evidence-backed events/jobs/service calls and contextual fields. DB edits remain separate draft proposals. The legacy procedure below does not provide incremental scopes or provider migration; select sync2 for those composed-source operations. Durable static diff/impact uses change5/backend-analysis-jobs in the same guide set. No source claim is executed application behavior.
 ## Select a compatible complete procedure before writes
 
 Call `get_server_config` and `get_backend_capabilities`. Classify foundation, relational,
@@ -37,7 +38,6 @@ provider or write a relational task through a foundation guide.
 
 Pin all topics to that immutable guideSetId; unknown sets fail without latest fallback. Recheck
 compatibility on resume/server change; retain original inputs/receipts.
-
 ## Load only the needed details
 
 This independently installable leaf fetches references with `get_guide

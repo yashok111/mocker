@@ -112,3 +112,25 @@ it("keeps evidenced relationships when compacting a source overview", () => {
   expect(layout.edges[1]?.target).toBe("d");
   expect(layout.nodes.every((n) => n.x >= 0 && n.y >= 0)).toBe(true);
 });
+
+it("reserves measured card heights in the overview and keeps adjacent rows apart", () => {
+  const { nodes, edges } = overviewFixture(6);
+  const layout = sourceOverviewLayout(
+    nodes,
+    edges,
+    new Map([
+      ["store-0", 340],
+      ["app", 220],
+    ]),
+  )!;
+  const tall = layout.nodes.find((n) => n.id === "store-0")!;
+  const next = layout.nodes.find((n) => n.id === "store-2")!;
+  const app = layout.nodes.find((n) => n.id === "app")!;
+  const frame = layout.nodes.find((n) => n.id === "system")!;
+  expect(tall.height).toBe(340);
+  expect(app.height).toBe(220);
+  expect(next.y).toBeGreaterThan(tall.y + tall.height);
+  expect(layout.nodes.every((n) => n.y + n.height <= frame.y + frame.height)).toBe(true);
+  const end = layout.edges.find((e) => e.target === tall.id)!.points.at(-1)!;
+  expect(end.y).toBe(tall.y + tall.height / 2);
+});

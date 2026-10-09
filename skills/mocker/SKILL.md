@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "2"
   requiredModelSchemaVersions: "[]"
   requiredCapabilities: "[]"
-  guideSetId: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
-  manifestHash: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
+  guideSetId: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
+  manifestHash: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
 ---
 
 # mocker
@@ -67,6 +67,8 @@ longer lists; recipes (`faker`, `enum`, `now`, `jwt`, `ref`, …) make single
 fields realistic without pinning the whole body.
 
 ## Classify the request first
+
+For backend imports intended to explain a system, use `mocker-backend-explain` and the Human-readable modeling contract in `backend-interactions` (selected inspect owner). Source capture plus readable, evidence-linked scenarios is the deliverable; a code-shaped Flow alone is incomplete.
 
 Route the task before listing or changing resources. Keep ordinary mock workspace/API-design/sequence workflows below intact; routing2 has no backend capability requirements.
 

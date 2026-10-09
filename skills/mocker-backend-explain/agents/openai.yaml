@@ -1,0 +1,4 @@
+interface:
+  display_name: "Mocker: понятные сценарии"
+  short_description: "Описывает поведение системы понятным языком"
+  default_prompt: "Use $mocker-backend-explain to turn backend evidence into human-readable scenarios with verifiable source references."

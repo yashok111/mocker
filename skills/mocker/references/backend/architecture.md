@@ -184,3 +184,7 @@ field or removed aggregate ID is inspected with the before pin, level=context,
 rootId=before.document.payload.primarySystemId and architecture-v1; never resolve
 it against the newer mapping. Target/evidence pin churn alone is not a membership
 change. Projected identities are checked against full keys and semantic IDs.
+
+## Human-facing responsibility models
+
+For architecture intended to explain the system, apply the Human-readable modeling contract in `backend-interactions` from this same guide set. Model meaningful responsibilities, not one component per method/file. Name views by capability and purpose; link to readable scenarios before optional exact-source drill-down. Grouping preserves evidence membership and does not invent domain boundaries or interactions.

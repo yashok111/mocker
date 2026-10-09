@@ -12,12 +12,21 @@ import { readDiagram } from "../backendDiagramReads";
 import { backendReadTargetKey } from "../backendReadTargets";
 import { readPages, uniqueBy } from "./readPages";
 import { ok } from "./catalogs";
-import { architectureDestinations, type ArchitectureDestination } from "./architectureNavigation";
+import {
+  architectureDestinations,
+  architecturePlace,
+  architectureLevelNames,
+  explicitArchitectureSearch,
+  type ArchitectureDestination,
+} from "./architectureNavigation";
 
 export type ArchitectureViewName = Pick<BackendDiagramView, "id" | "version" | "name"> & {
   state: Pick<BackendDiagramView["state"], "diagram" | "level" | "rootId">;
 };
-type NamedArchitectureDestination = ArchitectureDestination & { diagramId: string };
+export type NamedArchitectureDestination = ArchitectureDestination & {
+  diagramId: string;
+  nested?: boolean;
+};
 
 export async function readArchitectureChoices(
   projectId: string,
@@ -130,25 +139,69 @@ export async function readArchitectureChoices(
           c.search.diagramRoot === view.state.rootId,
       );
       if (ids.length && !matching.length) continue;
+      const elements =
+        diagram.document.kind === "architecture" ? diagram.document.payload.elements : [];
+      const contents = elements.filter((element) => element.parentId === view.state.rootId);
+      const description = [
+        architectureLevelNames[view.state.level],
+        `Объектов: ${contents.length}`,
+        contents
+          .slice(0, 3)
+          .map((element) => element.label)
+          .join(", "),
+      ]
+        .filter(Boolean)
+        .join(" · ");
       named.push({
         diagramId: diagram.pin.id,
         key: `view:${view.id}:${view.version}`,
         name: view.name,
-        description: matching[0]?.description ?? "Сохранённое представление архитектуры",
+        description,
         search: { diagramViewId: view.id, diagramViewVersion: view.version, wbView: "structure" },
       });
       covered.add(pinKey(diagram.pin));
+    }
+  }
+  // Internal drill-down maps are destinations, not independent project entry
+  // points. Their authored incoming links identify both scope and exact level.
+  // Never borrow a label from another version or redirect an immutable pin.
+  const nested = new Map<string, NamedArchitectureDestination[]>();
+  if (!ids.length) {
+    for (const source of documents.values()) {
+      if (source.document.kind !== "architecture") continue;
+      for (const element of source.document.payload.elements) {
+        for (const link of element.navigation ?? []) {
+          if (link.kind !== "diagram" || link.diagram.id === source.pin.id) continue;
+          const destination = documents.get(pinKey(link.diagram));
+          if (!destination || destination.document.kind !== "architecture") continue;
+          const search = explicitArchitectureSearch(link);
+          if (architecturePlace(destination.document, search).error) continue;
+          const key = pinKey(link.diagram);
+          const components = destination.document.payload.elements.filter(
+            (e) => e.role === "component" && e.parentId === link.rootId,
+          ).length;
+          const entry: NamedArchitectureDestination = {
+            key: `${key}:${link.level}:${link.rootId}:${link.focusId ?? ""}`,
+            diagramId: link.diagram.id,
+            name: `${element.label} — ${link.label}`,
+            description: `${architectureLevelNames[link.level]}${link.level === "components" ? ` · Компонентов: ${components}` : ""}`,
+            search,
+            nested: true,
+          };
+          nested.set(key, [...(nested.get(key) ?? []), entry]);
+        }
+      }
     }
   }
   signal.throwIfAborted();
   return uniqueBy(
     [
       ...named,
-      ...choices.filter(
-        (c) =>
-          c.search.diagramFocus ||
-          !covered.has(`${c.search.diagramId}:${c.search.diagramVersion}:${c.search.diagramHash}`),
-      ),
+      ...choices.flatMap((c) => {
+        const key = `${c.search.diagramId}:${c.search.diagramVersion}:${c.search.diagramHash}`;
+        if (!c.search.diagramFocus && covered.has(key)) return [];
+        return nested.get(key) ?? [c];
+      }),
     ],
     (c) => c.key,
   );

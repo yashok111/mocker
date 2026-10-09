@@ -1,65 +1,29 @@
 import { Graph, Shape } from "@antv/x6";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Button, Group, Text } from "@mantine/core";
 import { useDiagramLayout } from "../../diagram/useDiagramLayout";
 import { applyDiagramRoutes, measureDiagramLabel } from "../../diagram/elkX6";
 import { installCanvasWheelZoom } from "../../diagram/canvasControls";
 import { diagramOptions, diagramEdgeLine } from "../../diagram/presentation";
 import type { Camera } from "./navigation";
-import { kindName, nodeSubtitle, relationNames, type MapNode, type MapEdge } from "./model";
+import { relationNames, type MapNode, type MapEdge } from "./model";
 import styles from "./Explorer.module.css";
 import { positionSavedScene, preserveAnchorCamera, revealScenarioStart } from "./sceneLayout";
 import type { DiagramLayoutResult } from "../../diagram/elkLayout";
 import { sourceOverviewLayout, architectureOverviewLayout } from "./overviewLayout";
 import { createCardClicks } from "./cardClicks";
+import { createExploreCard, exploreCardWidth, exploreCardMinHeight } from "./exploreCard";
+import {
+  ObjectDescriptionTooltip,
+  type TooltipBounds,
+} from "../../design-canvas/ObjectDescriptionTooltip";
 
 Shape.HTML.register({
   shape: "backend-explore-card",
   effect: ["data"],
   html(node) {
     const data = node.getData() as MapNode & { selected?: boolean };
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = styles.mapCard ?? "";
-    button.dataset.objectId = data.id;
-    button.dataset.kind = data.kind;
-    if (data.change) button.dataset.change = data.change;
-    button.dataset.selected = String(!!data.selected);
-    button.setAttribute("aria-pressed", String(!!data.selected));
-    const type = document.createElement("span");
-    type.className = styles.cardType ?? "";
-    const icon = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-    icon.setAttribute("viewBox", "0 0 24 24");
-    icon.setAttribute("width", "14");
-    icon.setAttribute("height", "14");
-    icon.setAttribute("fill", "none");
-    icon.setAttribute("stroke", "currentColor");
-    icon.setAttribute("stroke-width", "1.6");
-    icon.setAttribute("aria-hidden", "true");
-    const path = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    path.setAttribute(
-      "d",
-      ["datastore", "data_store", "table"].includes(data.kind)
-        ? "M4 6c0-4 16-4 16 0v12c0 4-16 4-16 0V6Zm0 0c0 4 16 4 16 0M4 12c0 4 16 4 16 0"
-        : data.kind === "external_system"
-          ? "M13 5h6v6m0-6L9 15M9 5H5v14h14v-4"
-          : "M4 4h16v16H4zM4 9h16M9 9v11",
-    );
-    icon.append(path);
-    type.append(icon, document.createTextNode(kindName(data.kind)));
-    const title = document.createElement("strong");
-    title.className = styles.cardTitle ?? "";
-    title.textContent = data.name;
-    const description = document.createElement("span");
-    description.className = styles.cardDescription ?? "";
-    description.textContent = data.description === data.name ? "" : data.description;
-    const foot = document.createElement("span");
-    foot.className = styles.cardFoot ?? "";
-    foot.textContent =
-      data.kind === "query" ? nodeSubtitle(data) : (data.badge ?? nodeSubtitle(data) ?? "");
-    if (data.kind === "query") foot.title = data.id;
-    button.append(type, title, description, foot);
-    return button;
+    return createExploreCard(data);
   },
 });
 export function ExploreCanvas({
@@ -94,11 +58,55 @@ export function ExploreCanvas({
   const initialCamera = useRef(camera);
   const previousNodes = useRef<DiagramLayoutResult["nodes"]>([]);
   const [zoom, setZoom] = useState(100);
+  const [heights, setHeights] = useState<ReadonlyMap<string, number>>(new Map());
+  const [tooltip, setTooltip] = useState<{ description: string; bounds: TooltipBounds } | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    if (!host.current) return;
+    let disposed = false;
+    const measure = () => {
+      if (disposed || !host.current) return;
+      const probe = document.createElement("div");
+      probe.style.cssText = `position:absolute;visibility:hidden;pointer-events:none;width:${exploreCardWidth}px;left:0;top:0;`;
+      probe.setAttribute("aria-hidden", "true");
+      host.current.append(probe);
+      const cards = nodes.map((node) => {
+        const card = createExploreCard(node);
+        card.style.height = "auto";
+        card.style.minHeight = `${exploreCardMinHeight}px`;
+        probe.append(card);
+        return { id: node.id, card };
+      });
+      const measured = new Map(
+        cards.map(({ id, card }) => [
+          id,
+          Math.max(exploreCardMinHeight, Math.ceil(card.getBoundingClientRect().height)),
+        ]),
+      );
+      probe.remove();
+      setHeights((previous) =>
+        previous.size === measured.size &&
+        [...measured].every(([id, height]) => previous.get(id) === height)
+          ? previous
+          : measured,
+      );
+    };
+    measure();
+    void document.fonts?.ready.then(measure);
+    return () => {
+      disposed = true;
+    };
+  }, [nodes]);
   const nodeById = useMemo(() => new Map(nodes.map((n) => [n.id, n])), [nodes]);
   const edgeById = useMemo(() => new Map(edges.map((e) => [e.id, e])), [edges]);
   const shape = useMemo(
     () => ({
-      nodes: nodes.map((n) => ({ id: n.id, width: 248, height: 146 })),
+      nodes: nodes.map((n) => ({
+        id: n.id,
+        width: exploreCardWidth,
+        height: heights.get(n.id) ?? exploreCardMinHeight,
+      })),
       edges: edges
         .filter((e) => nodeById.has(e.from) && nodeById.has(e.to))
         .map((e) => ({
@@ -108,12 +116,15 @@ export function ExploreCanvas({
           label: measureDiagramLabel(e.label || relationNames[e.kind] || e.kind, 150, 2),
         })),
     }),
-    [nodes, edges, nodeById],
+    [nodes, edges, nodeById, heights],
   );
-  const sourceOverview = useMemo(() => sourceOverviewLayout(nodes, edges), [nodes, edges]);
+  const sourceOverview = useMemo(
+    () => sourceOverviewLayout(nodes, edges, heights),
+    [nodes, edges, heights],
+  );
   const overview = useMemo(
-    () => sourceOverview ?? architectureOverviewLayout(nodes, edges),
-    [sourceOverview, nodes, edges],
+    () => sourceOverview ?? architectureOverviewLayout(nodes, edges, heights),
+    [sourceOverview, nodes, edges, heights],
   );
   const computed = useDiagramLayout(overview ? { nodes: [], edges: [] } : shape);
   const rawLayout = overview ?? computed.layout;
@@ -220,6 +231,43 @@ export function ExploreCanvas({
       clicks.cancel();
       callback.current.onSelect(edge.id, "edge");
     });
+    const clearTooltip = () => setTooltip(null);
+    const showTooltip = (button: HTMLElement) => {
+      const data = nodeById.get(button.dataset.objectId ?? "");
+      if (!data?.description.trim() || data.description === data.name) return clearTooltip();
+      const card = button.getBoundingClientRect();
+      const shell = host.current!.parentElement!.getBoundingClientRect();
+      setTooltip({
+        description: data.description,
+        bounds: {
+          left: card.left - shell.left,
+          top: card.top - shell.top,
+          width: card.width,
+          height: card.height,
+        },
+      });
+    };
+    const focusTooltip = (event: FocusEvent) => {
+      const button = (event.target as HTMLElement).closest<HTMLElement>("button[data-object-id]");
+      if (button) showTooltip(button);
+    };
+    graph.on("node:mouseenter", ({ view, e }) => {
+      if (e.buttons) return;
+      const button = view.container.querySelector<HTMLElement>("button[data-object-id]");
+      if (button) showTooltip(button);
+    });
+    graph.on("node:mouseleave", clearTooltip);
+    graph.on("cell:mousedown", clearTooltip);
+    graph.on("blank:mousedown", clearTooltip);
+    graph.on("scale", clearTooltip);
+    graph.on("translate", clearTooltip);
+    host.current.addEventListener("focusin", focusTooltip);
+    host.current.addEventListener("focusout", clearTooltip);
+    host.current.addEventListener("mouseleave", clearTooltip);
+    const dismissTooltip = (event: KeyboardEvent) => {
+      if (event.key === "Escape") clearTooltip();
+    };
+    window.addEventListener("keydown", dismissTooltip);
     const keyboard = (e: KeyboardEvent) => {
       const button = (e.target as HTMLElement).closest<HTMLButtonElement>("button[data-object-id]");
       if (button && (e.key === "Enter" || e.key === " ")) {
@@ -278,6 +326,11 @@ export function ExploreCanvas({
       initialCamera.current = { x: tx, y: ty, zoom: graph.zoom() };
       previousNodes.current = renderedNodes;
       element.removeEventListener("keydown", keyboard);
+      element.removeEventListener("focusin", focusTooltip);
+      element.removeEventListener("focusout", clearTooltip);
+      element.removeEventListener("mouseleave", clearTooltip);
+      window.removeEventListener("keydown", dismissTooltip);
+      clearTooltip();
       stopWheel();
       graph.dispose();
       graphRef.current = null;
@@ -312,6 +365,9 @@ export function ExploreCanvas({
   return (
     <div className={styles.canvas}>
       <figure ref={host} className={styles.graph} aria-label="Карта системы" />
+      {tooltip && (
+        <ObjectDescriptionTooltip bounds={tooltip.bounds} description={tooltip.description} />
+      )}
       {layout.error && (
         <Text role="alert" className={styles.canvasMessage}>
           {layout.error} Откройте список объектов.

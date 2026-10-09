@@ -21,6 +21,14 @@ it, it only gives a quick way in.
 | a script or CI job | [`skills/mocker/references/http.md`](skills/mocker/references/http.md) — login, CSRF, spec import, asset upload, the `/__mocker/state` calls a test suite makes |
 | someone changing mocker itself | [`CLAUDE.md`](CLAUDE.md), [`HISTORY.md`](HISTORY.md), [`CARVE-OUTS.md`](CARVE-OUTS.md), and `DESIGN.md` above |
 
+For imports intended to explain backend behavior to people, use
+[`mocker-backend-explain`](skills/mocker-backend-explain/SKILL.md). It defines
+human-readable goals, actions, outcomes, evidence mappings and semantic acceptance;
+raw source capture remains a separate deliverable. Import, sync and inspection
+entrypoints also route to the same contract in `backend-interactions`. Install the
+entire explanation skill directory, including its `references/` and `agents/`.
+Its editorial instructions do not add server APIs or transform existing projects.
+
 Choose root-only, any leaf alone, or the four-package bundle in the repository where the agent works:
 
 ```bash

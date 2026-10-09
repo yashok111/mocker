@@ -7,20 +7,20 @@ metadata:
   requiredModelSchemaVersions: "[\"1\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"import-candidate-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-sync\",\"backend-source-incremental-sync\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\"]"
-  guideSetId: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
-  manifestHash: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
+  guideSetId: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
+  manifestHash: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
 ---
 
 # Synchronize a composed source
 
-Update one declared repository/provider scope while retaining the other source partitions, qualified identities and original proof. Source claims describe captured declarations and static dependencies. They do not establish execution, delivery, data safety or runtime impact.
+For imports or diagrams intended for human understanding, apply the **Human-readable modeling contract** in `backend-interactions` under the selected inspect owner before bulk work. Deliver authored goal/action/outcome scenarios with exact evidence alongside faithful source capture; raw Flow, translated code statements and generated candidates do not satisfy that task. The `mocker-backend-explain` skill orchestrates this editorial work; source-only requests remain source-only.
 
+Update one declared repository/provider scope while retaining the other source partitions, qualified identities and original proof. Source claims describe captured declarations and static dependencies. They do not establish execution, delivery, data safety or runtime impact.
 ## Select a compatible guide set
 
 Read `get_server_config` and `get_backend_capabilities`. Select advertised `mocker-backend-sync` version `2`, model schema `6`, profile `composed-source-v1`, staged view `import-candidate-v1` and every required capability above. Verify the exact workflowId/version/guideSetId/manifestHash and each needed topic contentHash. If installed text does not match, fetch the complete compatible server entrypoint with `get_guide {topic:"backend-sync",guideSetId:selected.guideSetId}`. Unknown sets fail; never replace one with current text.
 
 All topics use that same global set. Select their actual owner before reading shared material: project2 for `backend-overview`/`backend-annotations`, import8 for `backend-model`, `backend-import-protocol` and `backend-recovery`, inspect13 for source certainty and exact inspection. Selecting a reference owner starts no writes. Older source1–4 bases use import8's existing adjacent transitions before source5; sync does not silently upgrade them. An empty unsourced project can begin composed `add_repository` directly.
-
 ## Capture the exact base and selected partition
 
 Read project metadata, its selected immutable revision and coverage. Retain the project version, baseRevisionId, semantic hash, source vector, active partition and snapshot IDs. Select partitions by repositoryId and provider namespace. On a source5 base, retain its exact primary source; the server performs the read-only bootstrap. No externalKey or provider is inferred from a name, URL or first returned claim.

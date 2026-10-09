@@ -80,6 +80,16 @@ export function mapDiagram(
         });
       }
     }
+    const root = doc.payload.elements.find((element) => element.id === rootId);
+    if (root?.role === "application") {
+      // The projection includes the owning system as context. The rail already
+      // shows that ancestry; a disconnected system card adds no interaction.
+      const connected = new Set(edges.flatMap((edge) => [edge.from, edge.to]));
+      nodes = nodes.filter(
+        (node) =>
+          node.id !== root.parentId || node.kind !== "software_system" || connected.has(node.id),
+      );
+    }
   } else if (doc.kind === "business_map") {
     nodes = doc.payload.elements.map((e) =>
       node(e.id, e.label, e.role, e.origin, e.refs, e.responsibility),
@@ -279,21 +289,7 @@ export function DiagramMap({
   const destinations = (id: string) =>
     architecture ? (doc.payload.elements.find((e) => e.id === id)?.navigation ?? []) : [];
   const selectedDestinations = selection ? destinations(selection) : [];
-  const members = useDiagramPage(
-    projectId,
-    {
-      ...input,
-      section: "members",
-      search: "",
-      origin: "all",
-      subjectId: selection ?? "",
-      cursor: search.wbMemberCursor,
-      limit: 500,
-    },
-    architecture && !!selection && !place?.error && !!links.data,
-    diagram.targetHash,
-    true,
-  );
+
   const opener = useRef<HTMLElement | null>(null);
   const select = (id: string, type: "node" | "edge" = "node") => {
     opener.current = document.activeElement as HTMLElement;
@@ -636,24 +632,6 @@ export function DiagramMap({
           projectId={projectId}
           target={entry.target}
           targetHash={diagram.targetHash}
-          extraRefs={members.data?.items.flatMap((row) =>
-            row.rowType === "member" ? [row.data.ref] : [],
-          )}
-          referencesStatus={
-            architecture &&
-            (members.isFetching ? (
-              <Text size="xs" component="output">
-                Загружаем состав связей…
-              </Text>
-            ) : members.isError ? (
-              <Alert color="red">
-                Не удалось загрузить состав связей.{" "}
-                <Button variant="subtle" size="compact-xs" onClick={() => void members.refetch()}>
-                  Повторить
-                </Button>
-              </Alert>
-            ) : undefined)
-          }
           search={search}
           node={selected}
           edge={selectedEdge}

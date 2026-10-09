@@ -7,13 +7,14 @@ metadata:
   requiredModelSchemaVersions: "[\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"saved-view-v1\",\"api-artifact-pins-v1\",\"backend-editor-artifacts-v1\",\"proposal-graph-v1\",\"saved-view-v2\",\"import-candidate-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-api-artifact-pins\",\"backend-editor-projections\",\"backend-events-query\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-change-proposals\",\"backend-representations\",\"backend-saved-views-v2\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-interactions\",\"backend-lifecycle\",\"backend-business-map\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
-  manifestHash: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
+  guideSetId: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
+  manifestHash: "sha256:f6e18cc808ef2fa71d0f8e05fd0fefd3f07819492e99b86082ebec22b7884251"
 ---
 # Pinned source flow and data-access inspection
 
-Answer from imported source at one immutable revision. HTTP handles, reachable steps, call candidates, queries and local transaction boundaries are source claims with evidence. A witness is one discovered static route, not execution or every possible path. A question alone performs no mutation. This standalone leaf loads shared references from the server and needs no neighboring package.
+For imports or diagrams intended for human understanding, apply the **Human-readable modeling contract** in `backend-interactions` under the selected inspect owner before bulk work. Deliver authored goal/action/outcome scenarios with exact evidence alongside faithful source capture; raw Flow, translated code statements and generated candidates do not satisfy that task. The `mocker-backend-explain` skill orchestrates this editorial work; source-only requests remain source-only.
 
+Answer from imported source at one immutable revision. HTTP handles, reachable steps, call candidates, queries and local transaction boundaries are source claims with evidence. A witness is one discovered static route, not execution or every possible path. A question alone performs no mutation. This standalone leaf loads shared references from the server and needs no neighboring package.
 ## Negotiate the complete procedure
 
 Call `get_server_config` and `get_backend_capabilities`. Select the advertised supported
@@ -54,7 +55,6 @@ verify returned actual owner tuple and contentHash against its manifest. Selecti
 starts no writes. If an owner cannot qualify, keep the available independent reads and name the
 missing dependency. Recheck compatibility after restart/server change while retaining saved pins,
 original requests and receipts.
-
 ## Exact source6/full/staged extensions
 
 Use one explicit revisionId, legacy proposal, full changeProposal or READY importCandidate selector and preserve the complete returned target/pins. Native source6 wraps records with tag6 and all qualified claims; full proposal origins distinguish baseline proof from intent. Source5/legacy/full5 assertions are unsupported. Exact details and target exclusions are in backend-flow-reference/backend-database-reference under their actual inspect13/database7 owners.

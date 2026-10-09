@@ -1,13 +1,12 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Alert, Button, Loader, Text } from "@mantine/core";
+import { Alert, Button, Loader, Text, TextInput } from "@mantine/core";
 import type { BackendReadTarget } from "@/api/generated/schemas";
 import type { BackendWorkspaceSearch } from "../backendWorkspaceSearch";
 import { backendReadTargetKey } from "../backendReadTargets";
 import { nodeOf } from "./reads";
 import { readBackendNode } from "../backendGraphReads";
-import { readArchitectureChoices } from "./architectureReads";
-import { resolvedTargetSearch } from "./navigation";
+import { readArchitectureChoices, type NamedArchitectureDestination } from "./architectureReads";
 import styles from "./Explorer.module.css";
 
 export function ArchitectureScope({
@@ -22,6 +21,7 @@ export function ArchitectureScope({
   onNavigate: (s: BackendWorkspaceSearch, replace?: boolean) => void;
 }) {
   const exact = backendReadTargetKey(target);
+  const [filter, setFilter] = useState("");
   const source = useQuery({
     queryKey: ["architecture-source", projectId, exact, scope],
     retry: false,
@@ -80,38 +80,56 @@ export function ArchitectureScope({
                 ? "Выберите представление этой области."
                 : "Архитектура этой области ещё не описана. Доступны объекты исходников и их связи."}
             </Text>
-            <div className={styles.architectureChoices}>
-              {choices.data?.map((choice) => (
-                <button
-                  className={styles.catalogRow}
-                  key={choice.key}
-                  onClick={() => onNavigate(choice.search)}
-                >
-                  <span className={styles.catalogIdentity}>
-                    <strong>{choice.name}</strong>
-                    <span>{choice.description}</span>
-                  </span>
-                  <span aria-hidden="true">→</span>
-                </button>
-              ))}
-            </div>
-            <Button
-              variant="subtle"
-              mt="md"
-              onClick={() =>
-                onNavigate({
-                  ...resolvedTargetSearch(target),
-                  wbView: "structure",
-                  wbMode: scope ? "children" : "overview",
-                  wbScope: scope,
-                })
-              }
-            >
-              Открыть исходники
-            </Button>
+            {!!choices.data?.length && (
+              <TextInput
+                label="Поиск схем"
+                placeholder="Название области или содержимое"
+                value={filter}
+                onChange={(event) => setFilter(event.currentTarget.value)}
+                mt="md"
+              />
+            )}
+            <ArchitectureChoices
+              choices={choices.data ?? []}
+              filter={filter}
+              onNavigate={onNavigate}
+            />
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function ArchitectureChoices({
+  choices,
+  filter,
+  onNavigate,
+}: {
+  choices: NamedArchitectureDestination[];
+  filter: string;
+  onNavigate: (search: BackendWorkspaceSearch) => void;
+}) {
+  const query = filter.trim().toLocaleLowerCase();
+  const matching = choices.filter((choice) =>
+    `${choice.name} ${choice.description}`.toLocaleLowerCase().includes(query),
+  );
+  if (!matching.length && query) return <Text mt="md">Схемы не найдены.</Text>;
+  return (
+    <section aria-label="Список схем" className={styles.architectureChoices}>
+      {matching.map((choice) => (
+        <button
+          className={styles.catalogRow}
+          key={choice.key}
+          onClick={() => onNavigate(choice.search)}
+        >
+          <span className={styles.catalogIdentity}>
+            <strong>{choice.name}</strong>
+            <span>{choice.description}</span>
+          </span>
+          <span aria-hidden="true">→</span>
+        </button>
+      ))}
+    </section>
   );
 }
