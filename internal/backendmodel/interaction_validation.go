@@ -137,8 +137,11 @@ func (v *interactionValidator) validateSteps(rows []InteractionStep) error {
 		if !v.participants[row.From] || row.To != "" && !v.participants[row.To] {
 			return invalid("participant", "Step endpoint is not an owned participant")
 		}
-		if !slices.Contains([]string{"request", "response", "send", "receive", "error", "boundary"}, row.Kind) || row.To == "" && row.Kind != "send" && row.Kind != "boundary" {
+		if !slices.Contains(InteractionStepKinds(), row.Kind) || row.To == "" && row.Kind != "send" && row.Kind != "boundary" && row.Kind != "action" {
 			return invalid("step", "Invalid kind or missing receiver")
+		}
+		if row.Kind == "action" && (row.To != "" || row.ReplyTo != "") {
+			return invalid("step", "A local action has one responsible participant, no receiver or reply")
 		}
 		if err := v.validateBranchPath(row.BranchPath); err != nil {
 			return err

@@ -32,6 +32,21 @@ func TestBackendInteractionsContract(t *testing.T) {
 	if err = compiled.Validate(map[string]any{"document": doc, "idempotencyKey": "test"}); err != nil {
 		t.Fatal(err)
 	}
+	steps := doc["payload"].(map[string]any)["steps"].([]any)
+	action := steps[3].(map[string]any)
+	action["kind"] = "action"
+	delete(action, "to")
+	delete(action, "replyTo")
+	if err = compiled.Validate(map[string]any{"document": doc, "idempotencyKey": "action"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"to", "replyTo"} {
+		action[key] = "00000000-0000-4000-8000-000000000001"
+		if compiled.Validate(map[string]any{"document": doc, "idempotencyKey": "bad-action"}) == nil {
+			t.Fatalf("action accepted %s", key)
+		}
+		delete(action, key)
+	}
 	doc["payload"].(map[string]any)["unknown"] = true
 	if compiled.Validate(map[string]any{"document": doc, "idempotencyKey": "test"}) == nil {
 		t.Fatal("unknown key accepted")

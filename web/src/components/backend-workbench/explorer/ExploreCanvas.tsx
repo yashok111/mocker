@@ -37,6 +37,7 @@ export function ExploreCanvas({
   controls,
   anchorId,
   startId,
+  readable = false,
 }: {
   nodes: MapNode[];
   edges: MapEdge[];
@@ -48,13 +49,14 @@ export function ExploreCanvas({
   controls?: ReactNode;
   anchorId?: string;
   startId?: string;
+  readable?: boolean;
 }) {
   const host = useRef<HTMLElement>(null);
   const graphRef = useRef<Graph | null>(null);
-  const callback = useRef({ onSelect, onCamera, onEnter });
+  const callback = useRef({ onSelect, onCamera, onEnter, selection });
   useEffect(() => {
-    callback.current = { onSelect, onCamera, onEnter };
-  }, [onSelect, onCamera, onEnter]);
+    callback.current = { onSelect, onCamera, onEnter, selection };
+  }, [onSelect, onCamera, onEnter, selection]);
   const initialCamera = useRef(camera);
   const previousNodes = useRef<DiagramLayoutResult["nodes"]>([]);
   const [zoom, setZoom] = useState(100);
@@ -290,10 +292,16 @@ export function ExploreCanvas({
       const start = renderedNodes.find((n) => n.id === startId);
       if (start) {
         const { tx, ty } = graph.translate();
-        const restored = revealScenarioStart({ x: tx, y: ty, zoom: graph.zoom() }, start, {
-          width: host.current.clientWidth,
-          height: host.current.clientHeight,
-        });
+        const restored = revealScenarioStart(
+          { x: tx, y: ty, zoom: graph.zoom() },
+          start,
+          {
+            width: host.current.clientWidth,
+            height: host.current.clientHeight,
+          },
+          readable ? 0.8 : 0,
+        );
+        graph.zoomTo(restored.zoom);
         graph.translate(restored.x, restored.y);
       }
     }
@@ -316,7 +324,22 @@ export function ExploreCanvas({
       height = size.height;
       cancelAnimationFrame(resizeFrame);
       resizeFrame = requestAnimationFrame(() => {
-        if (width > 0 && height > 0) graph.zoomToFit({ padding: 32, maxScale: 1 });
+        if (width <= 0 || height <= 0) return;
+        if (!readable) {
+          graph.zoomToFit({ padding: 32, maxScale: 1 });
+          return;
+        }
+        const anchor =
+          renderedNodes.find((n) => n.id === callback.current.selection) ??
+          renderedNodes.find((n) => n.id === startId);
+        if (anchor) {
+          const { tx, ty } = graph.translate();
+          const next = revealScenarioStart({ x: tx, y: ty, zoom: graph.zoom() }, anchor, {
+            width,
+            height,
+          });
+          graph.translate(next.x, next.y);
+        }
       });
     });
     return () => {
@@ -345,10 +368,20 @@ export function ExploreCanvas({
     edgeById,
     anchorId,
     startId,
+    readable,
   ]);
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
+    const chosen = readable && layout.layout?.nodes.find((n) => n.id === selection);
+    if (chosen && host.current) {
+      const { tx, ty } = graph.translate();
+      const next = revealScenarioStart({ x: tx, y: ty, zoom: graph.zoom() }, chosen, {
+        width: host.current.clientWidth,
+        height: host.current.clientHeight,
+      });
+      graph.translate(next.x, next.y);
+    }
     for (const button of host.current?.querySelectorAll<HTMLButtonElement>(
       "button[data-object-id]",
     ) ?? []) {
@@ -361,7 +394,7 @@ export function ExploreCanvas({
         "line/stroke",
         e.id === selection ? "#087f70" : String(e.getData()?.baseStroke ?? "#66816c"),
       );
-  }, [selection, layout.layout]);
+  }, [selection, layout.layout, readable]);
   return (
     <div className={styles.canvas}>
       <figure ref={host} className={styles.graph} aria-label="Карта системы" />

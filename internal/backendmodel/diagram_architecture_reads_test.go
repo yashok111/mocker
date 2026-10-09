@@ -15,9 +15,10 @@ import (
 // Count the actual mutation's reads, including its locked reload. Counting only
 // loadArchitectureGraph would miss a caller accidentally using the full resolver.
 type diagramReadConnector struct {
-	driver driver.Driver
-	dsn    string
-	reads  atomic.Int64
+	driver    driver.Driver
+	dsn       string
+	reads     atomic.Int64
+	graphRows atomic.Int64
 }
 
 func (c *diagramReadConnector) Connect(context.Context) (driver.Conn, error) {
@@ -25,19 +26,24 @@ func (c *diagramReadConnector) Connect(context.Context) (driver.Conn, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &diagramReadConn{Conn: conn, counter: &c.reads}, nil
+	return &diagramReadConn{Conn: conn, counter: &c.reads, graphRows: &c.graphRows}, nil
 }
 
 func (c *diagramReadConnector) Driver() driver.Driver { return c.driver }
 
 type diagramReadConn struct {
 	driver.Conn
-	counter *atomic.Int64
+	counter   *atomic.Int64
+	graphRows *atomic.Int64
 }
 
 func (c *diagramReadConn) QueryContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Rows, error) {
 	c.counter.Add(1)
-	return c.Conn.(driver.QueryerContext).QueryContext(ctx, query, args)
+	rows, err := c.Conn.(driver.QueryerContext).QueryContext(ctx, query, args)
+	if err == nil && strings.Contains(query, "backend_graph_records_documents") {
+		return &diagramCountedRows{Rows: rows, count: c.graphRows}, nil
+	}
+	return rows, err
 }
 
 func (c *diagramReadConn) ExecContext(ctx context.Context, query string, args []driver.NamedValue) (driver.Result, error) {
@@ -285,5 +291,193 @@ func TestArchitectureSource5MutationValidatesPinnedArtifacts(t *testing.T) {
 	}
 	if before != diagramTableCounts(t, service.repo.db) {
 		t.Fatal("foreign artifact reference wrote diagram data")
+	}
+}
+
+func TestCompanionSource5OperationsHaveBoundedReads(t *testing.T) {
+	r, base, _ := effectiveFiveRelationalFixture(t)
+	target := BackendReadTarget{RevisionID: base.Revision.ID}
+	full, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := interactionFixture(t)
+	doc.Target = target
+	proof := full.State.Evidence[0]
+	doc.Interactions.Steps[0].Refs = []DiagramRef{diagramProofRef(full, proof)}
+	doc.Interactions.Steps[0].Origin = DiagramOrigin{Kind: "source_assertion", Evidence: []DiagramEvidenceRef{{RevisionID: base.Revision.ID, EvidenceID: proof.ID, SubjectID: proof.SubjectID}}}
+	want, err := resolveDiagramEvidence(t.Context(), full, doc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, writer := diagramCountReads(t, r)
+	var current, first *DiagramVersion
+	for _, op := range []string{"create", "save", "fork", "view", "compare", "scope"} {
+		t.Run(op, func(t *testing.T) {
+			reader.reads.Store(0)
+			writer.reads.Store(0)
+			switch op {
+			case "create":
+				current, err = r.CreateDiagram(t.Context(), base.Project.ID, DiagramCreateInput{Document: doc, IdempotencyKey: op})
+				first = current
+			case "save":
+				doc.Interactions.Steps[0].Label = "Changed action"
+				current, err = r.SaveDiagram(t.Context(), base.Project.ID, current.Pin.ID, DiagramSaveInput{ExpectedVersion: current.Pin.Version, Document: doc, IdempotencyKey: op})
+			case "fork":
+				current, err = r.ForkDiagram(t.Context(), base.Project.ID, DiagramForkInput{Source: current.Pin, Target: target, Reason: "Independent companion", IdempotencyKey: op})
+			case "view":
+				_, err = r.CreateDiagramView(t.Context(), base.Project.ID, DiagramCreateViewInput{Name: "Companion", IdempotencyKey: op, State: DiagramViewState{Diagram: current.Pin, Origin: "all", Positions: []DiagramPosition{}, CollapsedIDs: []string{}}})
+			case "compare":
+				_, err = r.CompareDiagrams(t.Context(), base.Project.ID, DiagramCompareInput{Before: first.Pin, After: current.Pin, Limit: 100})
+			case "scope":
+				_, err = r.ResolveDiagramScope(t.Context(), base.Project.ID, DiagramScopeInput{Pin: current.Pin, Selectors: []DiagramScopeSelector{{Kind: "semantic", ID: doc.Interactions.Steps[0].ID}}})
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if current.TargetHash != full.Pins.TargetHash {
+				t.Fatal("native pin changed")
+			}
+			if op == "create" && !reflect.DeepEqual(sortDiagramGaps(current.Gaps), sortDiagramGaps(want)) {
+				t.Fatal("evidence/gaps changed")
+			}
+			for name, n := range map[string]int64{"reader": reader.reads.Load(), "writer": writer.reads.Load()} {
+				limit := int64(32)
+				if op == "compare" {
+					limit = 40
+				}
+				if n > limit {
+					t.Errorf("%s: %d SQL reads, limit %d; source5 companion must not bootstrap per-evidence source6 proof", name, n, limit)
+				}
+			}
+		})
+	}
+}
+
+func TestCompanionMutationMatchesFullResolverTargets(t *testing.T) {
+	for _, schema := range []string{"source5", "source5-artifacts", "source6", "proposal"} {
+		t.Run(schema, func(t *testing.T) {
+			r, base, _ := effectiveFiveRelationalFixture(t)
+			if schema == "source6" {
+				r, base, _ = effectiveRepresentationFixture(t)
+			}
+			if schema == "source5-artifacts" {
+				service, old, _, _ := artifactServiceFixture(t)
+				base, _ = upgradeEventsArtifactFixture(t, service, old)
+				r = service.repo
+			}
+			target := BackendReadTarget{RevisionID: base.Revision.ID}
+			if schema == "proposal" {
+				draft, err := r.CreateChangeProposal(t.Context(), base.Project.ID, CreateChangeProposalInput{Name: "Companion parity", BaseRevisionID: base.Revision.ID, IdempotencyKey: "proposal"})
+				if err != nil {
+					t.Fatal(err)
+				}
+				target = BackendReadTarget{ChangeProposal: &ProposalReadTarget{ProposalID: draft.Proposal.ID, ProposalRevisionID: draft.Revision.ID}}
+			}
+			full, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, target)
+			if err != nil {
+				t.Fatal(err)
+			}
+			doc := interactionFixture(t)
+			doc.Target = target
+			proof := full.State.Evidence[0]
+			doc.Interactions.Steps[0].Refs = []DiagramRef{diagramProofRef(full, proof)}
+			doc.Interactions.Steps[0].Origin = DiagramOrigin{Kind: "source_assertion", Evidence: []DiagramEvidenceRef{{RevisionID: full.Pins.BaseRevisionID, EvidenceID: proof.ID, SubjectID: proof.SubjectID}}}
+			want, err := resolveDiagramEvidence(t.Context(), full, doc, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, err := r.CreateDiagram(t.Context(), base.Project.ID, DiagramCreateInput{Document: doc, IdempotencyKey: "parity"})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.TargetHash != full.Pins.TargetHash || !reflect.DeepEqual(sortDiagramGaps(got.Gaps), sortDiagramGaps(want)) {
+				t.Fatal("native companion validation differs from full resolver")
+			}
+			input := DiagramScopeInput{Pin: got.Pin, Selectors: []DiagramScopeSelector{{Kind: "semantic", ID: doc.Interactions.Steps[0].ID}}}
+			wantScope, err := resolveDiagramScope(t.Context(), got, full, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			actualScope, err := r.ResolveDiagramScope(t.Context(), base.Project.ID, input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(actualScope, wantScope) {
+				t.Fatal("native scope differs from full resolver")
+			}
+			for _, part := range []string{"record", "proof"} {
+				bad, err := normalizeDiagram(doc)
+				if err != nil {
+					t.Fatal(err)
+				}
+				const foreign = "10000000-0000-4000-8000-000000000099"
+				if part == "record" {
+					bad.Interactions.Steps[0].Refs[0].ID = foreign
+				} else {
+					bad.Interactions.Steps[0].Origin.Evidence[0].EvidenceID = foreign
+				}
+				if _, err = r.CreateDiagram(t.Context(), base.Project.ID, DiagramCreateInput{Document: bad, IdempotencyKey: part}); err == nil {
+					t.Fatalf("foreign %s accepted", part)
+				}
+			}
+		})
+	}
+}
+
+type diagramCountedRows struct {
+	driver.Rows
+	count *atomic.Int64
+}
+
+func (r *diagramCountedRows) Next(values []driver.Value) error {
+	err := r.Rows.Next(values)
+	if err == nil {
+		r.count.Add(1)
+	}
+	return err
+}
+func TestSource5CompanionReadsOnlyReferenceClosure(t *testing.T) {
+	r, base, _ := effectiveFiveRelationalFixture(t)
+	target := BackendReadTarget{RevisionID: base.Revision.ID}
+	full, err := r.ResolveEffectiveGraph(t.Context(), base.Project.ID, target)
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := interactionFixture(t)
+	doc.Target = target
+	doc.Interactions.ScopeRefs = []DiagramRef{{Kind: "record", RecordType: "node", ID: full.State.Nodes[0].ID}}
+	doc.Interactions.Steps[0].Refs = []DiagramRef{{Kind: "record", RecordType: "edge", ID: full.State.Edges[0].ID}}
+	origin := func(i int) DiagramOrigin {
+		p := full.State.Evidence[i]
+		return DiagramOrigin{Kind: "source_assertion", Evidence: []DiagramEvidenceRef{{RevisionID: base.Revision.ID, EvidenceID: p.ID, SubjectID: p.SubjectID}}}
+	}
+	doc.Interactions.Branches[0].Origin = origin(0)
+	doc.Interactions.Order[0].Origin = origin(1)
+	want, err := resolveDiagramEvidence(t.Context(), full, doc, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reader, writer := diagramCountReads(t, r)
+	saved, err := r.CreateDiagram(t.Context(), base.Project.ID, DiagramCreateInput{Document: doc, IdempotencyKey: "closure"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.TargetHash != full.Pins.TargetHash || !reflect.DeepEqual(sortDiagramGaps(saved.Gaps), sortDiagramGaps(want)) {
+		t.Fatal("closure lost exact proof or pin")
+	}
+	for name, n := range map[string]int64{"reader": reader.graphRows.Load(), "writer": writer.graphRows.Load()} {
+		if n > 4 {
+			t.Errorf("%s loaded %d graph records for four referenced records", name, n)
+		}
+	}
+	reader.graphRows.Store(0)
+	writer.graphRows.Store(0)
+	_, err = r.CreateDiagramView(t.Context(), base.Project.ID, DiagramCreateViewInput{Name: "Closure", IdempotencyKey: "closure-view", State: DiagramViewState{Diagram: saved.Pin, Origin: "all", Positions: []DiagramPosition{}, CollapsedIDs: []string{}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := reader.graphRows.Load() + writer.graphRows.Load(); n > 4 {
+		t.Errorf("view loaded %d unrelated records", n)
 	}
 }

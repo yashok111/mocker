@@ -64,3 +64,57 @@ func TestArchitectureFlowNavigationForkPreservesExactTarget(t *testing.T) {
 		t.Fatalf("inherited Flow silently repinned: %+v %v", gaps, err)
 	}
 }
+
+func TestArchitectureNavigationOpensExactCompanion(t *testing.T) {
+	r, _ := testRepo(t)
+	p := createProject(t, r, "companion-navigation")
+	childDoc := interactionFixture(t)
+	childDoc.Target = BackendReadTarget{RevisionID: p.CurrentRevisionID}
+	child, err := r.CreateDiagram(t.Context(), p.ID, DiagramCreateInput{Document: childDoc, IdempotencyKey: "child"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	doc := diagramTestDocument(p.CurrentRevisionID)
+	nav := ArchitectureNavigation{Format: "architecture-navigation-v2", Kind: "interactions", Label: "Получить ссылку", Diagram: &child.Pin, FocusID: child.Document.Interactions.Steps[0].ID}
+	doc.Payload.Elements[0].Navigation = []ArchitectureNavigation{nav}
+	parent, err := r.CreateDiagram(t.Context(), p.ID, DiagramCreateInput{Document: doc, IdempotencyKey: "parent"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	childDoc.Interactions.Steps[0].Label = "New wording"
+	if _, err = r.SaveDiagram(t.Context(), p.ID, child.Pin.ID, DiagramSaveInput{ExpectedVersion: 1, Document: childDoc, IdempotencyKey: "update"}); err != nil {
+		t.Fatal(err)
+	}
+	read, err := r.GetDiagram(t.Context(), p.ID, parent.Pin)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if *read.Document.Payload.Elements[0].Navigation[0].Diagram != child.Pin {
+		t.Fatal("companion pin advanced")
+	}
+	for _, bad := range []string{"legacy-format", "wrong-kind", "wrong-focus", "c4-root", "source-target", "wrong-hash"} {
+		t.Run(bad, func(t *testing.T) {
+			entry := nav
+			switch bad {
+			case "legacy-format":
+				entry.Format = ArchitectureNavigationVersion
+			case "wrong-kind":
+				entry.Kind = "lifecycle"
+			case "wrong-focus":
+				entry.FocusID = child.Document.Interactions.Participants[0].ID
+			case "c4-root":
+				entry.RootID = doc.Payload.PrimarySystemID
+			case "source-target":
+				entry.Target = new(doc.Target)
+			case "wrong-hash":
+				pin := child.Pin
+				pin.ContentHash = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+				entry.Diagram = &pin
+			}
+			doc.Payload.Elements[0].Navigation = []ArchitectureNavigation{entry}
+			if _, err := r.CreateDiagram(t.Context(), p.ID, DiagramCreateInput{Document: doc, IdempotencyKey: bad}); err == nil {
+				t.Fatal("invalid companion destination accepted")
+			}
+		})
+	}
+}

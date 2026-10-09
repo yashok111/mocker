@@ -4750,6 +4750,30 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
       },
     },
   },
+  BackendCallbackArgumentAttributes: {
+    type: "object",
+    additionalProperties: false,
+    required: ["argumentPosition", "invocationKnowledge", "reason"],
+    properties: {
+      argumentPosition: {
+        type: "integer",
+        minimum: 0,
+        maximum: 65535,
+      },
+      invocationKnowledge: {
+        type: "string",
+        const: "unknown",
+      },
+      reason: {
+        type: "string",
+        minLength: 1,
+        maxLength: 4096,
+      },
+      description: {
+        type: ["string", "null"],
+      },
+    },
+  },
   BackendCarriedSourceBasis: {
     type: "object",
     additionalProperties: false,
@@ -5116,6 +5140,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
               "delivered_to",
               "retries",
               "dead_letters",
+              "callback_argument",
             ],
           },
         },
@@ -5248,6 +5273,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
               "delivered_to",
               "retries",
               "dead_letters",
+              "callback_argument",
             ],
           },
         },
@@ -5304,6 +5330,7 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
               "delivered_to",
               "retries",
               "dead_letters",
+              "callback_argument",
             ],
           },
           from: {
@@ -10787,6 +10814,61 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
         },
         required: ["type", "commandId", "reason", "criteria"],
       },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          type: {
+            type: "string",
+            const: "upsert_edge",
+          },
+          commandId: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          reason: {
+            type: "string",
+            minLength: 1,
+            maxLength: 4096,
+          },
+          id: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          kind: {
+            type: "string",
+            const: "callback_argument",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendCallbackArgumentAttributes",
+          },
+        },
+        required: ["type", "commandId", "reason", "id", "kind", "from", "to", "attributes"],
+      },
     ],
   },
   BackendChangeProposalException: {
@@ -13946,6 +14028,40 @@ export const backendChangeSchemas: Record<string, ChangeSchema> = {
           },
           attributes: {
             $ref: "#/components/schemas/BackendEventsDeadLettersAttributes",
+          },
+          from: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+          to: {
+            type: "string",
+            format: "uuid",
+            pattern: "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            not: {
+              const: "00000000-0000-0000-0000-000000000000",
+            },
+          },
+        },
+        required: ["recordType", "kind", "attributes", "from", "to"],
+      },
+      {
+        type: "object",
+        additionalProperties: false,
+        properties: {
+          recordType: {
+            type: "string",
+            const: "edge",
+          },
+          kind: {
+            type: "string",
+            const: "callback_argument",
+          },
+          attributes: {
+            $ref: "#/components/schemas/BackendCallbackArgumentAttributes",
           },
           from: {
             type: "string",

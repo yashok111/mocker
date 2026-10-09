@@ -6,6 +6,12 @@ import (
 )
 
 func (r *Repo) readArchitectureGraph(ctx context.Context, pid string, target BackendReadTarget) (*EffectiveGraphSnapshot, error) {
+	return r.readNativeProjectionGraph(ctx, pid, target)
+}
+
+// Diagram projections validate native records and pins; source6 and proposals
+// retain the full resolver. No source5 migration proof is consumed here.
+func (r *Repo) readNativeProjectionGraph(ctx context.Context, pid string, target BackendReadTarget) (*EffectiveGraphSnapshot, error) {
 	if err := r.validateAnalysisLeaseTarget(ctx, pid, target); err != nil {
 		return nil, err
 	}

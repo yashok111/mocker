@@ -8,6 +8,8 @@ import type {
   BackendDiagramVersion,
   BackendDiagramView,
 } from "@/api/generated/schemas";
+import { diagramSearch } from "../backendWorkspaceSearch";
+import { diagramKindNames } from "./model";
 import { readDiagram } from "../backendDiagramReads";
 import { backendReadTargetKey } from "../backendReadTargets";
 import { readPages, uniqueBy } from "./readPages";
@@ -46,7 +48,6 @@ export async function readArchitectureChoices(
         await listBackendDiagrams(
           projectId,
           {
-            kind: "architecture",
             targetHash,
             subjectId: ids.length === 1 ? ids[0] : undefined,
             limit: 100,
@@ -58,9 +59,7 @@ export async function readArchitectureChoices(
       if (
         page.items.some(
           (item) =>
-            (targetHash !== undefined && item.targetHash !== targetHash) ||
-            item.id !== item.pin.id ||
-            item.kind !== "architecture",
+            (targetHash !== undefined && item.targetHash !== targetHash) || item.id !== item.pin.id,
         )
       )
         throw new Error("Получены схемы другой версии модели.");
@@ -92,6 +91,53 @@ export async function readArchitectureChoices(
     )
       throw new Error("Схема относится к другому источнику.");
     documents.set(pinKey(diagram.pin), diagram);
+    if (diagram.document.kind !== "architecture") {
+      const companion = diagram.document;
+      const refs =
+        companion.kind === "interactions"
+          ? [
+              ...companion.payload.scopeRefs,
+              ...companion.payload.participants.flatMap((e) => e.refs),
+              ...companion.payload.steps.flatMap((e) => e.refs),
+            ]
+          : companion.kind === "business_map"
+            ? [
+                ...companion.payload.elements.flatMap((e) => e.refs),
+                ...companion.payload.links.flatMap((e) => e.refs),
+              ]
+            : [
+                companion.payload.entity,
+                ...companion.payload.stateFields,
+                ...companion.payload.states.flatMap((e) => e.refs),
+                ...companion.payload.transitions.flatMap((e) => [
+                  ...e.refs,
+                  ...e.triggers,
+                  ...e.writes,
+                  ...e.events,
+                ]),
+                ...companion.payload.rules.map((e) => e.trigger),
+              ];
+      if (
+        ids.length > 1 &&
+        !refs.some(
+          (ref) => ref.kind === "record" && ref.recordType === "node" && ids.includes(ref.id),
+        )
+      ) {
+        documents.delete(pinKey(diagram.pin));
+        continue;
+      }
+      choices.push({
+        key: pinKey(diagram.pin),
+        diagramId: diagram.pin.id,
+        name: item.name ?? diagramKindNames[diagram.document.kind] ?? diagram.document.kind,
+        description: diagramKindNames[diagram.document.kind] ?? diagram.document.kind,
+        search: {
+          ...diagramSearch(diagram.pin),
+          wbView: diagram.document.kind === "lifecycle" ? "data" : "scenarios",
+        },
+      });
+      continue;
+    }
     const components =
       diagram.document.kind === "architecture"
         ? diagram.document.payload.elements.filter((e) => e.role === "component").length
@@ -110,13 +156,7 @@ export async function readArchitectureChoices(
   if (documents.size) {
     const viewPages = await readPages(
       async (cursor) =>
-        ok(
-          await listBackendDiagramViews(
-            projectId,
-            { kind: "architecture", limit: 100, cursor },
-            { signal },
-          ),
-        ),
+        ok(await listBackendDiagramViews(projectId, { limit: 100, cursor }, { signal })),
       signal,
       (p) => String(p.catalogVersion),
     );
@@ -129,7 +169,23 @@ export async function readArchitectureChoices(
       if (view.id !== item.id || view.version !== item.version)
         throw new Error("Получен другой сохранённый вид.");
       const diagram = documents.get(pinKey(view.state.diagram));
-      if (!diagram || !view.state.level || !view.state.rootId) continue;
+      if (!diagram) continue;
+      if (diagram.document.kind !== "architecture") {
+        named.push({
+          diagramId: diagram.pin.id,
+          key: `view:${view.id}:${view.version}`,
+          name: view.name,
+          description: diagramKindNames[diagram.document.kind] ?? diagram.document.kind,
+          search: {
+            diagramViewId: view.id,
+            diagramViewVersion: view.version,
+            wbView: diagram.document.kind === "lifecycle" ? "data" : "scenarios",
+          },
+        });
+        covered.add(pinKey(diagram.pin));
+        continue;
+      }
+      if (!view.state.level || !view.state.rootId) continue;
       const matching = choices.filter(
         (c) =>
           c.search.diagramId === diagram.pin.id &&

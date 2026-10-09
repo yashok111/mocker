@@ -38,6 +38,7 @@ export type MapData = {
   metadata?: { title: string; value: unknown }[];
 };
 export const kindNames: Record<string, string> = {
+  action: "Действие",
   actor: "Участник",
   command: "Команда",
   business_event: "Бизнес-событие",

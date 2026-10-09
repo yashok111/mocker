@@ -282,14 +282,7 @@ func (r *Repo) mutateDiagram(ctx context.Context, m diagramMutation) (*DiagramVe
 			return nil, err
 		}
 	}
-	if m.document.Kind == "architecture" {
-		// Architecture validation consumes native source records and evidence;
-		// bootstrapping source6 proof bases here adds per-evidence queries that
-		// the mutation never uses. Other kinds still need the full resolver.
-		m.graph, err = r.readArchitectureGraph(ctx, m.pid, m.document.Target)
-	} else {
-		m.graph, err = r.ResolveEffectiveGraph(ctx, m.pid, m.document.Target)
-	}
+	m.graph, err = r.readDiagramReferenceGraph(ctx, m.pid, m.document)
 	if err != nil {
 		return nil, err
 	}
@@ -441,14 +434,8 @@ func (r *Repo) writeDiagramMutation(ctx context.Context, tx *sql.Tx, m diagramMu
 	if raw != "" {
 		return decodeDiagramVersion(raw)
 	}
-	var graph *EffectiveGraphSnapshot
-	if m.document.Kind == "architecture" {
-		// Reload under the writer lock as before; only the source5 loading
-		// strategy changes, never the target-pin check below.
-		graph, err = loadArchitectureGraph(ctx, tx, m.pid, m.document.Target)
-	} else {
-		graph, err = resolveEffectiveGraph(ctx, tx, m.pid, m.document.Target)
-	}
+	// Reload the same exact target under the writer lock; preserve its pin check.
+	graph, err := loadDiagramReferenceGraph(ctx, tx, m.pid, m.document)
 	if err != nil {
 		return nil, err
 	}

@@ -57,6 +57,12 @@ export type ArchitectureDestination = {
 export function explicitArchitectureSearch(
   entry: BackendArchitectureNavigation,
 ): BackendWorkspaceSearch {
+  if (entry.format === "architecture-navigation-v2")
+    return {
+      ...diagramSearch(entry.diagram),
+      wbView: entry.kind === "lifecycle" ? "data" : "scenarios",
+      ...(entry.focusId ? { recordId: entry.focusId, recordType: "node" as const } : {}),
+    };
   return entry.kind === "diagram"
     ? architectureSearch(entry.diagram, entry.level, entry.rootId, entry.focusId)
     : {

@@ -188,3 +188,21 @@ change. Projected identities are checked against full keys and semantic IDs.
 ## Human-facing responsibility models
 
 For architecture intended to explain the system, apply the Human-readable modeling contract in `backend-interactions` from this same guide set. Model meaningful responsibilities, not one component per method/file. Name views by capability and purpose; link to readable scenarios before optional exact-source drill-down. Grouping preserves evidence membership and does not invent domain boundaries or interactions.
+
+## Exact companion navigation
+
+When `diagramSupport.navigationFormats` advertises `architecture-navigation-v2`,
+architecture elements may link directly to an existing semantic companion:
+`{format:"architecture-navigation-v2",kind:"interactions"|"lifecycle"|"business_map",
+label,diagram:{id,version,contentHash},focusId?}`. No level/rootId/target/flowId is
+allowed on this variant. The actual destination must match the exact kind,
+project and source target. Optional focus is an interaction step, lifecycle state
+or business-map element of that exact version; participants, branches and links
+are not visible focus destinations. V1 architecture and Flow variants retain
+unchanged wire semantics. Old pins never advance on a semantic save.
+
+Create companion documents before the new architecture version that links them;
+retain the old architecture pin if companions refer back to it. Do not create a
+cyclic exact-pin dependency. Portable closure includes these destinations and
+remaps their semantic focus IDs. The explorer opens the companion and retains
+Back navigation; its compact evidence disclosure opens each exact source ref.

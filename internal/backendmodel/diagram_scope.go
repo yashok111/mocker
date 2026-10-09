@@ -83,7 +83,7 @@ func (r *Repo) ResolveDiagramScope(ctx context.Context, pid string, in DiagramSc
 	if err != nil {
 		return nil, err
 	}
-	g, err := r.ResolveEffectiveGraph(ctx, pid, v.Document.Target)
+	g, err := r.readDiagramReferenceGraph(ctx, pid, v.Document)
 	if err != nil {
 		return nil, err
 	}

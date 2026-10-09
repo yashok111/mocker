@@ -142,3 +142,14 @@ func TestDiagramSVGLifecycleProjectsTransitionOnce(t *testing.T) {
 		t.Fatal("duplicate transition in elements/links")
 	}
 }
+
+func TestDiagramSVGLocalActionDoesNotInventReceiver(t *testing.T) {
+	row := bm.DiagramRow{Step: &bm.InteractionStep{ID: fixedID(91), Label: "Проверить ссылку", Kind: "action", From: fixedID(92), BranchPath: []string{}, Origin: bm.DiagramOrigin{Kind: "authored", Reason: "Local check"}, Refs: []bm.DiagramRef{}}}
+	node, _, err := svgRow(row)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(node.detail, "→") {
+		t.Fatal("action rendered as a message", node.detail)
+	}
+}

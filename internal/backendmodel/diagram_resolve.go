@@ -373,7 +373,7 @@ func resolveInteractionGaps(resolver *diagramArtifactResolver, d DiagramDocument
 			if step.Kind == "boundary" {
 				gaps = append(gaps, diagramGap(step.ID, "interaction_boundary", "Explicit static boundary; behavior beyond it is unverified"))
 			}
-			if step.To == "" {
+			if step.To == "" && step.Kind != "action" {
 				gaps = append(gaps, diagramGap(step.ID, "unresolved_receiver", "Receiver is not established; no receive or reply was inferred"))
 			}
 		}

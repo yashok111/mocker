@@ -46,7 +46,7 @@ func (r *Repo) ResolveDiagramScopeTx(ctx context.Context, tx *sql.Tx, pid string
 	if err != nil {
 		return nil, err
 	}
-	g, err := r.ResolveEffectiveGraphTx(ctx, tx, pid, v.Document.Target)
+	g, err := loadDiagramReferenceGraph(ctx, tx, pid, v.Document)
 	if err != nil {
 		return nil, err
 	}

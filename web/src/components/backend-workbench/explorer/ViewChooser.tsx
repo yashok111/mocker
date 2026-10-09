@@ -1,5 +1,7 @@
+import { useState } from "react";
+import { readPages } from "./readPages";
 import { useQuery } from "@tanstack/react-query";
-import { Button, Group, Loader, Text } from "@mantine/core";
+import { Button, Group, Loader, Text, TextInput } from "@mantine/core";
 import { listBackendDiagrams } from "@/api/generated/backend-projects/backend-projects";
 import type { BackendReadTarget, ListBackendDiagramsParams } from "@/api/generated/schemas";
 import type { BackendWorkspaceSearch } from "../backendWorkspaceSearch";
@@ -23,6 +25,7 @@ export function ViewChooser({
   view: View;
   onNavigate: (s: BackendWorkspaceSearch) => void;
 }) {
+  const [filter, setFilter] = useState("");
   const query = useQuery({
     queryKey: [
       "workbench-catalog",
@@ -48,14 +51,28 @@ export function ViewChooser({
             : ["architecture"];
       const pages = await Promise.all(
         kinds.map((kind) =>
-          listBackendDiagrams(
-            projectId,
-            { kind, targetHash: overview.targetHash, subjectId: scope, limit: 20, order: "desc" },
-            { signal },
-          ).then(ok),
+          readPages(
+            async (cursor) =>
+              ok(
+                await listBackendDiagrams(
+                  projectId,
+                  {
+                    kind,
+                    targetHash: overview.targetHash,
+                    subjectId: scope,
+                    limit: 100,
+                    order: "desc",
+                    cursor,
+                  },
+                  { signal },
+                ),
+              ),
+            signal,
+            (page) => String(page.catalogVersion),
+          ),
         ),
       );
-      return pages.flatMap((p) => p.items);
+      return pages.flatMap((ps) => ps.flatMap((p) => p.items));
     },
   });
   return (
@@ -81,16 +98,31 @@ export function ViewChooser({
               Не удалось прочитать схемы этой области.
             </Text>
           )}
+          {!!query.data?.length && (
+            <TextInput
+              label="Поиск сценариев"
+              value={filter}
+              onChange={(event) => setFilter(event.currentTarget.value)}
+              mt="md"
+            />
+          )}
           <Group mt="lg" justify="center">
-            {query.data?.map((item) => (
-              <Button
-                key={item.id}
-                variant="light"
-                onClick={() => onNavigate({ ...diagramSearch(item.pin), wbView: view })}
-              >
-                {item.name ?? diagramKindNames[item.kind]} · {diagramKindNames[item.kind]}
-              </Button>
-            ))}
+            {query.data
+              ?.filter((item) =>
+                (item.name ?? diagramKindNames[item.kind] ?? item.kind)
+                  .toLocaleLowerCase()
+                  .includes(filter.trim().toLocaleLowerCase()),
+              )
+              .map((item) => (
+                <Button
+                  key={item.id}
+                  variant="light"
+                  onClick={() => onNavigate({ ...diagramSearch(item.pin), wbView: view })}
+                >
+                  {item.name ?? diagramKindNames[item.kind] ?? item.kind} ·{" "}
+                  {diagramKindNames[item.kind]}
+                </Button>
+              ))}
           </Group>
           {query.data?.length === 0 && (
             <Text size="sm" c="dimmed" mt="md">

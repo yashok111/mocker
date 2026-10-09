@@ -8,7 +8,9 @@ export function revealScenarioStart(
   camera: Camera,
   start: DiagramLayoutPoint & { width: number; height: number },
   viewport: { width: number; height: number },
+  minimumZoom = 0,
 ): Camera {
+  if (camera.zoom < minimumZoom) camera = { ...camera, zoom: minimumZoom };
   const x = camera.x + start.x * camera.zoom,
     y = camera.y + start.y * camera.zoom;
   if (

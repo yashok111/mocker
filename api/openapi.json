@@ -15016,7 +15016,8 @@
                 "items": {
                   "type": "string",
                   "enum": [
-                    "architecture-navigation-v1"
+                    "architecture-navigation-v1",
+                    "architecture-navigation-v2"
                   ]
                 }
               },
@@ -15036,6 +15037,22 @@
                     "unrelated",
                     "collapsed_internal",
                     "unqualified"
+                  ]
+                },
+                "uniqueItems": true
+              },
+              "interactionStepKinds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "request",
+                    "response",
+                    "send",
+                    "receive",
+                    "error",
+                    "boundary",
+                    "action"
                   ]
                 },
                 "uniqueItems": true
@@ -83094,7 +83111,8 @@
               "send",
               "receive",
               "error",
-              "boundary"
+              "boundary",
+              "action"
             ]
           },
           "branchPath": {
@@ -83118,6 +83136,36 @@
           "from",
           "kind",
           "branchPath"
+        ],
+        "allOf": [
+          {
+            "if": {
+              "properties": {
+                "kind": {
+                  "const": "action"
+                }
+              },
+              "required": [
+                "kind"
+              ]
+            },
+            "then": {
+              "not": {
+                "anyOf": [
+                  {
+                    "required": [
+                      "to"
+                    ]
+                  },
+                  {
+                    "required": [
+                      "replyTo"
+                    ]
+                  }
+                ]
+              }
+            }
+          }
         ]
       },
       "BackendInteractionOrder": {
@@ -91023,6 +91071,42 @@
               "label",
               "flowId",
               "target"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "format": {
+                "type": "string",
+                "const": "architecture-navigation-v2"
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "interactions",
+                  "lifecycle",
+                  "business_map"
+                ]
+              },
+              "label": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "diagram": {
+                "$ref": "#/components/schemas/BackendDiagramPin"
+              },
+              "focusId": {
+                "type": "string",
+                "format": "uuid"
+              }
+            },
+            "required": [
+              "format",
+              "kind",
+              "label",
+              "diagram"
             ]
           }
         ]

@@ -116,7 +116,9 @@ export function BackendInteractions({
                     .join(" / ")}
                 </Text>
               )}
-              {"branchPath" in row && !row.to && <Text size="sm">Получатель не установлен</Text>}
+              {"branchPath" in row && row.kind !== "action" && !row.to && (
+                <Text size="sm">Получатель не установлен</Text>
+              )}
             </Group>
           ))}
       </Stack>

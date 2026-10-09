@@ -28,7 +28,7 @@ func Features() []string {
 	return []string{"backend-projects", "backend-project-metadata", "backend-revisions", "backend-graph-query", "backend-source-import", "backend-source-reconcile", "backend-revision-compare",
 		"backend-scenario-measurements", "backend-observed-impact", "backend-observed-sequences", "backend-observations", "backend-observation-correlation", "backend-replay", "backend-test-profiles", "backend-replay-bindings",
 		"backend-materialization", "backend-diagram-svg", "backend-portable", "backend-artifact-context-v3", "backend-namespaced-artifact-query",
-		"backend-architecture", "backend-interactions", "backend-lifecycle", "backend-business-map", "backend-diagrams", "backend-diagram-views",
+		"backend-architecture", "backend-interactions", "backend-interaction-actions", "backend-lifecycle", "backend-business-map", "backend-diagrams", "backend-diagram-views",
 		"backend-relational-import", "backend-database-query", "backend-database-er",
 		"backend-db-proposals", "backend-db-typed-edits", "backend-runtime-flow-import",
 		"backend-flow-query", "backend-data-access-query", "backend-saved-views",

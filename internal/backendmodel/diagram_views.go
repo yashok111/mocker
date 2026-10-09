@@ -118,14 +118,8 @@ func validateDiagramViewRead(ctx context.Context, qry importReader, pid, name st
 	if err != nil {
 		return err
 	}
-	// Architecture validation needs native source5 records, not a source6 proof
-	// bootstrap. Use the same bounded loader as writes, including portable Tx
-	// imports; composed/proposed targets retain its full-resolver fallback.
-	resolve := resolveEffectiveGraph
-	if v.Document.Kind == "architecture" {
-		resolve = loadArchitectureGraph
-	}
-	graph, err := resolve(ctx, qry, pid, v.Document.Target)
+	// Every diagram presentation consumes State/Pins, never migration proof bases.
+	graph, err := loadDiagramReferenceGraph(ctx, qry, pid, v.Document)
 	if err != nil {
 		return err
 	}

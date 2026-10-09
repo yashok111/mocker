@@ -22,10 +22,13 @@ open. This view never applies or runs a scenario.
    source. A participant has id/label/origin/refs and optional architectureElementId.
    A step has id/label/origin/refs/from, optional to/replyTo, kind
    request/response/send/receive/error/boundary and required branchPath.
+   When `backend-interaction-actions` and `diagramSupport.interactionStepKinds`
+   advertise `action`, it represents a meaningful local action by `from`; it
+   forbids `to` and `replyTo` and creates no unresolved-receiver gap.
    Branches have id, optional parentId, groupId, label, kind
    alternative/parallel/loop, guardText and origin. Order links have stable id,
    from/to step IDs and origin. Payload arrays scopeRefs/participants/steps/order/
-   branches are required and nonnull. Missing to is only legal for send/boundary.
+   branches are required and nonnull. Missing to is legal for send/boundary, and required for negotiated action.
 4. Explicit `create_backend_diagram {projectId,document,idempotencyKey}` accepts
    the candidate through the normal validator. Its normalized document and
    targetHash must equal the accepted candidate. Never save implicitly on query.
@@ -255,3 +258,20 @@ number of meaningful scenarios delivered, illustrative before/after, and remaini
 format/navigation work. If only the source graph is ready, say “source captured;
 human-readable scenarios incomplete”. Do not call a large raw Flow a successful
 human explanation merely because import validation passed.
+
+## Negotiated local actions
+
+With `backend-interaction-actions` and an advertised `action` in
+`diagramSupport.interactionStepKinds`, a step may express a meaningful local
+check, decision, transformation or persistent change. It has one responsible
+participant in `from`, no `to` or `replyTo`, exact refs and an explicit authored
+reason. It is not a message, delivery attempt or unknown boundary. Keep actions
+at the human abstraction level: do not turn every assignment into an action.
+Alternative/parallel/loop branches and acyclic partial order retain their existing
+semantics. Local action steps count toward ordinary interaction limits, retain
+portable identity/evidence mapping and have no unresolved-receiver gap.
+Older servers without the advertised feature retain the original closed kinds;
+use a supported representation or keep a local outline instead of sending action.
+The explorer displays guards directly and offers a compact many-to-many source
+reference disclosure. Exact architecture-to-companion links require the separate
+advertised architecture-navigation-v2 contract.

@@ -66,3 +66,25 @@ it("discovers architecture destinations through exact membership", () => {
   ]);
   expect(architectureDestinations(diagram, ["absent"])).toEqual([]);
 });
+
+it.each(["interactions", "business_map", "lifecycle"] as const)(
+  "opens exact %s companion without C4 projection",
+  (kind) => {
+    const search = explicitArchitectureSearch({
+      format: "architecture-navigation-v2",
+      kind,
+      label: "Scenario",
+      diagram: pin,
+      focusId: nodeId,
+    });
+    expect(search).toMatchObject({
+      diagramId: pin.id,
+      diagramVersion: pin.version,
+      diagramHash: pin.contentHash,
+      wbView: kind === "lifecycle" ? "data" : "scenarios",
+      recordId: nodeId,
+    });
+    expect(search).not.toHaveProperty("diagramLevel");
+    expect(search).not.toHaveProperty("flowId");
+  },
+);

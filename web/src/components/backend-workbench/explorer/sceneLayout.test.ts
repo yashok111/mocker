@@ -69,3 +69,17 @@ it("opens a long scenario at its entrypoint instead of cropping both ends around
   const visible = { x: 50, y: 100, zoom: 1 };
   expect(revealScenarioStart(visible, start, { width: 1000, height: 600 })).toBe(visible);
 });
+
+it("opens an authored algorithm at a readable scale while keeping its start visible", () => {
+  const start = { x: 20, y: 1400, width: 248, height: 146 };
+  const camera = revealScenarioStart(
+    { x: 12, y: -80, zoom: 0.25 },
+    start,
+    { width: 1000, height: 700 },
+    0.8,
+  );
+  expect(camera.zoom).toBe(0.8);
+  expect(camera.x + start.x * camera.zoom).toBeGreaterThanOrEqual(0);
+  expect(camera.y + start.y * camera.zoom).toBeGreaterThanOrEqual(0);
+  expect(camera.y + (start.y + start.height) * camera.zoom).toBeLessThanOrEqual(700);
+});

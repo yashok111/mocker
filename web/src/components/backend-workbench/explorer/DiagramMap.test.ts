@@ -71,3 +71,84 @@ it.each(["from", "to"] as const)(
 it("keeps the system on its own architecture level", () => {
   expect(mapDiagram(doc, rows, "system").nodes.find((n) => n.id === "system")?.boundary).toBe(true);
 });
+
+it("shows local responsibility and alternative conditions without fictional receivers", () => {
+  const result = mapDiagram({
+    format: "backend-diagram-v1",
+    kind: "interactions",
+    target: { revisionId },
+    payload: {
+      scopeRefs: [],
+      participants: [{ id: "service", label: "Платформа", origin, refs: [] }],
+      steps: [
+        {
+          id: "check",
+          label: "Ссылка настроена?",
+          kind: "action",
+          from: "service",
+          origin,
+          refs: [],
+          branchPath: [],
+        },
+        {
+          id: "yes",
+          label: "Вернуть ссылку",
+          kind: "action",
+          from: "service",
+          origin,
+          refs: [],
+          branchPath: ["allowed", "configured"],
+        },
+        {
+          id: "no",
+          label: "Сообщить об ошибке",
+          kind: "action",
+          from: "service",
+          origin,
+          refs: [],
+          branchPath: ["allowed", "missing"],
+        },
+      ],
+      branches: [
+        {
+          id: "allowed",
+          groupId: "admission",
+          label: "Допущен",
+          guardText: "Проверки пройдены",
+          kind: "alternative",
+          origin,
+        },
+        {
+          id: "configured",
+          parentId: "allowed",
+          groupId: "setting",
+          label: "Да",
+          guardText: "Ссылка задана",
+          kind: "alternative",
+          origin,
+        },
+        {
+          id: "missing",
+          parentId: "allowed",
+          groupId: "setting",
+          label: "Нет",
+          guardText: "Ссылка пуста",
+          kind: "alternative",
+          origin,
+        },
+      ],
+      order: [
+        { id: "ok", from: "check", to: "yes", origin },
+        { id: "error", from: "check", to: "no", origin },
+      ],
+    },
+  });
+  expect(result.nodes[0]?.description).toBe("Платформа · Fixture");
+  expect(result.nodes[1]?.badge).toBe("Ссылка задана");
+  expect(result.nodes[1]?.details?.Ветвь).toContain("Проверки пройдены");
+  expect(result.edges.map((e) => e.label)).toEqual([
+    "Допущен · Проверки пройдены / Да · Ссылка задана",
+    "Допущен · Проверки пройдены / Нет · Ссылка пуста",
+  ]);
+  expect(result.edges.some((e) => e.from === "yes" && e.to === "no")).toBe(false);
+});

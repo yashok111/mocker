@@ -50,3 +50,15 @@ it("applies presentation positions and collapse without editing semantic order",
   expect(collapsed.document.messages).toHaveLength(0);
   expect(JSON.stringify(d)).toBe(before);
 });
+
+it("keeps local actions out of message rendering without a missing receiver claim", () => {
+  const d = JSON.parse(source) as BackendInteractionDocument;
+  d.payload.steps = [
+    { ...d.payload.steps[0]!, kind: "action", to: undefined, replyTo: undefined, branchPath: [] },
+  ];
+  d.payload.order = [];
+  d.payload.branches = [];
+  const canvas = interactionCanvas(d.payload, []);
+  expect(canvas.document.messages).toHaveLength(0);
+  expect(canvas.boundaries[0]?.reason).toBe("Локальное действие участника");
+});

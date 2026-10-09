@@ -231,3 +231,149 @@ it.each([
   await userEvent.click(screen.getByText("Показать код", { exact: true }));
   expect(source.querySelector("code")?.textContent).toBe(nativeText);
 });
+
+it("opens each exact source ref of an authored action without removed tabs", async () => {
+  const second = "0197aaf9-5555-7000-8000-000000000099";
+  workspaceHTTP((path) =>
+    path.endsWith(`/nodes/${nodeId}`) || path.endsWith(`/nodes/${second}`)
+      ? json(200, {
+          ...step,
+          id: path.endsWith(second) ? second : nodeId,
+          name: path.endsWith(second) ? "Проверка настройки" : "Выдача ссылки",
+          attributes: { nativeText: "source" },
+          evidenceIds: [],
+        })
+      : undefined,
+  );
+  const navigate = vi.fn();
+  renderWithProviders(
+    <Inspector
+      projectId={projectId}
+      target={{ revisionId }}
+      targetHash={"a".repeat(64)}
+      search={{ revisionId }}
+      id="semantic"
+      node={{
+        ...step,
+        id: "semantic",
+        kind: "action",
+        refs: [
+          { kind: "record", recordType: "node", id: nodeId },
+          { kind: "record", recordType: "node", id: second },
+        ],
+      }}
+      onClose={vi.fn()}
+      onEnter={vi.fn()}
+      onNavigate={navigate}
+    />,
+  );
+  await userEvent.click(screen.getByText("Основания сценария · 2", { exact: true }));
+  await userEvent.click(await screen.findByRole("button", { name: /Проверка настройки/ }));
+  expect(navigate).toHaveBeenCalledWith(
+    expect.objectContaining({ revisionId, recordId: second, recordType: "node" }),
+  );
+  expect(screen.queryByRole("tablist")).not.toBeInTheDocument();
+});
+
+it("shows exact file evidence for a source symbol without a nativeText attribute", async () => {
+  workspaceHTTP((path) =>
+    path.endsWith(`/nodes/${nodeId}`)
+      ? json(200, {
+          ...step,
+          kind: "symbol",
+          attributes: { description: "Source declaration" },
+          evidenceIds: ["proof"],
+        })
+      : path.endsWith("/evidence")
+        ? json(200, {
+            items: [
+              {
+                id: "proof",
+                subjectId: nodeId,
+                method: "ast",
+                status: "explicit",
+                source: {
+                  repositoryId: projectId,
+                  snapshotId: revisionId,
+                  file: "internal/domain/litres/service.go",
+                  contentHash: "a".repeat(64),
+                  startLine: 49,
+                  endLine: 72,
+                },
+                explanation: "Explicit function",
+                snippet: "func Authorize() {}",
+              },
+            ],
+            nextCursor: "",
+          })
+        : undefined,
+  );
+  renderWithProviders(
+    <Inspector
+      projectId={projectId}
+      target={{ revisionId }}
+      search={{ revisionId }}
+      id={nodeId}
+      node={{ ...step, kind: "symbol", attributes: {} }}
+      onClose={vi.fn()}
+      onEnter={vi.fn()}
+      onNavigate={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText("internal/domain/litres/service.go:49–72")).toBeVisible();
+  await userEvent.click(screen.getByText("Показать код", { exact: true }));
+  expect(screen.getByText("func Authorize() {}", { exact: true })).toBeVisible();
+});
+
+it("opens a semantic edge reference without treating its ID as a node scope", async () => {
+  const edgeId = "0197aaf9-5555-7000-8000-000000000066";
+  workspaceHTTP((path) =>
+    path.endsWith("/graph/query")
+      ? json(200, {
+          nodes: [],
+          edges: [
+            {
+              id: edgeId,
+              kind: "calls",
+              from: nodeId,
+              to: projectId,
+              attributes: {},
+              evidenceIds: [],
+            },
+          ],
+          total: 1,
+          nextCursor: "",
+        })
+      : undefined,
+  );
+  const navigate = vi.fn();
+  renderWithProviders(
+    <Inspector
+      projectId={projectId}
+      target={{ revisionId }}
+      targetHash={"a".repeat(64)}
+      search={{ revisionId }}
+      id="semantic"
+      node={{
+        ...step,
+        id: "semantic",
+        kind: "action",
+        refs: [{ kind: "record", recordType: "edge", id: edgeId }],
+      }}
+      onClose={vi.fn()}
+      onEnter={vi.fn()}
+      onNavigate={navigate}
+    />,
+  );
+  await userEvent.click(screen.getByText("Основания сценария · 1", { exact: true }));
+  await userEvent.click(await screen.findByRole("button", { name: "Связь: calls" }));
+  expect(navigate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      revisionId,
+      wbMode: "overview",
+      recordId: edgeId,
+      recordType: "edge",
+    }),
+  );
+  expect(navigate.mock.calls[0]?.[0].wbScope).toBeUndefined();
+});

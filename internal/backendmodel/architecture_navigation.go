@@ -7,6 +7,7 @@ import (
 )
 
 const ArchitectureNavigationVersion = "architecture-navigation-v1"
+const CompanionNavigationVersion = "architecture-navigation-v2"
 
 type ArchitectureNavigation struct {
 	Target  *BackendReadTarget `json:"target,omitzero"`
@@ -29,9 +30,24 @@ func (n *ArchitectureNavigation) UnmarshalJSON(raw []byte) error {
 	return n.Validate()
 }
 func (n ArchitectureNavigation) Validate() error {
-	if n.Format != ArchitectureNavigationVersion || !validAPIText(n.Label, 1, 256) {
+	if !validAPIText(n.Label, 1, 256) {
 		return invalid("navigation", "Use architecture-navigation-v1 and a bounded label")
 	}
+	if n.Format == CompanionNavigationVersion {
+		return n.validateCompanion()
+	}
+	if n.Format != ArchitectureNavigationVersion {
+		return invalid("navigation/format", "Unsupported navigation format")
+	}
+	return n.validateLegacy()
+}
+func (n ArchitectureNavigation) validateCompanion() error {
+	if !slices.Contains([]string{"interactions", "lifecycle", "business_map"}, n.Kind) || n.Diagram == nil || n.Target != nil || n.FlowID != "" || n.Level != "" || n.RootID != "" || n.FocusID != "" && !ValidID(n.FocusID) {
+		return invalid("navigation", "Companion navigation requires only an exact diagram pin and optional element focus")
+	}
+	return n.Diagram.Validate()
+}
+func (n ArchitectureNavigation) validateLegacy() error {
 	switch n.Kind {
 	case "diagram":
 		if n.Target != nil {
@@ -161,6 +177,18 @@ func navigationDestination(ctx context.Context, q importReader, pid, targetHash 
 		}
 		loaded[pin] = child
 	}
+	if entry.Format == CompanionNavigationVersion {
+		if child.Document.Kind != entry.Kind {
+			return "navigation_wrong_kind", nil
+		}
+		if child.TargetHash != targetHash {
+			return "navigation_historical_target", nil
+		}
+		if entry.FocusID != "" && !companionFocusExists(child.Document, entry.FocusID) {
+			return "", invalid("navigation/focusId", "Focus must be a visible element in the exact companion")
+		}
+		return "", nil
+	}
 	if child.Document.Kind != "architecture" {
 		return "navigation_wrong_kind", nil
 	}
@@ -187,4 +215,16 @@ func validateNavigationRoot(document DiagramDocument, entry ArchitectureNavigati
 		return invalid("navigation/focusId", "Focus must belong to the exact destination application")
 	}
 	return nil
+}
+
+func companionFocusExists(d DiagramDocument, id string) bool {
+	switch d.Kind {
+	case "interactions":
+		return slices.ContainsFunc(d.Interactions.Steps, func(s InteractionStep) bool { return s.ID == id })
+	case "lifecycle":
+		return slices.ContainsFunc(d.Lifecycle.States, func(s LifecycleState) bool { return s.ID == id })
+	case "business_map":
+		return slices.ContainsFunc(d.BusinessMap.Elements, func(e BusinessElement) bool { return e.ID == id })
+	}
+	return false
 }

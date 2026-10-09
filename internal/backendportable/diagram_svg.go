@@ -326,6 +326,9 @@ func svgRow(r bm.DiagramRow) (*svgNode, *svgEdge, error) {
 		return &svgNode{id: v.ID, label: v.Label, detail: origin(v.Origin)}, nil, nil
 	case r.Step != nil:
 		v := r.Step
+		if v.Kind == "action" {
+			return &svgNode{id: v.ID, label: v.Label, detail: "local action; participant=" + v.From + "; branches=" + strings.Join(v.BranchPath, ",") + "; " + origin(v.Origin)}, nil, nil
+		}
 		return &svgNode{id: v.ID, label: v.Label, detail: v.Kind + " " + v.From + " → " + v.To + "; replyTo=" + v.ReplyTo + "; branches=" + strings.Join(v.BranchPath, ",") + "; " + origin(v.Origin)}, nil, nil
 	case r.Branch != nil:
 		v := r.Branch

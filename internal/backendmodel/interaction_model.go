@@ -2,6 +2,10 @@ package backendmodel
 
 import "encoding/json/v2"
 
+func InteractionStepKinds() []string {
+	return []string{"request", "response", "send", "receive", "error", "boundary", "action"}
+}
+
 type InteractionParticipant struct {
 	ID                    string        `json:"id"`
 	Label                 string        `json:"label"`

@@ -131,8 +131,14 @@ export function mapDiagram(
           e.kind,
           e.origin,
           e.refs,
-          `${doc.payload.participants.find((p) => p.id === e.from)?.label ?? "Участник"} → ${doc.payload.participants.find((p) => p.id === e.to)?.label ?? "Граница"}`,
+          (e.kind === "action"
+            ? (doc.payload.participants.find((p) => p.id === e.from)?.label ?? "Участник")
+            : `${doc.payload.participants.find((p) => p.id === e.from)?.label ?? "Участник"} → ${doc.payload.participants.find((p) => p.id === e.to)?.label ?? "Граница"}`) +
+            (e.origin.kind === "authored" ? ` · ${e.origin.reason}` : ""),
         ),
+        badge: branches.length
+          ? branches.at(-1)?.guardText || branches.at(-1)?.label || "Условие неизвестно"
+          : undefined,
         details: {
           ...(branches.length
             ? {
@@ -160,7 +166,17 @@ export function mapDiagram(
       kind: "order",
       from: e.from,
       to: e.to,
-      label: "Заявленный порядок",
+      label:
+        doc.payload.steps
+          .find((step) => step.id === e.to)
+          ?.branchPath.filter(
+            (id) => !doc.payload.steps.find((step) => step.id === e.from)?.branchPath.includes(id),
+          )
+          .map((id) => doc.payload.branches.find((b) => b.id === id))
+          .map((b) =>
+            b ? [b.label, b.guardText].filter(Boolean).join(" · ") : "Условие неизвестно",
+          )
+          .join(" / ") || "Далее",
       origin: origin(e.origin),
     }));
   }
@@ -618,7 +634,14 @@ export function DiagramMap({
             edges={presented.edges}
             selection={selection}
             camera={nav.presentation.camera}
-            startId={search.diagramFocus}
+            startId={
+              doc.kind === "interactions"
+                ? doc.payload.steps.find(
+                    (step) => !doc.payload.order.some((edge) => edge.to === step.id),
+                  )?.id
+                : search.diagramFocus
+            }
+            readable={doc.kind === "interactions"}
             onCamera={nav.updateCamera}
             onSelect={select}
             onEnter={enter}

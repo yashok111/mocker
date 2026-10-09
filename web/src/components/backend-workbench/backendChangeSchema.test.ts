@@ -8,7 +8,7 @@ describe("full command form contract", () => {
     for (const [name, schema] of Object.entries(backendChangeSchemas)) {
       expect(schema, name).toEqual(document.components.schemas[name]);
     }
-    expect(backendChangeSchemas.BackendChangeProposalCommand!.oneOf).toHaveLength(72);
+    expect(backendChangeSchemas.BackendChangeProposalCommand!.oneOf).toHaveLength(73);
   });
   it("includes the complete local dependency closure", () => {
     function walk(value: unknown) {

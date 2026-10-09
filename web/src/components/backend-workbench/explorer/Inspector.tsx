@@ -9,6 +9,7 @@ import type { BackendWorkspaceSearch } from "../backendWorkspaceSearch";
 import { nodeOf } from "./reads";
 import { resolvedTargetSearch } from "./navigation";
 import { kindName, nodeSubtitle, type MapNode, type MapEdge } from "./model";
+import { SemanticEvidence } from "./SemanticEvidence";
 import { nativeSources } from "./nativeSources";
 import styles from "./Explorer.module.css";
 export function Inspector({
@@ -95,7 +96,7 @@ export function Inspector({
   const snippets = nativeSources(
     raw && "attributes" in raw ? raw.attributes : selected?.attributes,
   );
-  const showSource = snippets.length > 0 || selected?.kind === "flow_step";
+  const showSource = snippets.length > 0 || selected?.kind === "flow_step" || source;
   const evidence = useQuery({
     queryKey: ["workbench-evidence", projectId, backendReadTargetKey(evidenceTarget), id],
     enabled: source && showSource,
@@ -104,6 +105,11 @@ export function Inspector({
     queryFn: ({ signal }) =>
       readBackendEvidence(projectId, evidenceTarget, { subjectId: id, limit: 20 }, signal),
   });
+  const displayedSnippets = snippets.length
+    ? snippets
+    : (evidence.data?.items.flatMap((item) =>
+        item.snippet ? [{ field: item.id, label: "Доказательство", text: item.snippet }] : [],
+      ) ?? []);
   const locations = [
     ...new Map(
       evidence.data?.items.map((item) => [JSON.stringify(item.source), item.source]),
@@ -238,6 +244,23 @@ export function Inspector({
           )}
         </div>
       )}
+      {!!(selected?.refs ?? edge?.refs)?.length && (
+        <SemanticEvidence
+          key={id}
+          projectId={projectId}
+          target={evidenceTarget}
+          refs={selected?.refs ?? edge?.refs ?? []}
+          onNavigate={onNavigate}
+        />
+      )}
+      {!!selected?.attributes.provenance &&
+        typeof selected.attributes.provenance === "object" &&
+        "reason" in selected.attributes.provenance &&
+        !selected.description.includes(String(selected.attributes.provenance.reason)) && (
+          <Text size="sm" mt="sm">
+            {String(selected.attributes.provenance.reason)}
+          </Text>
+        )}
       {showSource && (
         <section className={styles.sourceCode} aria-label="Исходный код">
           <Text component="h3" size="xs" fw={600} mb={6}>
@@ -252,13 +275,13 @@ export function Inspector({
               </Button>
             </Text>
           )}
-          {snippets.map(({ field, label, text }) => (
+          {displayedSnippets.map(({ field, label, text }) => (
             <details
               key={`${id}:${backendReadTargetKey(evidenceTarget)}:${field}`}
               className={styles.sourceCodeDetails}
             >
               <summary>
-                {snippets.length === 1 ? "Показать код" : `Показать код · ${label}`}
+                {displayedSnippets.length === 1 ? "Показать код" : `Показать код · ${label}`}
               </summary>
               {/* oxlint-disable jsx-a11y/no-noninteractive-tabindex -- The bounded code pane must support keyboard scrolling. */}
               <pre

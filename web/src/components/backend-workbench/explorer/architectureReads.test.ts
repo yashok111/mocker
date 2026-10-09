@@ -117,3 +117,115 @@ it("does not borrow names or hide diagrams through a stale navigation pin", asyn
   expect(choices[1]?.name).not.toBe("Достижения — Операции и сценарии области");
   expect(choices[1]).not.toHaveProperty("nested", true);
 });
+
+it("includes a named companion in the same complete scheme list", async () => {
+  const d = diagram(childPin);
+  d.document = {
+    format: "backend-diagram-v1",
+    kind: "interactions",
+    target: { revisionId },
+    payload: { scopeRefs: [], participants: [], steps: [], branches: [], order: [] },
+  };
+  workspaceHTTP((path) =>
+    path.endsWith("/diagrams")
+      ? json(200, {
+          catalogVersion: 1,
+          items: [
+            {
+              id: childPin.id,
+              pin: childPin,
+              kind: "interactions",
+              name: "Получить ссылку",
+              target: { revisionId },
+              targetHash: d.targetHash,
+            },
+          ],
+          nextCursor: "",
+        })
+      : path.endsWith(`/diagrams/${childPin.id}/versions/1`)
+        ? json(200, d)
+        : path.endsWith("/diagram-views")
+          ? json(200, {
+              catalogVersion: 1,
+              items: [{ id: viewId, version: 1, kind: "interactions" }],
+              nextCursor: "",
+            })
+          : path.endsWith(`/diagram-views/${viewId}/versions/1`)
+            ? json(200, {
+                id: viewId,
+                version: 1,
+                name: "Литрес — получить ссылку",
+                state: { diagram: childPin },
+              })
+            : undefined,
+  );
+  const result = await readArchitectureChoices(
+    projectId,
+    { revisionId },
+    undefined,
+    [],
+    new AbortController().signal,
+  );
+  expect(result).toHaveLength(1);
+  expect(result[0]).toMatchObject({
+    name: "Литрес — получить ссылку",
+    search: { diagramViewId: viewId, diagramViewVersion: 1, wbView: "scenarios" },
+  });
+});
+
+it("keeps a companion mapped through step refs when a responsibility has multiple members", async () => {
+  const d = diagram(childPin);
+  d.document = {
+    format: "backend-diagram-v1",
+    kind: "interactions",
+    target: { revisionId },
+    payload: {
+      scopeRefs: [],
+      participants: [],
+      steps: [
+        {
+          id: "step",
+          label: "Meaningful action",
+          kind: "action",
+          from: "actor",
+          branchPath: [],
+          origin: { kind: "authored", reason: "Source mapping" },
+          refs: [{ kind: "record", recordType: "node", id: "member-one" }],
+        },
+      ],
+      branches: [],
+      order: [],
+    },
+  };
+  workspaceHTTP((path) =>
+    path.endsWith("/diagrams")
+      ? json(200, {
+          catalogVersion: 1,
+          items: [
+            {
+              id: childPin.id,
+              pin: childPin,
+              kind: "interactions",
+              name: "Scenario",
+              target: { revisionId },
+              targetHash: d.targetHash,
+            },
+          ],
+          nextCursor: "",
+        })
+      : path.endsWith(`/diagrams/${childPin.id}/versions/1`)
+        ? json(200, d)
+        : path.endsWith("/diagram-views")
+          ? json(200, { catalogVersion: 1, items: [], nextCursor: "" })
+          : undefined,
+  );
+  const result = await readArchitectureChoices(
+    projectId,
+    { revisionId },
+    undefined,
+    ["member-one", "member-two"],
+    new AbortController().signal,
+  );
+  expect(result).toHaveLength(1);
+  expect(result[0]?.search.diagramId).toBe(childPin.id);
+});

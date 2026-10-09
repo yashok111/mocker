@@ -319,3 +319,35 @@ func TestInteractionsComparisonMetadataCannotShadowSemanticIdentity(t *testing.T
 		t.Fatalf("metadata shadowed semantic addition: %+v", reverse.Items)
 	}
 }
+
+func TestInteractionsLocalActionHasNoReceiverGap(t *testing.T) {
+	r, _ := testRepo(t)
+	p := createProject(t, r, "local-action")
+	doc := interactionFixture(t)
+	doc.Target = BackendReadTarget{RevisionID: p.CurrentRevisionID}
+	action := &doc.Interactions.Steps[3]
+	action.Kind, action.To, action.ReplyTo = "action", "", ""
+	action.Label = "Проверить, настроена ли ссылка"
+	v, err := r.CreateDiagram(t.Context(), p.ID, DiagramCreateInput{Document: doc, IdempotencyKey: "action"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.ContainsFunc(v.Gaps, func(g DiagramGap) bool { return g.SubjectID == action.ID && g.Code == "unresolved_receiver" }) {
+		t.Fatal("local action gained a receiver gap")
+	}
+	for _, field := range []string{"to", "replyTo"} {
+		t.Run(field, func(t *testing.T) {
+			bad := doc
+			bad.Interactions = new(*doc.Interactions)
+			bad.Interactions.Steps = slices.Clone(doc.Interactions.Steps)
+			if field == "to" {
+				bad.Interactions.Steps[3].To = doc.Interactions.Participants[0].ID
+			} else {
+				bad.Interactions.Steps[3].ReplyTo = doc.Interactions.Steps[0].ID
+			}
+			if err := bad.Validate(); err == nil {
+				t.Fatal("action accepted message fields")
+			}
+		})
+	}
+}
