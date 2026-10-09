@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"1\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"import-candidate-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-sync\",\"backend-source-incremental-sync\",\"backend-source-assertions\",\"backend-import-candidate\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\"]"
-  guideSetId: "sha256:261e46b06f1d483cc3dc47cdcbd3277bf946d36dae105da0a458fafa2a65ff1c"
-  manifestHash: "sha256:261e46b06f1d483cc3dc47cdcbd3277bf946d36dae105da0a458fafa2a65ff1c"
+  guideSetId: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
+  manifestHash: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
 ---
 
 # Synchronize a composed source

@@ -437,6 +437,38 @@ export function DiagramMap({
             ? (systems.find((s) => s.id === root)?.label ?? "Структура приложения")
             : data.title}
         </h2>
+        {elements.data?.cache?.status === "not_retained" && (
+          <Alert color="yellow" mx="xl" my="xs">
+            Эта карта превышает лимит кэша ({Math.round(elements.data.cache.limitBytes / 1048576)}{" "}
+            MiB). Повторное чтение потребует построить её заново.
+          </Alert>
+        )}
+        {saved && (saved.search || saved.origin !== "all") && (
+          <Alert color="blue" mx="xl" my="xs" title="Активные фильтры сохранённого вида">
+            {[
+              saved.search && `Поиск: «${saved.search}»`,
+              saved.origin !== "all" &&
+                `Основание: ${saved.origin === "authored" ? "авторское" : "исходный код"}`,
+            ]
+              .filter(Boolean)
+              .join(" · ")}
+            . Фильтр может скрывать концы связей.
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() =>
+                onNavigate({
+                  ...diagramSearch(diagram.pin),
+                  wbView: search.wbView,
+                  diagramLevel: level,
+                  diagramRoot: root,
+                })
+              }
+            >
+              Открыть без фильтров
+            </Button>
+          </Alert>
+        )}
         {!!saved?.collapsedIds.length && (
           <Button
             variant="subtle"

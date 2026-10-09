@@ -199,7 +199,11 @@ func (p *eventsProjection) jobs() error {
 		}
 		r := EventsReferences{JobID: id}
 		if w.Status != "explicit" {
-			p.items = append(p.items, eventsOrderedItem{key: id, item: EventsItem{Kind: "boundary", Boundary: &EventsBoundaryItem{View: "jobs", Reason: "Configured job dispatch has unavailable source proof", References: r, Trigger: &trigger, Dispatch: dispatch, Related: []EventsRelatedRoute{}, Witness: w}}})
+			reason := "Configured job dispatch has unavailable source proof"
+			if slices.ContainsFunc(dispatch, func(d EventsDispatch) bool { return len(d.FlowIDs) > 0 }) {
+				reason = "Configured job binding is known; downstream behavior remains qualified"
+			}
+			p.items = append(p.items, eventsOrderedItem{key: id, item: EventsItem{Kind: "boundary", Boundary: &EventsBoundaryItem{View: "jobs", Reason: reason, References: r, Trigger: &trigger, Dispatch: dispatch, Related: []EventsRelatedRoute{}, Witness: w}}})
 		} else {
 			p.items = append(p.items, eventsOrderedItem{key: id, item: EventsItem{Kind: "job", Job: &EventsJobItem{References: r, Trigger: trigger, Dispatch: dispatch, Witness: w}}})
 		}

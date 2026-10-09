@@ -44,7 +44,7 @@ func SupportedEdgeKindsForProfile(profile string) []string {
 	case LineageProfile:
 		return SupportedEdgeKindsForProfile(RuntimeProfile)
 	case RuntimeProfile:
-		return append(SupportedEdgeKindsForProfile(RelationalProfile), "next", "branch", "error", "returns", "reads", "writes", "deletes", "begins", "commits", "rolls_back")
+		return append(SupportedEdgeKindsForProfile(RelationalProfile), "next", "branch", "error", "returns", "reads", "writes", "deletes", "begins", "commits", "rolls_back", "callback_argument")
 	default:
 		return nil
 	}

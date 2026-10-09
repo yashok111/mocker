@@ -13357,6 +13357,9 @@
           "updatedAt": {
             "type": "string",
             "format": "date-time"
+          },
+          "startView": {
+            "$ref": "#/components/schemas/BackendProjectStartView"
           }
         }
       },
@@ -13633,6 +13636,12 @@
           },
           {
             "$ref": "#/components/schemas/RemoveBackendAnnotationCommand"
+          },
+          {
+            "$ref": "#/components/schemas/SetBackendProjectStartViewCommand"
+          },
+          {
+            "$ref": "#/components/schemas/ClearBackendProjectStartViewCommand"
           }
         ]
       },
@@ -15016,6 +15025,20 @@
                 "items": {
                   "const": "exact-node-scope-v1"
                 }
+              },
+              "gapClassifications": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "in_scope",
+                    "boundary",
+                    "unrelated",
+                    "collapsed_internal",
+                    "unqualified"
+                  ]
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -15312,7 +15335,8 @@
           "emits",
           "delivered_to",
           "retries",
-          "dead_letters"
+          "dead_letters",
+          "callback_argument"
         ]
       },
       "BackendProvider": {
@@ -15864,7 +15888,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -15909,7 +15934,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -15954,7 +15980,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -15999,7 +16026,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16044,7 +16072,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16089,7 +16118,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16134,7 +16164,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16179,7 +16210,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16224,7 +16256,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16269,7 +16302,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16314,7 +16348,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16359,7 +16394,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16404,7 +16440,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16449,7 +16486,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16494,7 +16532,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16539,7 +16578,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16585,7 +16625,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16631,7 +16672,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16677,7 +16719,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16723,7 +16766,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16769,7 +16813,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16815,7 +16860,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16860,7 +16906,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16905,7 +16952,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16950,7 +16998,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -16995,7 +17044,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -17040,7 +17090,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           }
@@ -18694,7 +18745,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -18742,7 +18794,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -18790,7 +18843,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -18838,7 +18892,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -18886,7 +18941,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -18934,7 +18990,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -18982,7 +19039,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19030,7 +19088,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19078,7 +19137,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19126,7 +19186,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19174,7 +19235,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19222,7 +19284,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19270,7 +19333,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19318,7 +19382,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19366,7 +19431,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -19414,7 +19480,57 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromKey",
+              "toKey",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "callback_argument"
+              },
+              "fromKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "toKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendCallbackArgumentAttributes"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                },
+                "uniqueItems": true
               }
             }
           }
@@ -20304,6 +20420,62 @@
               },
               "attributes": {
                 "$ref": "#/components/schemas/BackendEventsDeadLettersAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "ownership": {
+                "$ref": "#/components/schemas/BackendAssertionOwnership"
+              },
+              "freshness": {
+                "$ref": "#/components/schemas/BackendAssertionFreshness"
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "externalKey",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "callback_argument"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendCallbackArgumentAttributes"
               },
               "evidenceIds": {
                 "type": "array",
@@ -23329,7 +23501,8 @@
               "minLength": 1,
               "maxLength": 200,
               "pattern": "^[^\\p{Cc}]+$"
-            }
+            },
+            "uniqueItems": true
           }
         }
       },
@@ -47993,6 +48166,26 @@
           },
           "witness": {
             "$ref": "#/components/schemas/BackendEventsWitness"
+          },
+          "diagnostics": {
+            "type": "array",
+            "maxItems": 256,
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatchDiagnostic"
+            }
+          },
+          "sourceFlowIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256,
+            "description": "Separately stored lexical bodies, not verified dispatch. Inspect without inventing an entrypoint binding."
           }
         }
       },
@@ -50004,7 +50197,8 @@
               "maxLength": 200,
               "pattern": "^[^\\p{Cc}]+$"
             },
-            "minItems": 1
+            "minItems": 1,
+            "uniqueItems": true
           }
         }
       },
@@ -50378,7 +50572,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50420,7 +50615,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50462,7 +50658,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50504,7 +50701,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50546,7 +50744,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50588,7 +50787,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50630,7 +50830,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50672,7 +50873,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50714,7 +50916,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50756,7 +50959,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50798,7 +51002,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50840,7 +51045,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50882,7 +51088,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50924,7 +51131,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -50966,7 +51174,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -51008,7 +51217,51 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
+              }
+            }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "externalKey",
+              "kind",
+              "fromRef",
+              "toRef",
+              "attributes",
+              "evidenceKeys"
+            ],
+            "properties": {
+              "externalKey": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 200,
+                "pattern": "^[^\\p{Cc}]+$"
+              },
+              "kind": {
+                "type": "string",
+                "const": "callback_argument"
+              },
+              "fromRef": {
+                "$ref": "#/components/schemas/BackendImportRecordRef"
+              },
+              "toRef": {
+                "$ref": "#/components/schemas/BackendImportRecordRef"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendCallbackArgumentAttributes"
+              },
+              "evidenceKeys": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 200,
+                  "pattern": "^[^\\p{Cc}]+$"
+                },
+                "uniqueItems": true
               }
             }
           }
@@ -54210,7 +54463,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54252,7 +54506,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54294,7 +54549,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54336,7 +54592,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54378,7 +54635,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54420,7 +54678,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54462,7 +54721,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54504,7 +54764,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54546,7 +54807,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54588,7 +54850,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54630,7 +54893,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54672,7 +54936,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54714,7 +54979,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54756,7 +55022,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54798,7 +55065,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54840,7 +55108,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54883,7 +55152,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54926,7 +55196,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -54969,7 +55240,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55012,7 +55284,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55055,7 +55328,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55098,7 +55372,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55140,7 +55415,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55182,7 +55458,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55224,7 +55501,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55266,7 +55544,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55308,7 +55587,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55351,7 +55631,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55394,7 +55675,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55437,7 +55719,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           },
@@ -55480,7 +55763,8 @@
                   "minLength": 1,
                   "maxLength": 200,
                   "pattern": "^[^\\p{Cc}]+$"
-                }
+                },
+                "uniqueItems": true
               }
             }
           }
@@ -62049,6 +62333,53 @@
                 "$ref": "#/components/schemas/BackendSourceReadContext"
               }
             }
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "kind",
+              "from",
+              "to",
+              "attributes",
+              "evidenceIds",
+              "source"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "kind": {
+                "type": "string",
+                "const": "callback_argument"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendCallbackArgumentAttributes"
+              },
+              "evidenceIds": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "format": "uuid"
+                }
+              },
+              "facetComparison": {
+                "$ref": "#/components/schemas/BackendFacetComparison"
+              },
+              "source": {
+                "$ref": "#/components/schemas/BackendSourceReadContext"
+              }
+            }
           }
         ]
       },
@@ -62673,6 +63004,46 @@
               },
               "attributes": {
                 "$ref": "#/components/schemas/BackendEventsDeadLettersAttributes"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              }
+            },
+            "required": [
+              "recordType",
+              "kind",
+              "attributes",
+              "from",
+              "to"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "recordType": {
+                "type": "string",
+                "const": "edge"
+              },
+              "kind": {
+                "type": "string",
+                "const": "callback_argument"
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendCallbackArgumentAttributes"
               },
               "from": {
                 "type": "string",
@@ -66938,7 +67309,8 @@
                   "emits",
                   "delivered_to",
                   "retries",
-                  "dead_letters"
+                  "dead_letters",
+                  "callback_argument"
                 ]
               }
             },
@@ -67086,7 +67458,8 @@
                   "emits",
                   "delivered_to",
                   "retries",
-                  "dead_letters"
+                  "dead_letters",
+                  "callback_argument"
                 ]
               }
             },
@@ -67150,7 +67523,8 @@
                   "emits",
                   "delivered_to",
                   "retries",
-                  "dead_letters"
+                  "dead_letters",
+                  "callback_argument"
                 ]
               },
               "from": {
@@ -72148,6 +72522,70 @@
               "reason",
               "criteria"
             ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "upsert_edge"
+              },
+              "commandId": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "reason": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "kind": {
+                "type": "string",
+                "const": "callback_argument"
+              },
+              "from": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "to": {
+                "type": "string",
+                "format": "uuid",
+                "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+                "not": {
+                  "const": "00000000-0000-0000-0000-000000000000"
+                }
+              },
+              "attributes": {
+                "$ref": "#/components/schemas/BackendCallbackArgumentAttributes"
+              }
+            },
+            "required": [
+              "type",
+              "commandId",
+              "reason",
+              "id",
+              "kind",
+              "from",
+              "to",
+              "attributes"
+            ]
           }
         ]
       },
@@ -74428,6 +74866,26 @@
           },
           "witness": {
             "$ref": "#/components/schemas/BackendPinnedEventsWitness"
+          },
+          "diagnostics": {
+            "type": "array",
+            "maxItems": 256,
+            "items": {
+              "$ref": "#/components/schemas/BackendEventsDispatchDiagnostic"
+            }
+          },
+          "sourceFlowIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256,
+            "description": "Separately stored lexical bodies, not verified dispatch. Inspect without inventing an entrypoint binding."
           }
         }
       },
@@ -81837,6 +82295,17 @@
           },
           "gapScope": {
             "$ref": "#/components/schemas/BackendArchitectureGapScope"
+          },
+          "gapClassification": {
+            "type": "string",
+            "enum": [
+              "in_scope",
+              "boundary",
+              "unrelated",
+              "collapsed_internal",
+              "unqualified"
+            ],
+            "description": "Filter gap detail only; requires gapScope and section=gaps. The complete gap summary is unchanged."
           }
         },
         "required": [
@@ -82057,6 +82526,9 @@
           },
           "gapSummary": {
             "$ref": "#/components/schemas/BackendDiagramGapSummary"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/BackendArchitectureCacheStatus"
           }
         },
         "required": [
@@ -89439,6 +89911,17 @@
           },
           "gapScope": {
             "$ref": "#/components/schemas/BackendArchitectureGapScope"
+          },
+          "gapClassification": {
+            "type": "string",
+            "enum": [
+              "in_scope",
+              "boundary",
+              "unrelated",
+              "collapsed_internal",
+              "unqualified"
+            ],
+            "description": "Filter gap detail only; requires gapScope and section=gaps. The complete gap summary is unchanged."
           }
         },
         "required": [
@@ -89484,6 +89967,9 @@
           "documentHash": {
             "type": "string",
             "pattern": "^[a-f0-9]{64}$"
+          },
+          "cache": {
+            "$ref": "#/components/schemas/BackendArchitectureCacheStatus"
           }
         },
         "required": [
@@ -90610,6 +91096,175 @@
           }
         },
         "description": "Explicit intended scope, independent of membership. Nodes must belong to the exact target. Bound to cursor/cache context; does not hide gaps."
+      },
+      "BackendArchitectureCacheStatus": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "status",
+          "limitBytes"
+        ],
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "retained",
+              "not_retained"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "enum": [
+              "byte_budget"
+            ]
+          },
+          "limitBytes": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "BackendEventsDispatchDiagnostic": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "gate",
+          "recordType",
+          "subjectId",
+          "status",
+          "evidenceIds"
+        ],
+        "properties": {
+          "gate": {
+            "type": "string",
+            "enum": [
+              "origin_proof",
+              "handler_proof",
+              "handles_proof",
+              "flow_proof",
+              "flow_ownership_proof",
+              "missing_binding",
+              "missing_flow"
+            ]
+          },
+          "recordType": {
+            "type": "string",
+            "enum": [
+              "node",
+              "edge"
+            ]
+          },
+          "subjectId": {
+            "type": "string",
+            "format": "uuid",
+            "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+            "not": {
+              "const": "00000000-0000-0000-0000-000000000000"
+            }
+          },
+          "status": {
+            "$ref": "#/components/schemas/BackendPinnedEventsStatus"
+          },
+          "evidenceIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid",
+              "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+              "not": {
+                "const": "00000000-0000-0000-0000-000000000000"
+              }
+            },
+            "maxItems": 256
+          }
+        }
+      },
+      "BackendCallbackArgumentAttributes": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "argumentPosition",
+          "invocationKnowledge",
+          "reason"
+        ],
+        "properties": {
+          "argumentPosition": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 65535
+          },
+          "invocationKnowledge": {
+            "type": "string",
+            "const": "unknown"
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 4096
+          },
+          "description": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        }
+      },
+      "BackendProjectStartView": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id",
+          "version"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "saved_view",
+              "diagram_view"
+            ]
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 1
+          }
+        }
+      },
+      "SetBackendProjectStartViewCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type",
+          "startView"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "set_start_view"
+          },
+          "startView": {
+            "$ref": "#/components/schemas/BackendProjectStartView"
+          }
+        }
+      },
+      "ClearBackendProjectStartViewCommand": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "type"
+        ],
+        "properties": {
+          "type": {
+            "type": "string",
+            "const": "clear_start_view"
+          }
+        }
       }
     }
   },

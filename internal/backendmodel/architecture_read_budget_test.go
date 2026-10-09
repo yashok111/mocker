@@ -74,6 +74,27 @@ func TestArchitectureReadCacheOversizeEvictsWithoutRetention(t *testing.T) {
 		if cache.projection != nil || cache.key != "" {
 			t.Fatal("oversize projection was retained")
 		}
+		page, err := architecturePage(t.Context(), &DiagramVersion{}, p, DiagramQueryInput{Section: "elements", Origin: "all", Limit: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(page)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var envelope struct {
+			Cache struct {
+				Status     string `json:"status"`
+				Reason     string `json:"reason"`
+				LimitBytes int    `json:"limitBytes"`
+			} `json:"cache"`
+		}
+		if err := json.Unmarshal(raw, &envelope); err != nil {
+			t.Fatal(err)
+		}
+		if envelope.Cache.Status != "not_retained" || envelope.Cache.Reason != "byte_budget" || envelope.Cache.LimitBytes <= 0 {
+			t.Fatalf("readable uncached projection lacks retention explanation: %+v", envelope.Cache)
+		}
 	}
 	if loads != 2 {
 		t.Fatalf("oversize reads unexpectedly reused retained data: %d builds", loads)

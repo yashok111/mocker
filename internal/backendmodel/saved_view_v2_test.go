@@ -13,6 +13,21 @@ import (
 func savedV2FlowState() SavedViewState {
 	return SavedViewState{Flow: &SavedFlowViewState{Kind: "flow", Filters: SavedFlowViewFilters{}, Positions: []SavedViewPosition{}, CollapsedGroupIDs: []string{}}}
 }
+
+func TestSavedViewV2Source5UsesBoundedNativeRead(t *testing.T) {
+	r, base, _ := effectiveFiveRelationalFixture(t)
+	reader, writer := diagramCountReads(t, r)
+	view, err := r.CreateSavedView(t.Context(), base.Project.ID, CreateSavedViewInput{DocumentVersion: SavedViewV2DocumentVersion, Name: "Source5", Target: BackendReadTarget{RevisionID: base.Revision.ID}, State: savedV2FlowState(), IdempotencyKey: "native-v2"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if view.Pins.Effective == nil || view.Pins.Effective.BaseRevisionID != base.Revision.ID {
+		t.Fatal("effective pins lost")
+	}
+	if reader.reads.Load() > 25 || writer.reads.Load() > 40 {
+		t.Fatalf("source5 view bootstrapped proof bases: reader=%d writer=%d", reader.reads.Load(), writer.reads.Load())
+	}
+}
 func TestSavedViewV2FullDraftExactHistoryAndReplay(t *testing.T) {
 	t.Parallel()
 	r, base, initial := changeFixture(t)

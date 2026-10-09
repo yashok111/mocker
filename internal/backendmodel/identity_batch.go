@@ -31,7 +31,7 @@ func newBatchIdentities(base *RevisionState) *batchIdentities {
 // identity is stateIdentity over the batch's base, by index: the first record
 // of the base with that type and external key, as stateIdentity returns it.
 func (b *batchIdentities) identity(typ, key string) (string, string) {
-	if b.base == nil {
+	if b.base == nil && b.index == nil {
 		return "", ""
 	}
 	if b.index == nil {

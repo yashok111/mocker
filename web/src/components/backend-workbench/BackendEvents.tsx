@@ -304,6 +304,32 @@ function EventsWorkspace({
                     {!payload.dispatch.length && <Text>Известный handler не установлен.</Text>}
                     {payload.dispatch.map((dispatch, i) => (
                       <Stack key={`${dispatch.handlesEdgeId}:${i}`} gap="xs">
+                        {dispatch.diagnostics?.map((diagnostic) => (
+                          <details key={`${diagnostic.gate}:${diagnostic.subjectId}`}>
+                            <summary>
+                              {eventsReason(diagnostic.gate)} · {eventsReason(diagnostic.status)}
+                            </summary>
+                            {button(
+                              "Объект ограничения",
+                              diagnostic.subjectId,
+                              diagnostic.recordType,
+                            )}
+                            <Text size="xs" style={databaseWrap}>
+                              Основания: {diagnostic.evidenceIds.join(", ") || "не найдены"}
+                            </Text>
+                          </details>
+                        ))}
+                        {dispatch.sourceFlowIds?.map((flowId) => (
+                          <Button
+                            key={flowId}
+                            variant="subtle"
+                            onClick={() =>
+                              openFlow({ ...projectionURLTarget(target, revisionId), flowId })
+                            }
+                          >
+                            Тело Flow по исходникам · вызов не подтверждён · {flowId}
+                          </Button>
+                        ))}
                         <Group>
                           {button("Handler", dispatch.handlerId)}
                           {button("Неустановленный handler", dispatch.unresolvedTargetId)}

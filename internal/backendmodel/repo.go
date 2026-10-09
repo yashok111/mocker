@@ -20,6 +20,7 @@ import (
 type Repo struct {
 	db                *store.DB
 	architectureReads architectureReadCache
+	importIdentities  importIdentityCache
 }
 
 func NewRepo(db *store.DB) *Repo { return &Repo{db: db} }
@@ -109,6 +110,13 @@ func (r *Repo) ApplyAs(ctx context.Context, id string, in CommandsInput, actor s
 		now := time.Now().UTC()
 		annotationsChanged := false
 		for _, c := range commands {
+			if c.Type == "set_start_view" || c.Type == "clear_start_view" {
+				p.StartView = c.StartView
+				if err := writeProjectStartView(ctx, tx, p); err != nil {
+					return nil, err
+				}
+				continue
+			}
 			if c.Type == "rename_project" {
 				p.Name = c.Name
 				continue
@@ -167,12 +175,13 @@ func (r *Repo) mutate(ctx context.Context, scope, key string, request any, apply
 	return result, nil
 }
 
-const projectColumns = "id,name,version,current_revision_id,created_at,updated_at,(SELECT COALESCE(json_group_array(json_object('id',id,'logicalName',logical_name)),'[]') FROM backend_repositories WHERE project_id=backend_projects.id)"
+const projectColumns = "id,name,version,current_revision_id,created_at,updated_at,(SELECT COALESCE(json_group_array(json_object('id',id,'logicalName',logical_name)),'[]') FROM backend_repositories WHERE project_id=backend_projects.id),start_view_json"
 
 func scanProject(row interface{ Scan(...any) error }) (*Project, error) {
 	p := &Project{Repositories: []Repository{}, Capabilities: Features()}
 	var created, updated, repositories string
-	err := row.Scan(&p.ID, &p.Name, &p.Version, &p.CurrentRevisionID, &created, &updated, &repositories)
+	var start sql.NullString
+	err := row.Scan(&p.ID, &p.Name, &p.Version, &p.CurrentRevisionID, &created, &updated, &repositories, &start)
 	if errors.Is(err, sql.ErrNoRows) {
 		return nil, notFound()
 	}
@@ -181,6 +190,11 @@ func scanProject(row interface{ Scan(...any) error }) (*Project, error) {
 	}
 	if err := json.Unmarshal([]byte(repositories), &p.Repositories); err != nil {
 		return nil, err
+	}
+	if start.Valid {
+		if err := json.Unmarshal([]byte(start.String), &p.StartView); err != nil {
+			return nil, err
+		}
 	}
 	p.CreatedAt, err = time.Parse(time.RFC3339Nano, created)
 	if err != nil {

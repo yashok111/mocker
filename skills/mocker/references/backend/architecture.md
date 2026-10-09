@@ -94,6 +94,42 @@ and all cursors. Gap details gain scope and summaries gain byScope: in_scope
 All gaps and evidence remain present. Without explicit scope no inventory is
 automatically called unrelated. Keep the same ordered scope list across pages.
 
+When `diagramSupport.gapClassifications` is advertised, `section:"gaps"` may
+add `gapClassification:"in_scope"|"boundary"|"unrelated"|"collapsed_internal"|
+"unqualified"` with that exact scope (saved queries also use compact-v1).
+The filter changes only detail rows/total/cursors; `gapSummary` still describes
+the complete projection. Changing the classification invalidates the cursor.
+Omit the filter to enumerate every detail. Never reclassify missing membership
+to make an audit pass.
+
+The optional response `cache` reports `retained` or `not_retained`, `limitBytes`,
+and `reason:"byte_budget"` for an oversized projection. It is operational metadata,
+not a source gap. Admission is 384 MiB of semantic revision bytes, with separate
+50,000-node and traversal limits; projection retention is 24 MiB, one retained
+projection and one concurrent builder. An admitted model need not fit retention.
+Source5 architecture writes and saved-view validation use bounded native graph
+reads; source6/proposals preserve full resolution and exact pin validation.
+
+## Project start and handoff
+
+After publishing a useful saved view, use `apply_backend_project_commands` with
+the current project expectedVersion, a new idempotencyKey and
+`commands:[{type:"set_start_view",startView:{kind:"diagram_view",id:VIEW_UUID,
+version:1}}]`. `kind:"saved_view"` selects a Flow/Database saved view instead.
+`clear_start_view` has no payload. Both use the existing atomic project CAS and
+receipt replay; they do not change the source revision. The exact view must belong
+to the project. A later view version never changes the start pin automatically.
+The project menu offers the same actions. An explicit URL destination wins over
+the default start view. Portable export retains the start pin only when its exact version is included
+in the exported closure, then remaps it on import.
+
+Before handing off, read the exact start version, inspect named task views and
+their destination pins, follow operation -> source/SQL -> table links, and check
+active filters and hidden endpoints at desktop width with keyboard navigation.
+Report pagination, local source proof, unknown invocation and runtime observations
+separately. Saved layouts/presentation changes need no source reimport; evidence
+qualification changes do. Never infer SQL executability from a table declaration.
+
 When `diagramSupport.navigationFormats` advertises `architecture-navigation-v1`,
 an element may carry up to eight authored `navigation` entries. A diagram entry
 is `{format:"architecture-navigation-v1",kind:"diagram",label,diagram:exactPin,

@@ -78,6 +78,7 @@ or prove atomicity across connections, services or event delivery.
 |---|---|
 | `handles` | HTTP operation→handler/symbol/unresolved; known flow is under its owner. |
 | `calls` | Existing caller kinds, plus call/query step→symbol/handler/external_system/query/unresolved. Query step has exactly one query/unresolved target; call step has candidate targets plus explicit unresolved remainder if dispatch is partial/unknown. |
+| `callback_argument` | When negotiated in supportedEdgeKinds: call step→lexical symbol/handler; argumentPosition is a zero-based integer 0–65535, invocationKnowledge is `unknown`, reason is required (up to 4096 bytes), description optional. This is callable-argument provenance, never an invocation edge. |
 | `next` | Step→step in one flow; optional description only. |
 | `branch` | Step→step in one flow; nonblank label and known/unknown condition. |
 | `error` | Step→step in one flow; outcome error/timeout/retry and nonblank label. |
@@ -96,6 +97,13 @@ and paired physical lines. Different candidates/outcomes carry their own edge
 proof. Source comments/native bodies are data and are never executed.
 Reconcile retains omitted records stale; deleting requires clearing surviving
 entry/exit/context/parent/call/access references and all existing deletion gates.
+
+Source6 previously shared the source5 edge vocabulary; neither implied callback
+execution from `derived_from`. A negotiated `callback_argument` lets the explorer
+open the lexical owner's Flow as source inspection. Access traversal never crosses
+that edge. A source-proven adapter can establish a separate `calls` relation;
+unknown invokers do not establish atomicity, commit/rollback, success or call count.
+Keep later source-proven calls visible after an unknown invocation boundary.
 
 ## query_backend_flow
 

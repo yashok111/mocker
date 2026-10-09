@@ -80,7 +80,43 @@ receipts are checked, and pending Begin/Batch/Commit use their original body/key
 A lost Preview is recovered only from the exact saved session/version/base tuple;
 the client never raises CAS opportunistically. Changed source command bytes,
 endpoint, installation or guide set stop transfer for review. A definitive rejected
-batch requires repair through the documented import workflow, not journal editing.
+batch can use the continuation operation below; never edit an existing journal.
+
+The client checks ordinary/nested evidenceKeys for duplicate strings throughout
+the captured file before Begin. This is a cheap local gate, not the full public
+schema, exact-session `validate_backend_import_batch`, or a source semantic audit.
+
+For a captured definitive validation rejection, prepare a corrected command file
+under an identical transfer plan, preserving all accepted commands. Then run:
+
+```sh
+python3 scripts/backend_import_client.py continue --plan corrected/plan.json --from-journal original-journal --journal continued-journal --url https://mocker.local:8443/mcp
+```
+
+The new private journal copies accepted request/receipt bytes, retains the rejected
+attempt separately, binds a continuation manifest to the parent roster/corrected
+capture, and uses new batch IDs only for the unaccepted suffix. Fresh server status
+must confirm the same import, base and CAS. An uncertain transport outcome cannot
+be corrected: recover its identical request first. An advanced session or changed
+accepted prefix is refused. Stage/Commit retries use the continuation journal.
+`verification.json` contains the accepted command count/hash, complete request/
+receipt roster, references to identity receipts and READY tuple. `publication.json`
+binds the original Commit request/key, verification hash and exact result.
+Neither artifact certifies source fidelity; Commit still requires independent audit.
+
+Per-request timing files measure client request-to-receipt intervals. Debug server
+logs separate validation, native base identity lookup, staging and accounting
+inside the writer; they do not measure transport or certify publication. Source5
+reconciliation retains at most one exact (project,revision) identity index within
+32 MiB of accounted entries, never full source bodies or mutable session decisions.
+Every hit rechecks revision visibility. This does not optimize the separate
+source6 composed-base path (F194).
+
+For presentation-only changes, update exact saved views/diagrams and the project
+start pin. For source5 evidence corrections, reconcile the complete provider roster;
+omitted records become stale. Source6 incremental sync requires its negotiated
+provider partition, manifest and closure contracts, so migration is an explicit
+workflow decision rather than an automatic small-edit shortcut.
 
 Commit requires a private audit JSON containing result:"pass", projectId, importId,
 candidateHash, previewVersion, baseRevisionId, expectedVersion, journalHash (from

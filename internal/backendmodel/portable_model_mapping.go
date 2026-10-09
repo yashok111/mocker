@@ -28,6 +28,13 @@ func (m *portableMapper) model(model *PortableModel) {
 	p := &model.Project
 	m.id("project", &p.ID)
 	m.id("revision", &p.CurrentRevisionID)
+	if p.StartView != nil {
+		if err := p.StartView.Validate(); err != nil {
+			m.err = err
+			return
+		}
+		m.id(p.StartView.Kind, &p.StartView.ID)
+	}
 	for i := range p.Repositories {
 		m.id("repository", &p.Repositories[i].ID)
 	}

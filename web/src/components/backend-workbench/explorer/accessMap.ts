@@ -69,7 +69,7 @@ export async function readAccessMap(
         Режим: a.accessMode,
         Основание: a.status,
         Связь: a.relation,
-        Ограничения: a.limitations.slice(0, 4).join(" · "),
+        Ограничения: a.limitations.join(" · "),
       },
       witness: a,
     }));
@@ -82,7 +82,7 @@ export async function readAccessMap(
     partial: !edges.length
       ? "Нет извлечённых обращений в этой области. Это не доказывает отсутствие работы с данными."
       : pages.some((p) => p!.limitations.length)
-        ? "Детализация обращений частичная"
+        ? `Детализация обращений частичная: ${[...new Set(pages.flatMap((p) => p!.limitations))].join(" · ")}`
         : undefined,
   };
 }

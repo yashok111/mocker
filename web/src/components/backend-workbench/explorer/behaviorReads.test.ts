@@ -10,6 +10,33 @@ vi.mock("./reads", async (original) => ({
 }));
 vi.mock("../backendGraphReads", () => ({ readBackendGraph: vi.fn(), readBackendNode: vi.fn() }));
 afterEach(() => vi.resetAllMocks());
+
+it("inspects a symbol-owned callback body without inventing an executable entrypoint", async () => {
+  const owner = node("callback", "symbol");
+  vi.mocked(readBackendNode).mockResolvedValue({
+    ...node("callback-flow", "flow", { entryStepId: "callback-step" }),
+    parentId: "callback",
+  } as never);
+  const result = await readBehavior(
+    projectId,
+    { revisionId },
+    { entrypointId: "callback", flowId: "callback-flow" },
+    new AbortController().signal,
+    {
+      flowId: "callback-flow",
+      entrypoint: owner,
+      handlerIds: [],
+      nodes: [node("callback-step", "flow_step", { stepKind: "query" })],
+      edges: [],
+      total: 1,
+      title: "Callback",
+      subtitle: "Source only",
+    },
+  );
+  expect(result.flowId).toBe("callback-flow");
+  expect(result.scene.nodes.some((n) => n.id === "callback-step")).toBe(true);
+  expect(result.entrypoint.kind).toBe("symbol");
+});
 const node = (id: string, kind = "symbol", attributes = {}) => ({
   id,
   kind,

@@ -157,16 +157,19 @@ func rebuildStore26Shape(ctx context.Context, tx *sql.Tx) error {
 			}
 		}
 	}
-	for _, table := range []string{"backend_payload_members", "backend_payload_manifests", "backend_payload_pending", "backend_payload_blobs"} {
-		if _, err := tx.ExecContext(ctx, "DROP TABLE "+table); err != nil {
+	// Reconstruct the historical shape, including metadata introduced after
+	// Store26. Production downgrade is never supported by this test helper.
+	for _, statement := range []string{
+		"DROP TABLE backend_payload_members",
+		"DROP TABLE backend_payload_manifests",
+		"DROP TABLE backend_payload_pending",
+		"DROP TABLE backend_payload_blobs",
+		"DROP TABLE IF EXISTS backend_project_purge_receipts",
+		"ALTER TABLE backend_projects DROP COLUMN start_view_json",
+	} {
+		if _, err := tx.ExecContext(ctx, statement); err != nil {
 			return err
 		}
-	}
-	// The fixture deliberately returns to Store26 before running real upgrades.
-	// Store29's independent table must not survive that test-only rewind or its
-	// migration would be applied twice. Production downgrade remains unsupported.
-	if _, err := tx.ExecContext(ctx, "DROP TABLE IF EXISTS backend_project_purge_receipts"); err != nil {
-		return err
 	}
 	_, err := tx.ExecContext(ctx, "PRAGMA user_version=26")
 	return err

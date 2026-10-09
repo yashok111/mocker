@@ -107,6 +107,7 @@ func (s *Service) exportModelTx(ctx context.Context, tx *sql.Tx, selection Selec
 	if err = w.savedViews(selection); err != nil {
 		return nil, err
 	}
+	retainSelectedStartView(model)
 	if err := w.target(selection.Target); err != nil {
 		return nil, err
 	}
@@ -355,4 +356,23 @@ func sortPortableRevisions[T any](items []T, id func(T) string, parent func(T) *
 		}
 	}
 	return out, nil
+}
+
+func retainSelectedStartView(model *bm.PortableModel) {
+	if start := model.Project.StartView; start != nil {
+		included := false
+		for _, view := range model.DiagramViews {
+			if start.Kind == "diagram_view" && start.ID == view.ID && start.Version == view.Version {
+				included = true
+			}
+		}
+		for _, view := range model.SavedViews {
+			if start.Kind == "saved_view" && start.ID == view.ID && start.Version == view.Version {
+				included = true
+			}
+		}
+		if !included {
+			model.Project.StartView = nil
+		}
+	}
 }

@@ -6,6 +6,7 @@ import (
 )
 
 type architectureProjection struct {
+	cache        *ArchitectureCacheStatus
 	targetHash   string
 	identityKeys map[string]string
 	identityErr  error

@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"backend-replay-v1\",\"backend-diagram-v1\"]"
   requiredCapabilities: "[\"backend-replay\",\"backend-test-profiles\",\"backend-replay-bindings\"]"
-  guideSetId: "sha256:261e46b06f1d483cc3dc47cdcbd3277bf946d36dae105da0a458fafa2a65ff1c"
-  manifestHash: "sha256:261e46b06f1d483cc3dc47cdcbd3277bf946d36dae105da0a458fafa2a65ff1c"
+  guideSetId: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
+  manifestHash: "sha256:710046b39d698a117d9f9df318e6c97fa26124b670256006c33e425516b887ce"
 ---
 
 # Trusted Orders replay

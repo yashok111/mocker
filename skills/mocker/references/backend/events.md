@@ -1,5 +1,15 @@
 # Pinned source events, jobs and service calls
 
+Dispatch entries may include bounded `diagnostics` naming the gate, recordType,
+subjectId, qualification status and exact evidenceIds. `origin_proof`,
+`handler_proof` and `handles_proof` describe binding admission; `flow_proof` and
+`flow_ownership_proof` describe downstream body knowledge. Missing bindings/bodies
+have separate gates. Read the identified evidence at the returned exact target.
+`sourceFlowIds` are separately stored lexical bodies offered for inspection when
+dispatch is withheld: they are not verified invocation paths or access entrypoints.
+Known Flow IDs can coexist with inferred downstream behavior. Complete enumeration
+does not certify execution or eliminate semantic boundaries.
+
 Canonical owner: `mocker-backend-inspect` workflow13. Select its complete supported
 requirements, including source schemas3/4/5 and `backend-events-query`, in one
 immutable guideSetId/manifestHash. Verify this topic's actual owner/version/hash.

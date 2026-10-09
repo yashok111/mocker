@@ -55,7 +55,9 @@ Shape.HTML.register({
     description.textContent = data.description === data.name ? "" : data.description;
     const foot = document.createElement("span");
     foot.className = styles.cardFoot ?? "";
-    foot.textContent = data.badge ?? nodeSubtitle(data) ?? "";
+    foot.textContent =
+      data.kind === "query" ? nodeSubtitle(data) : (data.badge ?? nodeSubtitle(data) ?? "");
+    if (data.kind === "query") foot.title = data.id;
     button.append(type, title, description, foot);
     return button;
   },
@@ -236,7 +238,7 @@ export function ExploreCanvas({
       graph.zoomTo(restored.zoom);
       graph.translate(restored.x, restored.y);
     } else {
-      graph.zoomToFit({ padding: 32, maxScale: 1, minScale: 0.65 });
+      graph.zoomToFit({ padding: 32, maxScale: 1 });
       const start = renderedNodes.find((n) => n.id === startId);
       if (start) {
         const { tx, ty } = graph.translate();
@@ -257,7 +259,20 @@ export function ExploreCanvas({
     graph.on("translate", save);
     save();
     const element = host.current;
+    let width = element.clientWidth;
+    let height = element.clientHeight;
+    let resizeFrame = 0;
+    graph.on("resize", (size) => {
+      if (size.width === width && size.height === height) return;
+      width = size.width;
+      height = size.height;
+      cancelAnimationFrame(resizeFrame);
+      resizeFrame = requestAnimationFrame(() => {
+        if (width > 0 && height > 0) graph.zoomToFit({ padding: 32, maxScale: 1 });
+      });
+    });
     return () => {
+      cancelAnimationFrame(resizeFrame);
       clicks.cancel();
       const { tx, ty } = graph.translate();
       initialCamera.current = { x: tx, y: ty, zoom: graph.zoom() };

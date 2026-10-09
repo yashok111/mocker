@@ -48,14 +48,15 @@ type Repository struct {
 }
 
 type Project struct {
-	ID                string       `json:"id"`
-	Name              string       `json:"name"`
-	Version           int64        `json:"version"`
-	CurrentRevisionID string       `json:"currentRevisionId"`
-	Repositories      []Repository `json:"repositories"`
-	Capabilities      []string     `json:"capabilities"`
-	CreatedAt         time.Time    `json:"createdAt"`
-	UpdatedAt         time.Time    `json:"updatedAt"`
+	StartView         *ProjectStartView `json:"startView,omitzero"`
+	ID                string            `json:"id"`
+	Name              string            `json:"name"`
+	Version           int64             `json:"version"`
+	CurrentRevisionID string            `json:"currentRevisionId"`
+	Repositories      []Repository      `json:"repositories"`
+	Capabilities      []string          `json:"capabilities"`
+	CreatedAt         time.Time         `json:"createdAt"`
+	UpdatedAt         time.Time         `json:"updatedAt"`
 }
 
 type Coverage struct {
@@ -93,6 +94,7 @@ type CreateInput struct {
 }
 
 type Command struct {
+	StartView    *ProjectStartView `json:"startView,omitzero"`
 	Type         string            `json:"type"`
 	Name         string            `json:"name"`
 	AnnotationID string            `json:"annotationId,omitempty"`

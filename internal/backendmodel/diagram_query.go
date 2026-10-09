@@ -8,17 +8,18 @@ import (
 )
 
 type DiagramQueryInput struct {
-	GapScope     *ArchitectureGapScope `json:"gapScope,omitzero"`
-	ResponseMode string                `json:"responseMode,omitempty"`
-	Pin          DiagramPin            `json:"pin"`
-	Level        string                `json:"level,omitempty"`
-	RootID       string                `json:"rootId,omitempty"`
-	Search       string                `json:"search"`
-	Origin       string                `json:"origin"`
-	Section      string                `json:"section"`
-	SubjectID    string                `json:"subjectId,omitempty"`
-	Limit        int                   `json:"limit"`
-	Cursor       string                `json:"cursor,omitempty"`
+	GapClassification string                `json:"gapClassification,omitempty"`
+	GapScope          *ArchitectureGapScope `json:"gapScope,omitzero"`
+	ResponseMode      string                `json:"responseMode,omitempty"`
+	Pin               DiagramPin            `json:"pin"`
+	Level             string                `json:"level,omitempty"`
+	RootID            string                `json:"rootId,omitempty"`
+	Search            string                `json:"search"`
+	Origin            string                `json:"origin"`
+	Section           string                `json:"section"`
+	SubjectID         string                `json:"subjectId,omitempty"`
+	Limit             int                   `json:"limit"`
+	Cursor            string                `json:"cursor,omitempty"`
 }
 type ArchitectureProjectionContext struct {
 	Policy string `json:"policy"`
@@ -105,6 +106,7 @@ func (r DiagramRow) MarshalJSON() ([]byte, error) {
 }
 
 type DiagramPage struct {
+	Cache      *ArchitectureCacheStatus       `json:"cache,omitzero"`
 	GapSummary *DiagramGapSummary             `json:"gapSummary,omitzero"`
 	Projection *ArchitectureProjectionContext `json:"projection,omitzero"`
 	Pin        DiagramPin                     `json:"pin"`
@@ -116,10 +118,17 @@ type DiagramPage struct {
 	Truncated  bool                           `json:"truncated"`
 }
 
+// Retention is an operational property, not a gap in source knowledge.
+type ArchitectureCacheStatus struct {
+	Status     string `json:"status"`
+	Reason     string `json:"reason,omitempty"`
+	LimitBytes int    `json:"limitBytes"`
+}
+
 func (v *DiagramQueryInput) UnmarshalJSON(b []byte) error {
 	type plain DiagramQueryInput
 	*v = DiagramQueryInput{}
-	return strictAPIObject(b, []string{"pin", "search", "origin", "section", "limit"}, []string{"level", "rootId", "subjectId", "cursor", "responseMode", "gapScope"}, (*plain)(v))
+	return strictAPIObject(b, []string{"pin", "search", "origin", "section", "limit"}, []string{"level", "rootId", "subjectId", "cursor", "responseMode", "gapScope", "gapClassification"}, (*plain)(v))
 }
 func (in DiagramQueryInput) Validate() error {
 	if err := validateArchitectureGapQuery(in); err != nil {

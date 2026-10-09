@@ -97,6 +97,15 @@ func validateAnnotationTarget(target AnnotationTarget) error {
 // MarshalJSON preserves the exact pre-annotation rename encoding and field order.
 func (c Command) MarshalJSON() ([]byte, error) {
 	switch c.Type {
+	case "set_start_view":
+		return json.Marshal(struct {
+			Type      string            `json:"type"`
+			StartView *ProjectStartView `json:"startView"`
+		}{c.Type, c.StartView})
+	case "clear_start_view":
+		return json.Marshal(struct {
+			Type string `json:"type"`
+		}{c.Type})
 	case "rename_project":
 		return json.Marshal(struct {
 			Type string `json:"type"`
@@ -129,6 +138,9 @@ func (c *Command) UnmarshalJSON(raw []byte) error {
 	}
 	required := []string{"type"}
 	switch kind {
+	case "set_start_view":
+		required = append(required, "startView")
+	case "clear_start_view":
 	case "rename_project":
 		required = append(required, "name")
 	case "create_annotation", "update_annotation":
@@ -177,6 +189,12 @@ func (in *CommandsInput) UnmarshalJSON(raw []byte) error {
 	return nil
 }
 func validateProjectCommand(c Command) error {
+	if c.Type == "set_start_view" || c.Type == "clear_start_view" {
+		return validateStartViewCommand(c)
+	}
+	if c.StartView != nil {
+		return invalid("commands", "startView requires set_start_view")
+	}
 	switch c.Type {
 	case "rename_project":
 		if c.AnnotationID != "" || c.Target != nil || c.Body != "" {
@@ -212,6 +230,7 @@ func normalizeProjectCommands(commands []Command) ([]Command, error) {
 	}
 	normalized := slices.Clone(commands)
 	renamed := false
+	startChanged := false
 	for i, c := range normalized {
 		if err := validateProjectCommand(c); err != nil {
 			return nil, err
@@ -225,6 +244,15 @@ func normalizeProjectCommands(commands []Command) ([]Command, error) {
 		}
 		if c.Target != nil {
 			normalized[i].Target = new(*c.Target)
+		}
+		if c.Type == "set_start_view" || c.Type == "clear_start_view" {
+			if startChanged {
+				return nil, invalid("commands", "Use at most one start-view change per batch")
+			}
+			startChanged = true
+			if c.StartView != nil {
+				normalized[i].StartView = new(*c.StartView)
+			}
 		}
 	}
 	return normalized, nil

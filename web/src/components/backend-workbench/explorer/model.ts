@@ -34,6 +34,7 @@ export type MapData = {
   title: string;
   subtitle: string;
   partial?: string;
+  hiddenRelationships?: number;
   metadata?: { title: string; value: unknown }[];
 };
 export const kindNames: Record<string, string> = {
@@ -90,6 +91,7 @@ export const relationNames: Record<string, string> = {
   contains: "Содержит",
   handles: "Обрабатывает",
   calls: "Вызывает",
+  callback_argument: "Передаёт callback · вызов не подтверждён",
   reads: "Читает",
   writes: "Записывает",
   deletes: "Удаляет",
@@ -108,6 +110,8 @@ export const relationNames: Record<string, string> = {
 };
 export function nodeSubtitle(n: MapNode) {
   const a = n.attributes;
+  if (n.kind === "query")
+    return `${n.id.slice(-8)} · ${typeof a.qualifiedName === "string" ? a.qualifiedName : "Запрос"}`;
   if (typeof a.method === "string" && typeof a.path === "string") return `${a.method} ${a.path}`;
   for (const value of [
     a.technology,

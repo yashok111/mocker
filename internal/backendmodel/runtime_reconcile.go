@@ -170,6 +170,8 @@ func runtimeContains(from, to Node) (bool, bool) {
 
 func runtimeEndpoints(e Edge, from, to Node) (bool, bool) {
 	switch e.Kind {
+	case "callback_argument":
+		return from.Kind == "flow_step" && runtimeString(from.Attributes["stepKind"]) == "call" && slices.Contains([]string{"symbol", "handler"}, to.Kind), true
 	case "contains":
 		return runtimeContains(from, to)
 	case "calls":

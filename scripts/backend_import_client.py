@@ -14,6 +14,7 @@ import os
 import ssl
 import sys
 import tempfile
+import time
 from pathlib import Path
 from urllib.parse import urlsplit
 
@@ -28,6 +29,40 @@ class TransferError(Exception):
 
 class UncertainOutcome(TransferError):
     pass
+
+
+class RejectedRequest(TransferError):
+    def __init__(self, result):
+        super().__init__("MCP tool refused the saved request; inspect it locally")
+        self.result = result
+
+
+def correctable_rejection(result):
+    if result.get("isError") is not True:
+        return False
+    structured = result.get("structuredContent", {})
+    status = structured.get("status") if isinstance(structured, dict) else None
+    if status in (400, 413, 422):
+        return True
+    return any(
+        item.get("type") == "text"
+        and item.get("text", "").startswith(("HTTP 400:", "HTTP 413:", "HTTP 422:"))
+        for item in result.get("content", [])
+    )
+
+
+def validate_evidence_keys(value):
+    if isinstance(value, dict):
+        keys = value.get("evidenceKeys")
+        if isinstance(keys, list) and (
+            any(not isinstance(key, str) for key in keys) or len(set(keys)) != len(keys)
+        ):
+            raise TransferError("evidenceKeys must contain unique strings")
+        for child in value.values():
+            validate_evidence_keys(child)
+    elif isinstance(value, list):
+        for child in value:
+            validate_evidence_keys(child)
 
 
 class NumberToken(str):
@@ -204,6 +239,12 @@ class Transfer:
         self.endpoint, self.caller = endpoint, caller
         self.progress = progress or (lambda _: None)
         self.sequence = 0
+        self.continuation = None
+        manifest = self.journal / "continuation.json"
+        if manifest.is_symlink():
+            raise TransferError("journal symlinks are not allowed")
+        if manifest.exists():
+            self.continuation = decode(manifest.read_bytes())
 
     def negotiate(self):
         capabilities = self.caller.call("get_backend_capabilities", {})
@@ -221,6 +262,13 @@ class Transfer:
         self.capture = self.journal / "commands.ndjson"
         capture_file(self.commands, self.capture, binding["commandsHash"])
         self.input_binding = binding
+        # Check the entire frozen file before Begin or any new batch. This cheap
+        # gate is distinct from exact-session validation and source review.
+        with self.capture.open("rb") as stream:
+            for command in self.read_commands(
+                stream, {"repositoryId": "preflight", "snapshotId": "preflight"}
+            ):
+                validate_evidence_keys(command)
         limits = capabilities["limits"]
         self.max_commands = min(500, int(limits["maxImportBatchCommands"]))
         self.max_bytes = min(MAX_COMMAND, int(limits["maxImportBatchBytes"]))
@@ -238,6 +286,14 @@ class Transfer:
         pending = request_path.exists()
         save_once(request_path, raw)
         response_path = self.journal / (stem + ".receipt.json")
+        rejection_path = self.journal / (stem + ".rejection.json")
+        if rejection_path.is_symlink():
+            raise TransferError("journal symlinks are not allowed")
+        if rejection_path.exists():
+            rejected = decode(rejection_path.read_bytes())
+            if rejected["requestHash"] != digest(raw):
+                raise TransferError("rejection belongs to another request")
+            raise RejectedRequest(rejected["result"])
         if response_path.is_symlink():
             raise TransferError("journal symlinks are not allowed")
         if response_path.exists():
@@ -260,9 +316,23 @@ class Transfer:
             if pending and name == "preview_backend_import"
             else None
         )
+        started = time.monotonic()
         try:
             if result is None:
                 result = self.caller.call(name, arguments)
+        except RejectedRequest as error:
+            if correctable_rejection(error.result):
+                save_once(
+                    rejection_path,
+                    canonical(
+                        {
+                            "requestHash": digest(raw),
+                            "result": error.result,
+                            "resultHash": digest(canonical(error.result)),
+                        }
+                    ),
+                )
+            raise
         except UncertainOutcome:
             if name != "preview_backend_import":
                 raise
@@ -277,6 +347,15 @@ class Transfer:
             "result": result,
         }
         save_once(response_path, canonical(receipt))
+        save_once(
+            self.journal / (stem + ".timing.json"),
+            canonical(
+                {
+                    "requestHash": digest(raw),
+                    "requestToReceiptSeconds": time.monotonic() - started,
+                }
+            ),
+        )
         return result
 
     def recover_preview(self, arguments):
@@ -296,10 +375,18 @@ class Transfer:
         return None
 
     def batch_arguments(self, session, version, index, commands):
+        batch_id = f"file-{index:06d}"
+        if self.continuation:
+            accepted = self.continuation["acceptedBatchIds"]
+            batch_id = (
+                accepted[index - 1]
+                if index <= len(accepted)
+                else f"continue-{self.continuation['namespace']}-{index:06d}"
+            )
         return {
             "projectId": self.plan["projectId"],
             "importId": session["id"],
-            "batchId": f"file-{index:06d}",
+            "batchId": batch_id,
             "expectedImportVersion": version,
             "payloadHash": digest(canonical(commands)),
             "commands": commands,
@@ -410,10 +497,216 @@ class Transfer:
         ):
             raise TransferError("preview does not bind the submitted session/version")
         save_once(self.journal / "ready.json", canonical(ready))
+        self.verification_bundle(ready)
         self.progress(
             {"stage": "preview", "state": ready["state"], "version": ready["version"]}
         )
         return ready
+
+    def continue_from(self, parent):
+        """Prepare a separate journal; never rewrite an accepted or rejected byte."""
+        parent = Path(parent)
+        if parent.is_symlink() or parent.resolve() == self.journal.resolve():
+            raise TransferError("continuation requires a distinct ordinary journal")
+        paths = sorted(parent.glob("*.request.json"))
+        if not paths or (parent / "ready.json").exists():
+            raise TransferError("continuation requires a rejected staging batch")
+        binding = decode((parent / "input.json").read_bytes())
+        if binding["endpoint"] != self.endpoint or binding["planHash"] != digest(
+            canonical(self.plan)
+        ):
+            raise TransferError("continuation must keep the original endpoint and plan")
+        roster = []
+        for path in sorted(parent.iterdir()):
+            if path.is_symlink():
+                raise TransferError("journal symlinks are not allowed")
+            if path.is_file():
+                roster.append([path.name, file_digest(path)])
+        parent_hash = digest(canonical(roster))
+        candidate_hash = file_digest(self.commands)
+        if self.continuation:
+            if (
+                self.continuation["parentHash"] != parent_hash
+                or self.continuation["commandsHash"] != candidate_hash
+            ):
+                raise TransferError("continuation inputs changed")
+            return
+        self.negotiate()
+        accepted_ids, copies = [], []
+        session, version, count = None, None, 0
+        with self.capture.open("rb") as stream:
+            iterator = None
+            for sequence, path in enumerate(paths, 1):
+                if path.name != f"{sequence:06d}.request.json":
+                    raise TransferError("parent request roster is not contiguous")
+                raw = path.read_bytes()
+                request = decode(raw)
+                receipt_path = parent / f"{sequence:06d}.receipt.json"
+                if not receipt_path.exists():
+                    if (
+                        sequence != len(paths)
+                        or request["name"] != "put_backend_import_batch"
+                    ):
+                        raise TransferError(
+                            "only the final rejected batch may be corrected"
+                        )
+                    rejection_path = parent / f"{sequence:06d}.rejection.json"
+                    if not rejection_path.exists():
+                        raise TransferError(
+                            "uncertain outcome requires exact replay before correction"
+                        )
+                    rejected = decode(rejection_path.read_bytes())
+                    if (
+                        rejected["requestHash"] != digest(raw)
+                        or rejected["resultHash"]
+                        != digest(canonical(rejected["result"]))
+                        or not correctable_rejection(rejected["result"])
+                    ):
+                        raise TransferError("no bound definitive validation rejection")
+                    args = request["arguments"]
+                    if (
+                        not session
+                        or args["importId"] != session["id"]
+                        or args["projectId"] != self.plan["projectId"]
+                        or args["expectedImportVersion"] != version
+                    ):
+                        raise TransferError("rejected request changed import or CAS")
+                    rejection = {"request": request, "rejection": rejected}
+                    break
+                receipt_raw = receipt_path.read_bytes()
+                receipt = decode(receipt_raw)
+                result = receipt["result"]
+                if receipt["requestHash"] != digest(raw) or receipt[
+                    "resultHash"
+                ] != digest(canonical(result)):
+                    raise TransferError("parent receipt binding is invalid")
+                if sequence == 1:
+                    if request != {
+                        "name": "begin_backend_import",
+                        "arguments": dict(
+                            self.plan["begin"], projectId=self.plan["projectId"]
+                        ),
+                    }:
+                        raise TransferError("continuation changed Begin")
+                    session, version = result, result["version"]
+                    iterator = self.read_commands(stream, session)
+                else:
+                    args = request["arguments"]
+                    if (
+                        request["name"] != "put_backend_import_batch"
+                        or args["importId"] != session["id"]
+                        or args["projectId"] != self.plan["projectId"]
+                        or args["expectedImportVersion"] != version
+                    ):
+                        raise TransferError("accepted prefix changed import or CAS")
+                    consumed = []
+                    for _ in args["commands"]:
+                        try:
+                            consumed.append(next(iterator))
+                        except StopIteration:
+                            raise TransferError(
+                                "corrected candidate lost accepted commands"
+                            ) from None
+                    if canonical(consumed) != canonical(args["commands"]) or args[
+                        "payloadHash"
+                    ] != digest(canonical(consumed)):
+                        raise TransferError(
+                            "corrected candidate changed accepted commands"
+                        )
+                    if (
+                        result.get("batchId") != args["batchId"]
+                        or result.get("payloadHash") != args["payloadHash"]
+                        or result.get("acceptedVersion") != version + 1
+                    ):
+                        raise TransferError("accepted prefix receipt differs")
+                    accepted_ids.append(args["batchId"])
+                    version = result["acceptedVersion"]
+                    count += len(consumed)
+                # Keep only bindings while auditing. A long accepted prefix can
+                # approach the capture limit; retaining every raw file here
+                # would make recovery require gigabytes of additional RAM.
+                copies.extend(
+                    [(path.name, digest(raw)), (receipt_path.name, digest(receipt_raw))]
+                )
+            else:
+                raise TransferError("no rejected tail found")
+        status = self.caller.call(
+            "get_backend_import",
+            {"projectId": self.plan["projectId"], "importId": session["id"]},
+        ).get("session", {})
+        if (
+            status.get("id") != session["id"]
+            or status.get("projectId") != self.plan["projectId"]
+            or status.get("baseRevisionId") != self.plan["begin"]["baseRevisionId"]
+            or status.get("version") != version
+            or status.get("state") not in ("collecting", "staging")
+        ):
+            raise TransferError(
+                "server import advanced or no longer matches the rejected prefix"
+            )
+        manifest = {
+            "format": "mocker-import-continuation-v1",
+            "parentHash": parent_hash,
+            "parentRoster": roster,
+            "commandsHash": candidate_hash,
+            "acceptedCommands": count,
+            "acceptedBatchIds": accepted_ids,
+            "namespace": digest(canonical([parent_hash, candidate_hash]))[:24],
+        }
+        for name, expected_hash in copies:
+            path = parent / name
+            if path.is_symlink():
+                raise TransferError("journal symlinks are not allowed")
+            raw = path.read_bytes()
+            if digest(raw) != expected_hash:
+                raise TransferError(
+                    "accepted prefix changed while preparing continuation"
+                )
+            save_once(self.journal / name, raw)
+        save_once(self.journal / "rejected-attempt.json", canonical(rejection))
+        save_once(self.journal / "continuation.json", canonical(manifest))
+        self.continuation = manifest
+
+    def verification_bundle(self, ready):
+        roster, identities, count = [], [], 0
+        accepted = hashlib.sha256()
+        for path in sorted(self.journal.glob("*.request.json")):
+            request = decode(path.read_bytes())
+            if request["name"] == "commit_backend_import":
+                continue
+            receipt_path = path.with_name(
+                path.name.replace(".request.json", ".receipt.json")
+            )
+            receipt = decode(receipt_path.read_bytes())
+            roster.append(
+                {
+                    "request": path.name,
+                    "requestHash": digest(path.read_bytes()),
+                    "receipt": receipt_path.name,
+                    "receiptHash": digest(receipt_path.read_bytes()),
+                }
+            )
+            if request["name"] == "put_backend_import_batch":
+                for command in request["arguments"]["commands"]:
+                    count += 1
+                    accepted.update(canonical(command) + b"\n")
+                identities.append(
+                    {
+                        "receipt": receipt_path.name,
+                        "count": len(receipt["result"].get("identities", [])),
+                    }
+                )
+        bundle = {
+            "format": "mocker-import-verification-v1",
+            "journalHash": self.audit_binding(),
+            "acceptedCommands": count,
+            "acceptedCommandsHash": accepted.hexdigest(),
+            "roster": roster,
+            "identityReceipts": identities,
+            "ready": ready,
+        }
+        save_once(self.journal / "verification.json", canonical(bundle))
+        return bundle
 
     @staticmethod
     def read_commands(stream, session):
@@ -444,6 +737,18 @@ class Transfer:
                 {
                     "input": decode((self.journal / "input.json").read_bytes()),
                     "roster": roster,
+                    **(
+                        {
+                            "continuation": decode(
+                                (self.journal / "continuation.json").read_bytes()
+                            ),
+                            "rejectedAttempt": decode(
+                                (self.journal / "rejected-attempt.json").read_bytes()
+                            ),
+                        }
+                        if self.continuation
+                        else {}
+                    ),
                 }
             )
         )
@@ -473,7 +778,7 @@ class Transfer:
                 "an independent audit with exact candidate/journal bindings and findings is required"
             )
         save_once(self.journal / "audit.json", canonical(audit))
-        return self.request(
+        result = self.request(
             "commit_backend_import",
             {
                 "projectId": self.plan["projectId"],
@@ -484,6 +789,20 @@ class Transfer:
                 "idempotencyKey": "file-commit-" + expected["journalHash"],
             },
         )
+        request = self.journal / f"{self.sequence:06d}.request.json"
+        save_once(
+            self.journal / "publication.json",
+            canonical(
+                {
+                    "format": "mocker-import-publication-v1",
+                    "requestHash": digest(request.read_bytes()),
+                    "idempotencyKey": "file-commit-" + expected["journalHash"],
+                    "verificationHash": file_digest(self.journal / "verification.json"),
+                    "result": result,
+                }
+            ),
+        )
+        return result
 
 
 class HTTPMCP:
@@ -609,9 +928,7 @@ class HTTPMCP:
         result = self.rpc("tools/call", {"name": name, "arguments": arguments})
         if result.get("isError"):
             # Do not echo a server validation tree: it can contain source values.
-            raise TransferError(
-                "MCP tool refused the saved request; inspect it locally"
-            )
+            raise RejectedRequest(result)
         if "structuredContent" in result:
             return result["structuredContent"]
         text = next(
@@ -632,7 +949,10 @@ class HTTPMCP:
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=("stage", "commit", "audit-binding"))
+    parser.add_argument(
+        "operation", choices=("stage", "continue", "commit", "audit-binding")
+    )
+    parser.add_argument("--from-journal", type=Path)
     parser.add_argument("--plan", type=Path, required=True)
     parser.add_argument("--journal", type=Path, required=True)
     parser.add_argument("--url", required=True)
@@ -651,7 +971,12 @@ def main():
             caller,
             lambda value: print(json.dumps(value), flush=True),
         )
-        if args.operation == "stage":
+        if args.operation == "continue":
+            if args.from_journal is None:
+                raise TransferError("continue requires --from-journal PATH")
+            transfer.continue_from(args.from_journal)
+            transfer.stage()
+        elif args.operation == "stage":
             transfer.stage()
         elif args.operation == "audit-binding":
             print(json.dumps({"journalHash": transfer.audit_binding()}))

@@ -12,6 +12,9 @@ func validateArchitectureGapQuery(in DiagramQueryInput) error {
 	if in.GapScope != nil && (in.ResponseMode != "compact-v1" || in.Level == "") {
 		return invalid("gapScope", "Explicit scope requires a compact architecture projection")
 	}
+	if in.GapClassification != "" && (in.GapScope == nil || in.Section != "gaps" || !slices.Contains([]string{"in_scope", "boundary", "unrelated", "collapsed_internal", "unqualified"}, in.GapClassification)) {
+		return invalid("gapClassification", "Select a known classification on a scoped architecture gap-detail read")
+	}
 	return nil
 }
 

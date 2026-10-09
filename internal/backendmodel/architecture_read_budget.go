@@ -88,7 +88,12 @@ func (c *architectureReadCache) load(ctx context.Context, key string, build func
 		Members  map[string][]DiagramMember
 		Gaps     []DiagramGap
 	}{p.elements, p.links, p.members, p.gaps})
+	p.cache = &ArchitectureCacheStatus{Status: "not_retained", Reason: "byte_budget", LimitBytes: MaxArchitectureCacheBytes}
+	if err != nil && !errors.Is(err, errProjectionCacheBudget) {
+		return nil, err
+	}
 	if err == nil {
+		p.cache.Status, p.cache.Reason = "retained", ""
 		c.mu.Lock()
 		c.key, c.projection = key, p
 		c.mu.Unlock()

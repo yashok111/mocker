@@ -198,6 +198,10 @@ func stageRoundtrip(t *testing.T, f *roundtripFixture) (*ExportResult, *Session)
 func TestDiagramPortableSemanticRoundtripAtomicReplay(t *testing.T) {
 	t.Parallel()
 	f := makeRoundtripFixture(t)
+	project, err := f.service.models.Get(t.Context(), f.selection.ProjectID)
+	check(t, err)
+	_, err = f.service.models.Apply(t.Context(), project.ID, bm.CommandsInput{ExpectedVersion: project.Version, IdempotencyKey: "start-view", Commands: []bm.Command{{Type: "set_start_view", StartView: &bm.ProjectStartView{Kind: "diagram_view", ID: f.views[0].ID, Version: f.views[0].Version}}}})
+	check(t, err)
 	_, session := stageRoundtrip(t, f)
 	preview, err := f.service.Preview(t.Context(), session.ID, PreviewInput{ExpectedVersion: session.Version, Name: "Imported", ArtifactMappings: []bm.PortableArtifactMapping{}, IdempotencyKey: "preview"})
 	check(t, err)
@@ -234,6 +238,11 @@ func TestDiagramPortableSemanticRoundtripAtomicReplay(t *testing.T) {
 		t.Fatal("commit replay changed IDs or bytes")
 	}
 	assertRoundtripSemantics(t, f, committed)
+	if committed.Project.StartView == nil || committed.Project.StartView.ID == f.views[0].ID || committed.Project.StartView.Version != f.views[0].Version {
+		t.Fatal("portable start view was lost or not remapped")
+	}
+	_, err = f.service.models.GetDiagramView(t.Context(), committed.Project.ID, committed.Project.StartView.ID, committed.Project.StartView.Version)
+	check(t, err)
 	// nil owner readers make any accidental foreign numeric resolution fail.
 	reader := bm.NewArtifactService(f.service.models, nil, nil)
 	namespace := f.pin.Namespace

@@ -60,6 +60,63 @@ func eventsQueryRefs(i EventsItem) EventsReferences {
 	}
 	return EventsReferences{}
 }
+
+func TestEventsDispatchExplainsBindingAndDownstreamProofSeparately(t *testing.T) {
+	for _, subject := range []int{102, 9} {
+		t.Run(runtimeQueryID(subject), func(t *testing.T) {
+			s := eventsQueryState(t)
+			proofID := ""
+			for i := range s.Evidence {
+				if s.Evidence[i].SubjectID == runtimeQueryID(subject) {
+					s.Evidence[i].Status = "inferred"
+					proofID = s.Evidence[i].ID
+				}
+			}
+			if proofID == "" {
+				t.Fatal("fixture proof absent")
+			}
+			page := eventsQueryPage(t, s, EventsQueryInput{View: "routes"})
+			b := page.Items[0].Boundary
+			if b == nil || len(b.Dispatch) != 1 {
+				t.Fatal("expected qualified route")
+			}
+			d := b.Dispatch[0]
+			if (len(d.FlowIDs) != 0) != (subject == 9) {
+				t.Fatal("diagnostic must preserve existing conservative dispatch admission")
+			}
+			raw, _ := json.Marshal(d)
+			var envelope struct {
+				SourceFlowIDs []string `json:"sourceFlowIds"`
+				Diagnostics   []struct {
+					Gate        string   `json:"gate"`
+					SubjectID   string   `json:"subjectId"`
+					Status      string   `json:"status"`
+					EvidenceIDs []string `json:"evidenceIds"`
+				} `json:"diagnostics"`
+			}
+			if err := json.Unmarshal(raw, &envelope); err != nil {
+				t.Fatal(err)
+			}
+			if subject == 102 && !slices.Contains(envelope.SourceFlowIDs, runtimeQueryID(9)) {
+				t.Fatal("withheld dispatch hides separately stored source body")
+			}
+			want := "handles_proof"
+			if subject == 9 {
+				want = "flow_proof"
+			}
+			if !slices.ContainsFunc(envelope.Diagnostics, func(v struct {
+				Gate        string   `json:"gate"`
+				SubjectID   string   `json:"subjectId"`
+				Status      string   `json:"status"`
+				EvidenceIDs []string `json:"evidenceIds"`
+			}) bool {
+				return v.Gate == want && v.SubjectID == runtimeQueryID(subject) && v.Status == "inferred" && slices.Contains(v.EvidenceIDs, proofID)
+			}) {
+				t.Fatalf("missing exact %s diagnostic: %s", want, raw)
+			}
+		})
+	}
+}
 func TestEventsQueryExactRoutesAndPureRead(t *testing.T) {
 	s := eventsQueryState(t)
 	runtimeQueryAddNode(t, s, 10, "channel", 1, nil)

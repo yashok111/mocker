@@ -1,9 +1,12 @@
 import { useEffect, useState, type ReactNode } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { ActionIcon, Alert, Badge, Button, Group, Loader, Stack, Tabs, Text } from "@mantine/core";
 import { IconArrowRight, IconCopy, IconX } from "@tabler/icons-react";
 import type { BackendReadTarget, BackendDiagramRef } from "@/api/generated/schemas";
-import { listBackendDiagrams } from "@/api/generated/backend-projects/backend-projects";
+import {
+  listBackendDiagrams,
+  getBackendDiagramView,
+} from "@/api/generated/backend-projects/backend-projects";
 import { diagramSearch } from "../backendWorkspaceSearch";
 import { ok } from "./catalogs";
 import { diagramKindNames } from "./model";
@@ -23,6 +26,7 @@ import {
 import { Contracts } from "./Contracts";
 import { diagramArtifactLink } from "./artifactLinks";
 import { nativeSources } from "./nativeSources";
+import { readArchitectureChoices } from "./architectureReads";
 import styles from "./Explorer.module.css";
 export function Inspector({
   projectId,
@@ -59,6 +63,7 @@ export function Inspector({
   onNavigate: (s: BackendWorkspaceSearch) => void;
   onEnter: (n: MapNode) => void;
 }) {
+  const queryClient = useQueryClient();
   useEffect(() => {
     const closeOnEscape = (event: KeyboardEvent) => {
       if (
@@ -145,6 +150,45 @@ export function Inspector({
           { subjectId: relatedID, targetHash: relatedHash, limit: 20, order: "desc" },
           { signal },
         ),
+      ),
+  });
+  const architectureMaps = useQuery({
+    queryKey: ["workbench-related-architecture", projectId, relatedHash, relatedID],
+    enabled:
+      !!relatedID &&
+      tab === "relations" &&
+      !!maps.data?.items.some((item) => item.kind === "architecture"),
+    retry: false,
+    queryFn: ({ signal }) =>
+      readArchitectureChoices(
+        projectId,
+        evidenceTarget,
+        relatedHash,
+        [relatedID!],
+        signal,
+        undefined,
+        (viewId, version) =>
+          queryClient.fetchQuery({
+            queryKey: ["workbench-architecture-view-name", projectId, viewId, version],
+            staleTime: Infinity,
+            queryFn: async ({ signal: viewSignal }) => {
+              const view = ok(
+                await getBackendDiagramView(projectId, viewId, version, { signal: viewSignal }),
+              );
+              if (view.id !== viewId || view.version !== version)
+                throw new Error("Получен другой сохранённый вид.");
+              return {
+                id: view.id,
+                version: view.version,
+                name: view.name,
+                state: {
+                  diagram: view.state.diagram,
+                  level: view.state.level,
+                  rootId: view.state.rootId,
+                },
+              };
+            },
+          }),
       ),
   });
   const sourceRefs = references.flatMap((r) =>
@@ -328,19 +372,6 @@ export function Inspector({
               </Button>
             </Text>
           )}
-          {locations.map((location, index) => (
-            <Text key={index} size="xs" ff="monospace" style={{ overflowWrap: "anywhere" }}>
-              {location.file}
-              {location.startLine
-                ? `:${location.startLine}${location.endLine && location.endLine !== location.startLine ? `–${location.endLine}` : ""}`
-                : ""}
-            </Text>
-          ))}
-          {!evidence.isFetching && !evidence.isError && locations.length === 0 && (
-            <Text size="xs" c="dimmed">
-              Файл и строки не указаны.
-            </Text>
-          )}
           {snippets.map(({ field, label, text }) => (
             <details
               key={`${id}:${backendReadTargetKey(evidenceTarget)}:${field}`}
@@ -360,6 +391,19 @@ export function Inspector({
               {/* oxlint-enable jsx-a11y/no-noninteractive-tabindex */}
             </details>
           ))}
+          {locations.map((location, index) => (
+            <Text key={index} size="xs" ff="monospace" style={{ overflowWrap: "anywhere" }}>
+              {location.file}
+              {location.startLine
+                ? `:${location.startLine}${location.endLine && location.endLine !== location.startLine ? `–${location.endLine}` : ""}`
+                : ""}
+            </Text>
+          ))}
+          {!evidence.isFetching && !evidence.isError && locations.length === 0 && (
+            <Text size="xs" c="dimmed">
+              Файл и строки не указаны.
+            </Text>
+          )}
         </section>
       )}
       {selected?.details && (
@@ -458,26 +502,56 @@ export function Inspector({
         ) : tab === "relations" ? (
           <Stack gap="xs">
             {referencesStatus}
-            {maps.data?.items.map((map) => (
+            {architectureMaps.isError && (
+              <Text size="xs" c="dimmed">
+                Названия архитектурных видов недоступны. Доступны точные ссылки на схемы.
+              </Text>
+            )}
+            {maps.isError && (
+              <Text size="xs" c="red">
+                Связанные схемы недоступны.{" "}
+                <Button size="compact-xs" variant="subtle" onClick={() => void maps.refetch()}>
+                  Повторить
+                </Button>
+              </Text>
+            )}
+            {architectureMaps.data?.map((choice) => (
               <Button
-                key={map.id}
+                key={choice.key}
                 variant="light"
                 size="compact-sm"
-                onClick={() =>
-                  onNavigate({
-                    ...diagramSearch(map.pin),
-                    wbView:
-                      map.kind === "architecture"
-                        ? "structure"
-                        : map.kind === "lifecycle"
-                          ? "data"
-                          : "scenarios",
-                  })
-                }
+                onClick={() => onNavigate(choice.search)}
               >
-                {map.name ?? diagramKindNames[map.kind]} · {diagramKindNames[map.kind]}
+                {choice.name} · Архитектура
               </Button>
             ))}
+            {maps.data?.items
+              .filter(
+                (map) => !architectureMaps.data?.some((choice) => choice.diagramId === map.id),
+              )
+              .map((map) => (
+                <Button
+                  key={map.id}
+                  variant="light"
+                  size="compact-sm"
+                  onClick={() =>
+                    onNavigate({
+                      ...diagramSearch(map.pin),
+                      wbView:
+                        map.kind === "architecture"
+                          ? "structure"
+                          : map.kind === "lifecycle"
+                            ? "data"
+                            : "scenarios",
+                    })
+                  }
+                >
+                  {map.name ?? diagramKindNames[map.kind]} · {diagramKindNames[map.kind]}
+                  {map.kind === "architecture"
+                    ? ` · ${map.pin.id.slice(-8)} · v${map.pin.version}`
+                    : ""}
+                </Button>
+              ))}
             {synthetic && (
               <Text size="sm">
                 Коллекция для навигации по импортированным объектам. Не обозначает отдельный сервис.
@@ -515,6 +589,31 @@ export function Inspector({
                     ) : (
                       <Text size="xs">Связанный объект вне этой страницы</Text>
                     )}
+                    {e.kind === "callback_argument" &&
+                      e.from === id &&
+                      other &&
+                      ["symbol", "handler"].includes(other.kind) && (
+                        <Stack gap="xs">
+                          <Text size="xs" c="dimmed">
+                            Тело известно по исходникам. Выполнение callback и границы транзакции не
+                            подтверждены.
+                          </Text>
+                          <Button
+                            variant="light"
+                            size="compact-sm"
+                            onClick={() =>
+                              onNavigate({
+                                ...pin,
+                                wbView: "scenarios",
+                                wbMode: "flow",
+                                entrypointId: other.id,
+                              })
+                            }
+                          >
+                            Открыть тело callback
+                          </Button>
+                        </Stack>
+                      )}
                   </div>
                 );
               })}

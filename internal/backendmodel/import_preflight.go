@@ -131,7 +131,7 @@ func importConsumerPreflight(surface string, in ImportPreflightInput) (ImportCon
 	case "architecture":
 		c.Concurrency["maxBuilders"] = MaxArchitectureReadConcurrency
 		c.Traversal["maxExaminedEdges"] = 250000
-		c.Admission = map[string]int64{"maxElementMembers": MaxArchitectureElementMembers, "maxDocumentMembers": MaxArchitectureDocumentMembers, "maxDocumentBytes": 1 << 20}
+		c.Admission = map[string]int64{"maxElementMembers": MaxArchitectureElementMembers, "maxDocumentMembers": MaxArchitectureDocumentMembers, "maxDocumentBytes": 1 << 20, "maxRetainedProjectionBytes": MaxArchitectureCacheBytes}
 		c.Remedy = "Preview an explicit exact membership document before saving; use compact-v1 pages and retry the same pins after backend_projection_busy. Membership and proof quality cannot be inferred from graph counts."
 	default:
 		return c, invalid("surfaces", "Unknown consumer surface")

@@ -108,11 +108,21 @@ type EventsTrigger struct {
 }
 
 type EventsDispatch struct {
-	HandlesEdgeID      string        `json:"handlesEdgeId,omitempty"`
-	HandlerID          string        `json:"handlerId,omitempty"`
-	UnresolvedTargetID string        `json:"unresolvedTargetId,omitempty"`
-	FlowIDs            []string      `json:"flowIds"`
-	Witness            EventsWitness `json:"witness"`
+	SourceFlowIDs      []string                   `json:"sourceFlowIds,omitempty"`
+	Diagnostics        []EventsDispatchDiagnostic `json:"diagnostics,omitempty"`
+	HandlesEdgeID      string                     `json:"handlesEdgeId,omitempty"`
+	HandlerID          string                     `json:"handlerId,omitempty"`
+	UnresolvedTargetID string                     `json:"unresolvedTargetId,omitempty"`
+	FlowIDs            []string                   `json:"flowIds"`
+	Witness            EventsWitness              `json:"witness"`
+}
+
+type EventsDispatchDiagnostic struct {
+	Gate        string   `json:"gate"`
+	RecordType  string   `json:"recordType"`
+	SubjectID   string   `json:"subjectId"`
+	Status      string   `json:"status"`
+	EvidenceIDs []string `json:"evidenceIds"`
 }
 
 type EventsRelatedRoute struct {

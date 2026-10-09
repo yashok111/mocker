@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json/v2"
 	"errors"
+	"log/slog"
 	"math"
 	"time"
 	"uuid"
@@ -323,6 +324,7 @@ func (r *Repo) PutImportBatch(ctx context.Context, pid, sid, bid string, in Impo
 }
 
 func (r *Repo) putImportBatchTx(ctx context.Context, tx *sql.Tx, pid, sid, bid string, in ImportBatchInput, requestHash string, result *BatchReceipt) error {
+	started := time.Now()
 	s, err := loadSession(ctx, tx, pid, sid)
 	if err != nil {
 		return err
@@ -359,23 +361,36 @@ func (r *Repo) putImportBatchTx(ctx context.Context, tx *sql.Tx, pid, sid, bid s
 			return importCommandError(err, i, c)
 		}
 	}
-	var base *RevisionState
+	validated := time.Now()
+	identities := newBatchIdentities(nil)
 	if s.Mode == "reconcile" {
-		base, err = loadRevisionState(ctx, tx, pid, s.BaseRevisionID)
+		identities.index, err = r.loadImportBaseIdentityIndex(ctx, tx, pid, s.BaseRevisionID)
 		if err != nil {
 			return err
 		}
 	}
+	baseLoaded := time.Now()
 	if s.Mode == "composed" {
 		if err := putComposedCommands(ctx, tx, s, in.Commands, result); err != nil {
 			return err
 		}
-	} else if err := stageImportCommands(ctx, tx, s, sid, in.Commands, base, result); err != nil {
+	} else if err := stageImportCommands(ctx, tx, s, sid, in.Commands, identities, result); err != nil {
 		return err
 	}
+	staged := time.Now()
 	if err := recordImportBatch(ctx, tx, s, sid, bid, in.PayloadHash, requestHash, result); err != nil {
 		return err
 	}
+	if err := r.checkImportBatchStorage(ctx, tx, pid, sid, s); err != nil {
+		return err
+	}
+	// These are server phases inside the writer, not transport latency or a
+	// publication receipt. No source text, evidence or request keys are logged.
+	slog.DebugContext(ctx, "backend import batch staged", "mode", s.Mode, "commands", len(in.Commands), "validation_us", validated.Sub(started).Microseconds(), "base_identity_us", baseLoaded.Sub(validated).Microseconds(), "stage_us", staged.Sub(baseLoaded).Microseconds(), "accounting_us", time.Since(staged).Microseconds())
+	return nil
+}
+
+func (r *Repo) checkImportBatchStorage(ctx context.Context, tx *sql.Tx, pid, sid string, s *ImportSession) error {
 	if err := checkImportSessionLimits(ctx, tx, s, sid); err != nil {
 		return err
 	}
@@ -410,9 +425,8 @@ func validateImportBatchPayload(in ImportBatchInput) error {
 
 // stageImportCommands reserves an identity for every addressed command of a
 // non-composed batch and stages it as a record or a decision.
-func stageImportCommands(ctx context.Context, tx *sql.Tx, s *ImportSession, sid string, commands []ImportCommand, base *RevisionState, result *BatchReceipt) error {
+func stageImportCommands(ctx context.Context, tx *sql.Tx, s *ImportSession, sid string, commands []ImportCommand, identities *batchIdentities, result *BatchReceipt) error {
 	seen := map[string]bool{}
-	identities := newBatchIdentities(base)
 	result.Identities = []RecordIdentity{}
 	for i, c := range commands {
 		typ, key, err := commandAddress(c)

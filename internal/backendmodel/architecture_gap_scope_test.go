@@ -1,6 +1,64 @@
 package backendmodel
 
-import "testing"
+import (
+	"encoding/json/v2"
+	"reflect"
+	"testing"
+)
+
+func TestArchitectureGapClassificationFiltersDetailsNotSummary(t *testing.T) {
+	r, pid, q := storedArchitectureFixture(t, 4, 6, 6)
+	q.Section, q.Limit = "gaps", 1
+	q.GapScope = &ArchitectureGapScope{Format: "exact-node-scope-v1", NodeIDs: []string{"20000000-0000-4000-8000-000000000002"}}
+	all, err := r.QueryDiagram(t.Context(), pid, q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(q)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields map[string]any
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		t.Fatal(err)
+	}
+	fields["gapClassification"] = "boundary"
+	raw, err = json.Marshal(fields)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := json.Unmarshal(raw, &q); err != nil {
+		t.Fatalf("classification query rejected: %v", err)
+	}
+	count := 0
+	for {
+		page, err := r.QueryDiagram(t.Context(), pid, q)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if page.Total != 2 || !reflect.DeepEqual(page.GapSummary, all.GapSummary) {
+			t.Fatalf("filter changed full summary or selected total: %+v", page)
+		}
+		for _, row := range page.Items {
+			if row.Gap == nil || row.Gap.Scope != "boundary" {
+				t.Fatal("another scope leaked into filtered details")
+			}
+			count++
+		}
+		q.Cursor = page.NextCursor
+		if q.Cursor == "" {
+			break
+		}
+		other := q
+		other.GapScope = nil
+		if _, err := r.QueryDiagram(t.Context(), pid, other); err == nil {
+			t.Fatal("classification without exact scope accepted")
+		}
+	}
+	if count != 2 {
+		t.Fatalf("read %d boundary details, want 2", count)
+	}
+}
 
 func TestArchitectureGapScopeIsExplicitPinnedAndComplete(t *testing.T) {
 	r, pid, q := storedArchitectureFixture(t, 4, 6, 6)

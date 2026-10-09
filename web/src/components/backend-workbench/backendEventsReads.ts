@@ -303,6 +303,19 @@ export function eventsReason(reason: string) {
   return (
     (
       {
+        origin_proof: "Основание регистрации",
+        handler_proof: "Основание обработчика",
+        handles_proof: "Связь с обработчиком",
+        flow_proof: "Полнота тела Flow",
+        flow_ownership_proof: "Владелец Flow",
+        missing_binding: "Обработчик не найден",
+        missing_flow: "Тело обработчика не найдено",
+        inferred: "Вывод анализа",
+        explicit: "Подтверждено исходниками",
+        "Configured job binding is known; downstream behavior remains qualified":
+          "Привязка фоновой задачи известна; дальнейшее поведение подтверждено частично",
+        "Configured job dispatch has unavailable source proof":
+          "Недостаточно оснований для вызова обработчика фоновой задачи",
         ownership_depth: "Достигнута граница глубины владельцев",
         edge_limit: "Превышен предел связей исходного снимка",
         item_limit: "Достигнут предел результатов",

@@ -27,6 +27,7 @@ import {
   useGetBackendProject,
   listBackendDiagrams,
   getGetBackendProjectQueryKey,
+  applyBackendProjectCommands,
 } from "@/api/generated/backend-projects/backend-projects";
 import type { BackendExplorePage, BackendProject } from "@/api/generated/schemas";
 import { backendReadTargetKey } from "../backendReadTargets";
@@ -54,6 +55,7 @@ import { useCardClicks } from "./cardClicks";
 import { SourceCatalog, catalogScope } from "./SourceCatalog";
 import { ScenarioWorkspace } from "./ScenarioWorkspace";
 import { ScenarioStart } from "./ScenarioStart";
+import { projectEntrySearch } from "./projectStartView";
 const EMPTY_SEARCH: BackendWorkspaceSearch = {};
 const NO_NAVIGATE = () => {};
 const views: [View, string][] = [
@@ -146,7 +148,12 @@ function PinnedWorkspace(props: WorkspaceProps) {
 }
 function WorkspaceEntry(props: WorkspaceProps & { resolvedEntry?: Entry }) {
   const project = useGetBackendProject(props.projectId, { query: { retry: false } });
-  const search = props.sourcePin ?? EMPTY_SEARCH;
+  const routeSearch = props.sourcePin ?? EMPTY_SEARCH;
+  const startView = project.data?.status === 200 ? project.data.data.startView : undefined;
+  const search = useMemo(
+    () => projectEntrySearch(routeSearch, startView),
+    [routeSearch, startView],
+  );
   const entry = useQuery({
     queryKey: [
       "workbench-entry",
@@ -178,6 +185,10 @@ function WorkspaceEntry(props: WorkspaceProps & { resolvedEntry?: Entry }) {
   const entryData = props.resolvedEntry ?? entry.data;
   useEffect(() => {
     if (!entryData) return;
+    if (search !== routeSearch) {
+      navigate(search, true);
+      return;
+    }
     const t = entryData.target;
     if (
       !search.revisionId &&
@@ -189,7 +200,7 @@ function WorkspaceEntry(props: WorkspaceProps & { resolvedEntry?: Entry }) {
       "revisionId" in t
     )
       navigate({ ...search, revisionId: t.revisionId ?? undefined }, true);
-  }, [entryData, search, navigate]);
+  }, [entryData, search, routeSearch, navigate]);
   const needsPin =
     !!props.onSourceNavigate &&
     !!entryData &&
@@ -278,6 +289,47 @@ function ResolvedWorkspace({
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchText, setSearchText] = useState("");
   const [copied, setCopied] = useState(false);
+  const [startSaving, setStartSaving] = useState(false);
+  const [startNotice, setStartNotice] = useState<{ error: boolean; text: string }>();
+  const currentStart = entry.diagramView
+    ? {
+        kind: "diagram_view" as const,
+        id: entry.diagramView.id,
+        version: entry.diagramView.version,
+      }
+    : entry.saved
+      ? { kind: "saved_view" as const, id: entry.saved.id, version: entry.saved.version }
+      : undefined;
+  const saveStart = async (clear = false) => {
+    if (!clear && !currentStart) return;
+    setStartSaving(true);
+    setStartNotice(undefined);
+    try {
+      const response = await applyBackendProjectCommands(project.id, {
+        expectedVersion: project.version,
+        idempotencyKey: crypto.randomUUID(),
+        commands: clear
+          ? [{ type: "clear_start_view" }]
+          : [{ type: "set_start_view", startView: currentStart! }],
+      });
+      if (response.status !== 200)
+        throw new Error("Не удалось изменить стартовый вид. Обновите проект и повторите действие.");
+      client.setQueryData(getGetBackendProjectQueryKey(project.id), response);
+      setStartNotice({
+        error: false,
+        text: clear
+          ? "Стартовый вид снят."
+          : `Стартовый вид закреплён: версия ${currentStart!.version}.`,
+      });
+    } catch (error) {
+      setStartNotice({
+        error: true,
+        text: error instanceof Error ? error.message : "Стартовый вид недоступен.",
+      });
+    } finally {
+      setStartSaving(false);
+    }
+  };
   const objectList = !!search.wbList;
   const opener = useRef<HTMLElement | null>(null);
   const pin = useMemo(() => resolvedTargetSearch(target), [target]);
@@ -597,6 +649,21 @@ function ResolvedWorkspace({
             </ActionIcon>
           </Menu.Target>
           <Menu.Dropdown>
+            {project.startView && (
+              <Menu.Item onClick={() => go(projectEntrySearch({}, project.startView))}>
+                Открыть стартовый вид
+              </Menu.Item>
+            )}
+            {currentStart && (
+              <Menu.Item disabled={startSaving} onClick={() => void saveStart()}>
+                Сделать этот вид стартовым
+              </Menu.Item>
+            )}
+            {project.startView && (
+              <Menu.Item disabled={startSaving} onClick={() => void saveStart(true)}>
+                Снять стартовый вид
+              </Menu.Item>
+            )}
             <Menu.Item onClick={() => void copy()}>
               {copied ? "Ссылка скопирована" : "Скопировать ссылку"}
             </Menu.Item>
@@ -611,6 +678,14 @@ function ResolvedWorkspace({
           </Menu.Dropdown>
         </Menu>
       </header>
+      {startNotice && (
+        <Alert
+          color={startNotice.error ? "red" : "green"}
+          role={startNotice.error ? "alert" : "status"}
+        >
+          {startNotice.text}
+        </Alert>
+      )}
       <div className={styles.toolbar}>
         <nav className={styles.breadcrumbs} aria-label="Положение в проекте">
           <ActionIcon variant="subtle" aria-label="Назад к предыдущему виду" onClick={nav.back}>
@@ -700,6 +775,49 @@ function ResolvedWorkspace({
           ? `Новые результаты: ${changes.count + checks.count}`
           : ""}
       </output>
+      {!search.wbPanel &&
+        !entry.diagram &&
+        (search.wbQuery ||
+          search.wbAccessKind ||
+          search.wbReverseAccessKind ||
+          (entry.saved?.state.kind === "database" && search.dataNodeId)) && (
+          <Group px="xl" py="xs" aria-label="Активные фильтры">
+            <Text size="sm">
+              Фильтры:{" "}
+              {[
+                search.wbQuery && `поиск «${search.wbQuery}»`,
+                search.wbAccessKind,
+                search.wbReverseAccessKind,
+                entry.saved?.state.kind === "database" &&
+                  search.dataNodeId &&
+                  `таблица ${search.dataNodeId}`,
+              ]
+                .filter(Boolean)
+                .join(" · ")}
+            </Text>
+            <Button
+              size="compact-xs"
+              variant="subtle"
+              onClick={() =>
+                go({
+                  ...search,
+                  ...pin,
+                  viewId: undefined,
+                  viewVersion: undefined,
+                  wbQuery: "",
+                  wbCatalog: undefined,
+                  wbFilter: undefined,
+                  wbCursor: undefined,
+                  wbAccessKind: undefined,
+                  wbReverseAccessKind: undefined,
+                  ...(entry.saved?.state.kind === "database" ? { dataNodeId: undefined } : {}),
+                })
+              }
+            >
+              Снять фильтры
+            </Button>
+          </Group>
+        )}
       <div className={styles.body}>
         {search.wbPanel ? (
           <Results projectId={project.id} target={target} search={search} onNavigate={go} />
@@ -843,6 +961,17 @@ function ResolvedWorkspace({
                     </Button>
                   )}
                 </Group>
+              )}
+              {!!map.data?.hiddenRelationships && (
+                <Alert color="yellow" mx="xl" my="xs">
+                  Связей с таблицами вне текущего списка: {map.data.hiddenRelationships}. Фильтры
+                  или ограничения страницы скрывают один из концов связи.
+                </Alert>
+              )}
+              {map.data?.partial && map.data.nodes.length > 0 && (
+                <Alert color="yellow" mx="xl" my="xs" title="Границы анализа">
+                  {map.data.partial}
+                </Alert>
               )}
               {entry.saved?.state.collapsedGroupIds.length ? (
                 <Group px="xl">

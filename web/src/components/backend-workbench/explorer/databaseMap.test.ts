@@ -14,6 +14,29 @@ vi.mock("./reads", async (original) => ({
   readExploreNodes: vi.fn(),
 }));
 afterEach(() => vi.resetAllMocks());
+
+it("discloses only hidden relationships incident to a visible filtered table", async () => {
+  fixture();
+  const read = vi.mocked(readDatabasePage).getMockImplementation()!;
+  vi.mocked(readDatabasePage).mockImplementation(async (...args) => {
+    const response = await read(...args);
+    if (response.status === 200 && args[1].recordType === "relationships") {
+      response.data.relationshipItems = [
+        { ...relation("hidden", "chat_id"), targetTableId: "chat" },
+        { ...relation("unrelated", "other_id"), sourceTableId: "other", targetTableId: "another" },
+      ];
+    }
+    return response;
+  });
+  const map = await readDatabaseMap(
+    projectId,
+    target,
+    { datastoreId: "db", facetKey: "migration", wbQuery: "kladr" },
+    new AbortController().signal,
+  );
+  expect(map.edges).toEqual([]);
+  expect(map.hiddenRelationships).toBe(1);
+});
 const target = { revisionId };
 const relation = (id: string, column: string): BackendDatabaseRelationshipItem => ({
   edgeId: id,

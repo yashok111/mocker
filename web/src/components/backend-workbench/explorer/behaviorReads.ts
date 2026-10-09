@@ -52,7 +52,9 @@ export async function readBehavior(
       : definition;
   if (!entrypoint) throw new Error("Не указан вход в сценарий");
   if (search.entrypointId && definition) {
-    const owners = entrypoint.kind === "handler" ? [entrypoint.id] : (flow.handlerIds ?? []);
+    const owners = ["handler", "symbol"].includes(entrypoint.kind)
+      ? [entrypoint.id]
+      : (flow.handlerIds ?? []);
     if (!definition.parentId || !owners.includes(definition.parentId))
       throw new Error("Flow не принадлежит выбранной точке входа");
   }

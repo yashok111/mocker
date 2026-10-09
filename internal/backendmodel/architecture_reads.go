@@ -18,6 +18,10 @@ func (r *Repo) readArchitectureGraph(ctx context.Context, pid string, target Bac
 }
 
 func loadArchitectureGraph(ctx context.Context, q importReader, pid string, target BackendReadTarget) (*EffectiveGraphSnapshot, error) {
+	return loadNativeProjectionGraph(ctx, q, pid, target)
+}
+
+func loadNativeProjectionGraph(ctx context.Context, q importReader, pid string, target BackendReadTarget) (*EffectiveGraphSnapshot, error) {
 	if err := target.Validate(); err != nil {
 		return nil, err
 	}
@@ -34,8 +38,8 @@ func loadArchitectureGraph(ctx context.Context, q importReader, pid string, targ
 	// C4 consumes native source5 records and their evidence, not the source6
 	// migration identities/proof bases. Bootstrapping those for every section
 	// cost 14.6 seconds and 12.5 GiB of allocations on Education Platform.
-	// Keep this snapshot private to projection reads: generic source consumers
-	// still need the full resolver, as do composed and proposed targets.
+	// Use only for projections/reference validation consuming State and Pins.
+	// Proof-basis consumers, composed and proposed targets need the full resolver.
 	state, err := loadRevisionState(ctx, q, pid, target.RevisionID)
 	if err != nil {
 		return nil, err

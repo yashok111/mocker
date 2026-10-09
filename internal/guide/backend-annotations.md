@@ -22,6 +22,16 @@ Replace with `{type:"update_annotation",annotationId,target,body}`. Replacement 
 
 These operations increment project metadata CAS without creating a source revision or changing semantic source hashes. A pending source Commit can consequently receive a project-version 409 with the same source head. No workspace confirmSlug applies to this annotation endpoint.
 
+## Exact project start view
+
+The same metadata batch supports at most one start-view change:
+`{type:"set_start_view",startView:{kind:"saved_view"|"diagram_view",id,version}}`
+or `{type:"clear_start_view"}`. The UUID and positive version must resolve in
+this project. The start pin is independent of the current source head and never
+follows a later view version automatically. Source bytes stay unchanged; the
+normal project CAS/receipt rules apply. Explicit URL destinations take precedence
+over this default. See backend-architecture for the import handoff checklist.
+
 ## List and navigate
 
 `list_backend_annotations {projectId,annotationId?,recordType?,targetId?,revisionId?,orphaned?,limit?,cursor?}` uses intersecting filters. targetId requires recordType; orphaned is a literal boolean. Default page100, maximum500. Preserve returned projectVersion and cursor scope. The cursor binds metadata version and source head; on 409 clear the page stack and reread, preserving any unsaved text.

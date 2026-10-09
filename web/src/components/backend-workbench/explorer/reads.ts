@@ -415,19 +415,7 @@ export async function readFlowMap(
     const operation = "node" in detail ? detail.node : detail;
     if (!("name" in operation)) throw new Error("Операция недоступна");
     entrypoint = nodeOf(operation);
-    if (operation.kind === "symbol" && flowId)
-      throw new Error("Для этого символа не подтверждена связь с выбранным Flow");
-    if (operation.kind === "symbol")
-      return {
-        nodes: [],
-        edges: [],
-        total: 0,
-        title: entrypoint.name,
-        subtitle: "Связи по исходникам",
-        entrypoint,
-        handlerIds: [],
-      };
-    if (operation.kind === "handler") {
+    if (operation.kind === "handler" || operation.kind === "symbol") {
       const flows = await readExploreScope(
         projectId,
         { target, mode: "children", scopeId: operation.id, kind: "flow", limit: 100 },

@@ -36,7 +36,7 @@ func resolveSavedVersionReferences(ctx context.Context, q importReader, pid, ver
 	if selectedSavedViewVersion(version) == SavedViewDocumentVersion {
 		return resolveSavedReferences(ctx, q, pid, target, state)
 	}
-	graph, err := resolveEffectiveGraph(ctx, q, pid, target)
+	graph, err := loadNativeProjectionGraph(ctx, q, pid, target)
 	if err != nil {
 		return nil, err
 	}

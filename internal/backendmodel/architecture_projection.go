@@ -43,6 +43,7 @@ func architecturePage(ctx context.Context, v *DiagramVersion, p *architecturePro
 	}
 	end := min(len(rows), offset+in.Limit)
 	page := &DiagramPage{Projection: &ArchitectureProjectionContext{Policy: "architecture-v1", Level: in.Level, RootID: in.RootID}, Pin: v.Pin, TargetHash: v.TargetHash, Total: len(rows), NextCursor: diagramNext(scope, end, len(rows)), Items: rows[offset:end], Gaps: p.gaps, Truncated: p.truncated}
+	page.Cache = p.cache
 	if err := compactDiagramPage(ctx, page, in); err != nil {
 		return nil, err
 	}
@@ -271,7 +272,7 @@ func architectureFilteredRows(ctx context.Context, p *architectureProjection, in
 			if err := ctx.Err(); err != nil {
 				return nil, err
 			}
-			if strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(in.Search)) {
+			if (in.GapClassification == "" || gap.Scope == in.GapClassification) && strings.Contains(strings.ToLower(gap.Explanation), strings.ToLower(in.Search)) {
 				rows = append(rows, DiagramRow{Gap: new(gap)})
 			}
 		}

@@ -66,6 +66,9 @@ func (r *Repo) ImportPortableModelTx(ctx context.Context, tx *sql.Tx, input Port
 	if err := r.importPortableViewsTx(ctx, tx, &model, diagramPins); err != nil {
 		return nil, err
 	}
+	if err := writeProjectStartView(ctx, tx, p); err != nil {
+		return nil, err
+	}
 	if err := importPortableAnnotationsTx(ctx, tx, p.ID, model.Annotations); err != nil {
 		return nil, err
 	}

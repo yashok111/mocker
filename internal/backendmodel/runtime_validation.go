@@ -11,7 +11,7 @@ import (
 
 func runtimeSubject(kind string, edge bool) bool {
 	if edge {
-		return slices.Contains([]string{"next", "branch", "error", "returns", "reads", "writes", "deletes", "begins", "commits", "rolls_back"}, kind)
+		return slices.Contains([]string{"next", "branch", "error", "returns", "reads", "writes", "deletes", "begins", "commits", "rolls_back", "callback_argument"}, kind)
 	}
 	return slices.Contains([]string{"flow", "flow_step", "query", "transaction"}, kind)
 }
@@ -120,6 +120,9 @@ func runtimeAttributeFields(kind string, a map[string]jsontext.Value, edge, pers
 	case "returns":
 		fs.required = append(fs.required, "label")
 		fs.text = append(fs.text, "label")
+	case "callback_argument":
+		fs.required = append(fs.required, "argumentPosition", "invocationKnowledge", "reason")
+		fs.text = append(fs.text, "reason")
 	case "reads", "writes", "deletes":
 		fs.required = append(fs.required, "accessMode", ref, "facetKey", "columnScope")
 		fs.text = append(fs.text, "facetKey")
@@ -224,6 +227,14 @@ func runtimeCheckRef(a map[string]jsontext.Value, key string, persisted bool) er
 func validateRuntimeKindRules(kind string, a map[string]jsontext.Value, persisted bool) error {
 	ref := runtimeReferenceName("datastoreKey", persisted)
 	switch kind {
+	case "callback_argument":
+		var position *int
+		if err := json.Unmarshal(a["argumentPosition"], &position); err != nil || position == nil || *position < 0 || *position > 65535 {
+			return semantic("argumentPosition", "Use a zero-based integer argument position from 0 to 65535")
+		}
+		// Proved invocations use a separate calls edge. The argument relation
+		// itself never promises execution, count, atomicity or success.
+		return relationalEnum(a["invocationKnowledge"], "unknown")
 	case "flow":
 		return validateRuntimeFlowExits(a, persisted)
 	case "flow_step":

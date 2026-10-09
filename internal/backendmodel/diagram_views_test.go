@@ -2,6 +2,51 @@ package backendmodel
 
 import "testing"
 
+func TestArchitectureSource5ViewValidationHasBoundedReads(t *testing.T) {
+	t.Parallel()
+	r, base, _ := effectiveFiveRelationalFixture(t)
+	doc := diagramTestDocument(base.Revision.ID)
+	d, err := r.CreateDiagram(t.Context(), base.Project.ID, DiagramCreateInput{Document: doc, IdempotencyKey: "diagram"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	state := DiagramViewState{Diagram: d.Pin, Level: "context", RootID: doc.Payload.PrimarySystemID, Origin: "all", Positions: []DiagramPosition{}, CollapsedIDs: []string{}}
+	reader, writer := diagramCountReads(t, r)
+	view, err := r.CreateDiagramView(t.Context(), base.Project.ID, DiagramCreateViewInput{Name: "Overview", State: state, IdempotencyKey: "view"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := reader.reads.Load(); n > 20 {
+		t.Errorf("create used %d SQL reads; source5 view validation must use bulk reads", n)
+	}
+	reader.reads.Store(0)
+	writer.reads.Store(0)
+	input := DiagramSaveViewInput{Name: "Updated overview", State: state, ExpectedVersion: view.Version, IdempotencyKey: "save"}
+	updated, err := r.SaveDiagramView(t.Context(), base.Project.ID, view.ID, input)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := reader.reads.Load(); n > 20 {
+		t.Errorf("save used %d SQL reads; source5 view validation must use bulk reads", n)
+	}
+	replay, err := r.SaveDiagramView(t.Context(), base.Project.ID, view.ID, input)
+	if err != nil || replay.Version != updated.Version || replay.State.Diagram != d.Pin {
+		t.Fatalf("exact replay changed view pin/version: %+v %v", replay, err)
+	}
+	input.IdempotencyKey = "stale-cas"
+	if _, err := r.SaveDiagramView(t.Context(), base.Project.ID, view.ID, input); err == nil {
+		t.Fatal("stale view CAS accepted")
+	}
+	for _, bad := range []DiagramViewState{
+		{Diagram: d.Pin, Level: "context", Origin: "all", Selection: &DiagramSelection{Type: "element", ID: "absent"}, Positions: []DiagramPosition{}, CollapsedIDs: []string{}},
+		{Diagram: d.Pin, Level: "context", Origin: "all", Positions: []DiagramPosition{{ID: "absent", X: 1, Y: 2}}, CollapsedIDs: []string{}},
+	} {
+		if err := validateDiagramViewRead(t.Context(), r.db.R, base.Project.ID, "Invalid layout", bad); err == nil {
+			t.Fatal("foreign layout member accepted")
+		}
+	}
+}
+
 func TestDiagramViewsKeepExactPinAndIndependentCatalog(t *testing.T) {
 	t.Parallel()
 	r, _ := testRepo(t)

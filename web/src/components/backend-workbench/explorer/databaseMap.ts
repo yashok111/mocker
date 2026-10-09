@@ -108,10 +108,16 @@ export async function readDatabaseMap(
     origin: "Объявленная схема",
   }));
   const ids = new Set(nodes.map((n) => n.id));
-  const visibleRelations = uniqueBy(
+  const allRelations = uniqueBy(
     relations.flatMap((p) => p.relationshipItems),
     (e) => e.edgeId,
-  ).filter((e) => e.targetTableId && ids.has(e.sourceTableId) && ids.has(e.targetTableId));
+  );
+  const visibleRelations = allRelations.filter(
+    (e) => e.targetTableId && ids.has(e.sourceTableId) && ids.has(e.targetTableId),
+  );
+  const hiddenRelationships = allRelations.filter(
+    (e) => e.targetTableId && ids.has(e.sourceTableId) !== ids.has(e.targetTableId),
+  ).length;
   const fieldIds = [
     ...new Set(
       visibleRelations.flatMap((e) =>
@@ -131,6 +137,7 @@ export async function readDatabaseMap(
   const tableNames = new Map(nodes.map((n) => [n.id, n.name]));
   return {
     nodes,
+    hiddenRelationships,
     edges: visibleRelations.map((e) => {
       const named =
         e.columnPairs.length > 0 &&

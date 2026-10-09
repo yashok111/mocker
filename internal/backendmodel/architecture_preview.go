@@ -3,18 +3,20 @@ package backendmodel
 import "context"
 
 type ArchitecturePreviewInput struct {
-	GapScope  *ArchitectureGapScope `json:"gapScope,omitzero"`
-	Document  DiagramDocument       `json:"document"`
-	Level     string                `json:"level"`
-	RootID    string                `json:"rootId"`
-	Section   string                `json:"section"`
-	SubjectID string                `json:"subjectId,omitempty"`
-	Origin    string                `json:"origin"`
-	Search    string                `json:"search"`
-	Limit     int                   `json:"limit"`
-	Cursor    string                `json:"cursor,omitempty"`
+	GapClassification string                `json:"gapClassification,omitempty"`
+	GapScope          *ArchitectureGapScope `json:"gapScope,omitzero"`
+	Document          DiagramDocument       `json:"document"`
+	Level             string                `json:"level"`
+	RootID            string                `json:"rootId"`
+	Section           string                `json:"section"`
+	SubjectID         string                `json:"subjectId,omitempty"`
+	Origin            string                `json:"origin"`
+	Search            string                `json:"search"`
+	Limit             int                   `json:"limit"`
+	Cursor            string                `json:"cursor,omitempty"`
 }
 type ArchitecturePreviewPage struct {
+	Cache        *ArchitectureCacheStatus       `json:"cache,omitzero"`
 	DocumentHash string                         `json:"documentHash"`
 	TargetHash   string                         `json:"targetHash"`
 	Projection   *ArchitectureProjectionContext `json:"projection"`
@@ -28,7 +30,7 @@ type ArchitecturePreviewPage struct {
 func (in *ArchitecturePreviewInput) UnmarshalJSON(b []byte) error {
 	type plain ArchitecturePreviewInput
 	*in = ArchitecturePreviewInput{}
-	return strictAPIObject(b, []string{"document", "level", "rootId", "section", "origin", "search", "limit"}, []string{"subjectId", "cursor", "gapScope"}, (*plain)(in))
+	return strictAPIObject(b, []string{"document", "level", "rootId", "section", "origin", "search", "limit"}, []string{"subjectId", "cursor", "gapScope", "gapClassification"}, (*plain)(in))
 }
 
 func (r *Repo) PreviewArchitecture(ctx context.Context, pid string, in ArchitecturePreviewInput) (*ArchitecturePreviewPage, error) {
@@ -54,6 +56,7 @@ func (r *Repo) PreviewArchitecture(ctx context.Context, pid string, in Architect
 	v := &DiagramVersion{ProjectID: pid, Document: document, Pin: DiagramPin{ID: diagramIdentity("architecture-preview-v1", pid, hash), Version: 1, ContentHash: hash}}
 	q := DiagramQueryInput{Pin: v.Pin, Level: in.Level, RootID: in.RootID, Section: in.Section, SubjectID: in.SubjectID, Origin: in.Origin, Search: in.Search, Limit: in.Limit, Cursor: in.Cursor, ResponseMode: "compact-v1"}
 	q.GapScope = in.GapScope
+	q.GapClassification = in.GapClassification
 	if err := q.Validate(); err != nil {
 		return nil, err
 	}
@@ -86,5 +89,5 @@ func (r *Repo) PreviewArchitecture(ctx context.Context, pid string, in Architect
 	if err != nil {
 		return nil, err
 	}
-	return &ArchitecturePreviewPage{DocumentHash: hash, TargetHash: page.TargetHash, Projection: page.Projection, Total: page.Total, Items: page.Items, GapSummary: page.GapSummary, NextCursor: page.NextCursor, Truncated: page.Truncated}, nil
+	return &ArchitecturePreviewPage{Cache: page.Cache, DocumentHash: hash, TargetHash: page.TargetHash, Projection: page.Projection, Total: page.Total, Items: page.Items, GapSummary: page.GapSummary, NextCursor: page.NextCursor, Truncated: page.Truncated}, nil
 }

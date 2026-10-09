@@ -185,6 +185,11 @@ func (p *eventsProjection) dispatch(id string) []EventsDispatch {
 		originNode := p.nodes[id]
 		originProof := (&runtimeFlowProjection{effective: p.effective, source: p.source, evidence: p.evidence}).sourceRecordStatus("node", originNode.ID, nil, originNode.EvidenceIDs, originNode.Freshness, map[string]bool{})
 		d := EventsDispatch{HandlesEdgeID: e.ID, FlowIDs: []string{}, Witness: p.witness([]string{e.To}, []string{e.ID})}
+		originDiagnostic := origin
+		originDiagnostic.Status = originProof
+		p.dispatchDiagnostic(&d, "origin_proof", "node", id, originDiagnostic)
+		p.dispatchDiagnostic(&d, "handler_proof", "node", e.To, p.witness([]string{e.To}, nil))
+		p.dispatchDiagnostic(&d, "handles_proof", "edge", e.ID, p.witness(nil, []string{e.ID}))
 		h, ok := p.nodes[e.To]
 		if !ok || h.Kind != "handler" {
 			d.UnresolvedTargetID = e.To
@@ -194,6 +199,8 @@ func (p *eventsProjection) dispatch(id string) []EventsDispatch {
 			// A stale/unknown handle is a boundary; never follow it into a flow.
 			if d.Witness.Status == "explicit" && originProof == "explicit" {
 				p.dispatchFlows(&d, h)
+			} else {
+				p.sourceDispatchFlows(&d, h)
 			}
 		}
 		d.Witness = p.combineWitness(d.Witness, origin)
@@ -203,12 +210,35 @@ func (p *eventsProjection) dispatch(id string) []EventsDispatch {
 	if len(result) == 0 {
 		result = append(result, EventsDispatch{FlowIDs: []string{}, Witness: p.witness([]string{id}, nil)})
 		eventsWitnessReason(&result[0].Witness, "Missing discovered handler for "+id, "unresolved")
+		p.dispatchDiagnostic(&result[0], "missing_binding", "node", id, result[0].Witness)
 	}
 	if p.truncations["auxiliary_limit"] || len(result) == EventsMaxWitnessRecords {
 		eventsWitnessReason(&result[len(result)-1].Witness, "Dispatch witness construction incomplete", "inferred")
 	}
 	p.dispatchCache[id] = result
 	return result
+}
+
+// Diagnostics explain qualification without widening dispatch admission. Share
+// a bounded detail budget so many failed flow proofs cannot multiply evidence.
+func (p *eventsProjection) dispatchDiagnostic(d *EventsDispatch, gate, typ, id string, w EventsWitness) {
+	if w.Status == "explicit" {
+		return
+	}
+	remaining := EventsMaxWitnessRecords
+	for _, item := range d.Diagnostics {
+		remaining -= 1 + len(item.EvidenceIDs)
+	}
+	if remaining <= 0 {
+		p.truncations["witness_limit"] = true
+		return
+	}
+	ids := w.EvidenceIDs
+	if len(ids) > remaining-1 {
+		ids = ids[:remaining-1]
+		p.truncations["witness_limit"] = true
+	}
+	d.Diagnostics = append(d.Diagnostics, EventsDispatchDiagnostic{Gate: gate, RecordType: typ, SubjectID: id, Status: w.Status, EvidenceIDs: slices.Clone(ids)})
 }
 func (p *eventsProjection) combineWitness(a, b EventsWitness) EventsWitness {
 	nodes, edges := slices.Clone(a.NodeIDs), slices.Clone(a.EdgeIDs)
@@ -363,11 +393,14 @@ func (p *eventsProjection) dispatchFlows(d *EventsDispatch, h Node) {
 			break
 		}
 		d.FlowIDs = append(d.FlowIDs, f.ID)
+		p.dispatchDiagnostic(d, "flow_proof", "node", f.ID, p.witness([]string{f.ID}, nil))
+		p.dispatchDiagnostic(d, "flow_ownership_proof", "edge", contains.ID, p.witness(nil, []string{contains.ID}))
 		next := p.witness([]string{f.ID}, []string{contains.ID})
 		d.Witness = p.combineWitness(d.Witness, next)
 	}
 	if len(d.FlowIDs) == 0 {
 		eventsWitnessReason(&d.Witness, "Missing discovered handler flow "+h.ID, "unresolved")
+		p.dispatchDiagnostic(d, "missing_flow", "node", h.ID, d.Witness)
 	}
 }
 
@@ -416,4 +449,23 @@ func (b *eventsWitnessBuilder) sourceObserve(typ, id string, ids []string, fresh
 		}
 		b.evidence[eid] = true
 	}
+}
+
+func (p *eventsProjection) sourceDispatchFlows(d *EventsDispatch, h Node) {
+	// Lexical ownership is navigable source context even when the
+	// binding is not admitted as verified dispatch. Never fold these
+	// bodies into FlowIDs or the execution witness.
+	for _, ownership := range p.out[h.ID] {
+		flow, exists := p.nodes[ownership.To]
+		if ownership.Kind != "contains" || !exists || flow.Kind != "flow" || flow.ParentID == nil || *flow.ParentID != h.ID {
+			continue
+		}
+		if len(d.SourceFlowIDs) == EventsMaxWitnessRecords || !p.auxiliary() {
+			p.truncations["witness_limit"] = true
+			break
+		}
+		d.SourceFlowIDs = append(d.SourceFlowIDs, flow.ID)
+	}
+	slices.Sort(d.SourceFlowIDs)
+	d.SourceFlowIDs = slices.Compact(d.SourceFlowIDs)
 }
