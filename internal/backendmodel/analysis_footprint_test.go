@@ -63,7 +63,7 @@ func TestAnalysisFootprintRejectsCombinedPairBeforeDecode(t *testing.T) {
 			// Invalid domain records are deliberately retained: a graph decoder would
 			// fail, while admission must reject the combined bytes before reaching it.
 			id := uuid.NewV7().String()
-			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('id',?,'kind','','name','','padding',printf('%*s',?,'x')))`, base.Project.ID, rid, id, id, 130<<20); err != nil {
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_graph_records(project_id,revision_id,record_type,id,document) VALUES(?,?,'node',?,json_object('id',?,'kind','','name','','padding',printf('%*s',?,'x')))`, base.Project.ID, rid, id, id, MaxRevisionBytes/2+(2<<20)); err != nil {
 				return err
 			}
 		}

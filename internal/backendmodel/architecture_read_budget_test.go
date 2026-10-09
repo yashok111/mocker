@@ -2,10 +2,83 @@ package backendmodel
 
 import (
 	"context"
+	"encoding/json/v2"
 	"errors"
+	"fmt"
+	"strings"
 	"sync"
 	"testing"
 )
+
+func TestArchitectureReadCacheRetainsEducationSizedProjection(t *testing.T) {
+	var cache architectureReadCache
+	p := newArchitectureProjection(&DiagramVersion{})
+	for i := range 38106 {
+		scope := "unrelated"
+		if i < 153 {
+			scope = "boundary"
+		}
+		p.gaps = append(p.gaps, DiagramGap{
+			ID:          fmt.Sprintf("20000000-0000-4000-8000-%012d", i),
+			SubjectID:   fmt.Sprintf("30000000-0000-4000-8000-%012d", i),
+			Code:        "unresolved_membership",
+			Explanation: "Source dependency has a missing or ambiguous explicit architecture membership",
+			Scope:       scope,
+		})
+	}
+	raw, err := json.Marshal(p.gaps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) <= 8<<20 || len(raw) >= 24<<20 {
+		t.Fatalf("fixture must exercise the observed cache gap, got %d bytes", len(raw))
+	}
+	t.Logf("qualified gap array bytes: %d", len(raw))
+	loads := 0
+	build := func() (*architectureProjection, error) {
+		loads++
+		return p, nil
+	}
+	for range 2 {
+		if _, err := cache.load(t.Context(), "exact-education-projection", build); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if loads != 1 {
+		t.Fatalf("qualified projection rebuilt on identical read: %d builds", loads)
+	}
+}
+
+func TestArchitectureReadCacheOversizeEvictsWithoutRetention(t *testing.T) {
+	var cache architectureReadCache
+	if _, err := cache.load(t.Context(), "small", func() (*architectureProjection, error) {
+		return newArchitectureProjection(&DiagramVersion{}), nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	loads := 0
+	build := func() (*architectureProjection, error) {
+		loads++
+		if cache.projection != nil || cache.key != "" {
+			t.Fatal("old projection retained while replacement is allocated")
+		}
+		p := newArchitectureProjection(&DiagramVersion{})
+		p.gaps = []DiagramGap{{ID: "oversize", Code: "fixture", Explanation: strings.Repeat("x", 24<<20)}}
+		return p, nil
+	}
+	for range 2 {
+		p, err := cache.load(t.Context(), "oversize", build)
+		if err != nil || p == nil {
+			t.Fatalf("oversize projection should remain readable: %v", err)
+		}
+		if cache.projection != nil || cache.key != "" {
+			t.Fatal("oversize projection was retained")
+		}
+	}
+	if loads != 2 {
+		t.Fatalf("oversize reads unexpectedly reused retained data: %d builds", loads)
+	}
+}
 
 func TestArchitectureReadAdmissionAndCancellation(t *testing.T) {
 	t.Parallel()

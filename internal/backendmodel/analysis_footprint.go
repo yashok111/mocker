@@ -117,7 +117,7 @@ func (b *analysisFootprintBuilder) add(key string, size int64) error {
 		return nil
 	}
 	if size < 0 || size > MaxRevisionBytes || b.total > MaxRevisionBytes-size {
-		return &FaultError{Status: 413, Code: "backend_analysis_input_limit", Message: "Combined immutable analysis inputs exceed 256 MiB", Details: map[string]any{"actualBytes": b.total + size, "allowedBytes": MaxRevisionBytes}}
+		return &FaultError{Status: 413, Code: "backend_analysis_input_limit", Message: "Combined immutable analysis inputs exceed the revision byte limit", Details: map[string]any{"actualBytes": b.total + size, "allowedBytes": MaxRevisionBytes}}
 	}
 	b.documents[key] = size
 	b.total += size

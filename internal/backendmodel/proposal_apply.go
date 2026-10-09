@@ -222,7 +222,7 @@ func (r *Repo) prepareProposal(ctx context.Context, pid, proposalID string, in P
 		return nil, err
 	}
 	if len(baseJSON)+len(candidateJSON) > MaxRevisionBytes {
-		return nil, proposalLimit("Effective proposal semantic payload exceeds 256 MiB")
+		return nil, proposalLimit("Effective proposal semantic payload exceeds the revision byte limit")
 	}
 	reserved := int64(len(baseJSON) + len(candidateJSON))
 	if err := r.db.Write(ctx, func(writer *sql.Tx) error {

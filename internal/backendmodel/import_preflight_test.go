@@ -5,6 +5,42 @@ import (
 	"testing"
 )
 
+func TestImportPreflightAdmitsCompleteEducationCorpusWithBoundedHeadroom(t *testing.T) {
+	t.Parallel()
+	counts := ImportCardinalities{Nodes: 38685, Edges: 69522, Evidence: 193277}
+	for _, tc := range []struct {
+		name   string
+		bytes  int64
+		within bool
+	}{
+		{"recorded corpus plus serialization headroom", 300 << 20, true},
+		{"above bounded local ceiling", 385 << 20, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			plan, err := PlanImport(ImportPreflightInput{Profile: EventsProfile, Counts: counts, SemanticBytes: &tc.bytes, Surfaces: []string{"graph", "events"}})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if (plan.Storage.Status == "within_limits") != tc.within {
+				t.Fatalf("semantic admission for %d bytes: %+v", tc.bytes, plan.Storage)
+			}
+		})
+	}
+	for _, over := range []ImportCardinalities{
+		{Nodes: 50001, Edges: counts.Edges, Evidence: counts.Evidence},
+		{Nodes: counts.Nodes, Edges: 200001, Evidence: counts.Evidence},
+		{Nodes: counts.Nodes, Edges: counts.Edges, Evidence: 250001},
+	} {
+		plan, err := PlanImport(ImportPreflightInput{Profile: EventsProfile, Counts: over, SemanticBytes: new(int64(300 << 20)), Surfaces: []string{"graph"}})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if plan.Storage.Status == "within_limits" {
+			t.Fatalf("cardinality limits were relaxed: %+v", over)
+		}
+	}
+}
+
 func TestImportPreflightSeparatesStorageAndConsumerAdmission(t *testing.T) {
 	t.Parallel()
 	plan, err := PlanImport(ImportPreflightInput{Profile: EventsProfile, Counts: ImportCardinalities{Nodes: 25228, Edges: 100001, Evidence: 106398}, SemanticBytes: new(int64(140 << 20)), Surfaces: []string{"graph", "events", "data_access", "architecture"}})

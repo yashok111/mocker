@@ -5,6 +5,7 @@ import type { BackendReadTarget, BackendSavedViewResponse } from "@/api/generate
 import type { BackendWorkspaceSearch } from "../backendWorkspaceSearch";
 import { backendReadTargetKey } from "../backendReadTargets";
 import { readBehavior } from "./behaviorReads";
+import { isAccessEntrypoint, readFlowAccessEntrypoints } from "./flowAccessEntrypoints";
 import { readFlowMap, readSourceMap } from "./reads";
 import { SourceCatalog, restoreCatalog, triggerLabel, purposeText } from "./SourceCatalog";
 import { ExploreCanvas } from "./LazyExploreCanvas";
@@ -60,6 +61,20 @@ export function ScenarioWorkspace({
     staleTime: Infinity,
   });
   const data = query.data;
+  const explicitAccess =
+    !!search.entrypointId && !!data && isAccessEntrypoint(data.entrypoint.kind);
+  const flowOwnerId =
+    data?.flowId && ["handler", "symbol"].includes(data.entrypoint.kind)
+      ? data.entrypoint.id
+      : undefined;
+  const accessEntrypoints = useQuery({
+    queryKey: ["workbench-flow-access-entrypoints", projectId, exact, flowOwnerId],
+    enabled: !explicitAccess && !!flowOwnerId,
+    retry: false,
+    staleTime: Infinity,
+    queryFn: ({ signal }) => readFlowAccessEntrypoints(projectId, target, flowOwnerId!, signal),
+  });
+  const singleAccess = accessEntrypoints.data?.length === 1 ? accessEntrypoints.data[0] : undefined;
   const scope = useMemo(
     () =>
       restoreCatalog(search.wbCatalog) ??
@@ -94,6 +109,14 @@ export function ScenarioWorkspace({
   const selectedEdge = data?.scene.edges.find((e) => e.id === selected);
   const opener = useRef<HTMLElement | null>(null);
   const pin = resolvedTargetSearch(target);
+  const openAccesses = (entrypointId: string) =>
+    onNavigate({
+      ...search,
+      entrypointId,
+      wbFlowPart: "accesses",
+      recordId: undefined,
+      wbSelection: "",
+    });
   const choose = (node: MapNode) =>
     onNavigate({
       ...pin,
@@ -165,21 +188,79 @@ export function ScenarioWorkspace({
                 <Text size="xs">{data.scene.partial}</Text>
               </details>
             )}
-            {search.entrypointId && (
+            {explicitAccess && (
               <Button
                 variant="subtle"
                 size="compact-xs"
-                onClick={() =>
-                  onNavigate({
-                    ...search,
-                    wbFlowPart: "accesses",
-                    recordId: undefined,
-                    wbSelection: "",
-                  })
-                }
+                onClick={() => openAccesses(search.entrypointId!)}
               >
                 Чтение и запись
               </Button>
+            )}
+            {!explicitAccess && flowOwnerId && accessEntrypoints.isPending && (
+              <Loader size="xs" aria-label="Ищем точки входа для данных" />
+            )}
+            {!explicitAccess && accessEntrypoints.isError && (
+              <Text size="xs" c="red">
+                Не удалось прочитать точки входа.{" "}
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  onClick={() => void accessEntrypoints.refetch()}
+                >
+                  Повторить
+                </Button>
+              </Text>
+            )}
+            {!explicitAccess && singleAccess && (
+              <>
+                <Text size="xs" c="dimmed">
+                  Точка входа: {singleAccess.name}
+                </Text>
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  onClick={() => openAccesses(singleAccess.id)}
+                >
+                  Чтение и запись
+                </Button>
+              </>
+            )}
+            {!explicitAccess && (accessEntrypoints.data?.length ?? 0) > 1 && (
+              <>
+                <Text size="xs">Выберите точку входа для чтения и записи</Text>
+                {accessEntrypoints.data!.map((entrypoint) => (
+                  <Button
+                    key={entrypoint.id}
+                    variant="subtle"
+                    size="compact-xs"
+                    onClick={() => openAccesses(entrypoint.id)}
+                  >
+                    {entrypoint.name}
+                  </Button>
+                ))}
+              </>
+            )}
+            {!explicitAccess && (!flowOwnerId || accessEntrypoints.data?.length === 0) && (
+              <>
+                <Text size="xs" c="dimmed">
+                  Для чтения и записи выберите API-операцию, фоновую задачу или обработчик событий.
+                </Text>
+                <Button
+                  variant="subtle"
+                  size="compact-xs"
+                  onClick={() =>
+                    onNavigate({
+                      ...pin,
+                      wbView: "scenarios",
+                      wbMode: "flow",
+                      wbFlowPart: "entrypoints",
+                    })
+                  }
+                >
+                  Выбрать точку входа
+                </Button>
+              </>
             )}
             {search.dataNodeId && (
               <Button

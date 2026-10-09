@@ -15,12 +15,14 @@ const (
 	MaxRevisionNodes        = 50000
 	MaxRevisionEdges        = 200000
 	MaxRevisionEvidence     = 250000
-	MaxRevisionBytes        = 256 << 20
-	MaxProjectStagingBytes  = 1 << 30
-	MaxOpenImportSessions   = 5
-	DefaultGraphPageSize    = 100
-	MaxGraphPageSize        = 500
-	MaxExternalKeyLength    = 200
+	// Source ownership and freshness metadata expand the audited Education
+	// Platform corpus beyond 256 MiB; keep that complete graph bounded at 384 MiB.
+	MaxRevisionBytes       = 384 << 20
+	MaxProjectStagingBytes = 1 << 30
+	MaxOpenImportSessions  = 5
+	DefaultGraphPageSize   = 100
+	MaxGraphPageSize       = 500
+	MaxExternalKeyLength   = 200
 )
 
 func SupportedNodeKinds() []string {

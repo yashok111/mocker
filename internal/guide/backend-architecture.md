@@ -118,7 +118,7 @@ level/root and filters for every cursor. Omitted mode keeps the legacy envelope.
 Architecture cache misses admit one graph/projection builder per server Repo.
 Excess concurrent misses return retryable `backend_projection_busy` (HTTP503,
 Retry-After1s) before graph allocation. Retry the same exact pinned read. The
-server retains at most one projection whose serialized data fits8MiB; native
+server retains at most one projection whose serialized data fits24MiB; native
 graphs and snippets are not cached. Pins include project, document/version/hash,
 target/provenance hashes, level/root and policy. Cache hits still check target
 visibility. These bounds are admission/cache budgets, not a measured process-RSS

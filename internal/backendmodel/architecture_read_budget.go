@@ -8,7 +8,11 @@ import (
 )
 
 const MaxArchitectureReadConcurrency = 1
-const MaxArchitectureCacheBytes = 8 << 20
+
+// The qualified Education Platform gap array alone is 9,221,500 bytes.
+// Keep bounded room for its element/link/member indexes while still retaining
+// only one projection and releasing it before the next graph build.
+const MaxArchitectureCacheBytes = 24 << 20
 
 // One retained projection and one in-flight builder bound the multiplicative
 // cost of large source graphs. The cache holds projection data only, never the
