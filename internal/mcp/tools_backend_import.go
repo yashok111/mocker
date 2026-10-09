@@ -253,7 +253,7 @@ func backendImportPathValue(name, key string, raw jsonx.RawMessage) (string, err
 // the path identifiers, integers re-encoded from their exact JSON digits.
 func backendImportQuery(in map[string]jsonx.RawMessage) (url.Values, error) {
 	q := url.Values{}
-	for _, key := range []string{"targetHash", "order", "jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
+	for _, key := range []string{"targetHash", "order", "jobId", "hash", "limit", "cursor", "subjectId", "evidenceId", "previewVersion", "profile", "recordType", "baseRevisionId", "status", "proposalRevisionId", "kind", "version", "importVersion", "candidateHash", "id", "repositoryId", "providerNamespace", "resultVersion", "section", "service", "certainty", "direction", "depth"} {
 		raw, ok := in[key]
 		if !ok {
 			continue

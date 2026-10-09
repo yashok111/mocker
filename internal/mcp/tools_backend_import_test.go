@@ -54,6 +54,21 @@ func TestBackendImportToolsRawRoutes(t *testing.T) {
 	}
 }
 
+func TestBackendImportSchemaToolForwardsEverySelector(t *testing.T) {
+	for _, tt := range []struct{ args, query string }{
+		{`{"profile":"relational-graph-v1","recordType":"node","kind":"module"}`, "kind=module&profile=relational-graph-v1&recordType=node"},
+		{`{"profile":"foundation-graph-v1","recordType":"evidence"}`, "profile=foundation-graph-v1&recordType=evidence"},
+	} {
+		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
+		if _, msg := callTool(t, calls, "get_backend_import_schema", tt.args); msg != "" {
+			t.Fatal(msg)
+		}
+		if want := "/api/backend-projects/import-schema?" + tt.query; calls.method != "GET" || calls.path != want {
+			t.Fatalf("route: %s %s, want GET %s", calls.method, calls.path, want)
+		}
+	}
+}
+
 func TestBackendImportToolsRejectUnknownAndWrongSelectors(t *testing.T) {
 	for _, args := range []string{`{}`, `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","recordType":"nodes","from":"` + backendTestID + `"}`, `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","recordType":"edges","search":"x"}`, `{"projectId":"` + backendTestID + `","revisionId":"` + backendTestID + `","recordType":"nodes","unknown":true}`} {
 		calls := &recordingCaller{status: 200, body: []byte(`{}`)}
