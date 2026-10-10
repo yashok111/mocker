@@ -10,6 +10,24 @@ import type {
   BackendLineageValueRef,
 } from "@/api/generated/schemas";
 import { useDatabaseCancellation } from "./backendDatabaseReads";
+import { ApiFailure } from "@/api/client";
+
+// A revision imported without the runtime-flow-v1 profile (foundation and
+// relational only) carries no Flow records: the server answers every Flow read
+// with 422 backend_unsupported_scope by design. That is an empty state of the
+// revision, not a failed read, so screens explain it instead of offering a retry.
+export function isFlowNotImported(error: unknown): boolean {
+  return (
+    error instanceof ApiFailure &&
+    error.status === 422 &&
+    error.code === "backend_unsupported_scope"
+  );
+}
+
+export const flowNotImportedTitle = "Сценариев нет в этой версии";
+export const flowNotImportedText =
+  "Версия импортирована без профиля runtime-flow-v1 — только структура кода и база данных. " +
+  "Сценарии, шаги и обращения к данным появятся после импорта runtime-flow.";
 
 export type BackendSourcePin = {
   changeProposalId?: string;

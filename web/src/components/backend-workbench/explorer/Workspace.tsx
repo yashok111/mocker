@@ -36,6 +36,11 @@ import { diagramSearch, workspacePinError } from "../backendWorkspaceSearch";
 import { ArchitectureScope } from "./ArchitectureScope";
 import { viewOf, useExplorerNavigation, resolvedTargetSearch, type View } from "./navigation";
 import { resolveEntry, readSourceMap, readFlowMap, readLineageMap, type Entry } from "./reads";
+import {
+  flowNotImportedText,
+  flowNotImportedTitle,
+  isFlowNotImported,
+} from "../backendFlowReads";
 import { ExploreCanvas } from "./LazyExploreCanvas";
 import { Inspector } from "./Inspector";
 import { SearchDialog } from "./SearchDialog";
@@ -989,7 +994,9 @@ function ResolvedWorkspace({
                   </Button>
                 </Group>
               ) : null}
-              {map.isError ? (
+              {map.isError && isFlowNotImported(map.error) ? (
+                <Empty title={flowNotImportedTitle} description={flowNotImportedText} />
+              ) : map.isError ? (
                 <Empty
                   title="Область недоступна"
                   description="Не удалось прочитать эту область выбранной версии."

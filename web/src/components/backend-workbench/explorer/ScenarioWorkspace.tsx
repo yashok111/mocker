@@ -7,6 +7,11 @@ import { backendReadTargetKey } from "../backendReadTargets";
 import { readBehavior } from "./behaviorReads";
 import { isAccessEntrypoint, readFlowAccessEntrypoints } from "./flowAccessEntrypoints";
 import { readFlowMap, readSourceMap } from "./reads";
+import {
+  flowNotImportedText,
+  flowNotImportedTitle,
+  isFlowNotImported,
+} from "../backendFlowReads";
 import { SourceCatalog, restoreCatalog, triggerLabel, purposeText } from "./SourceCatalog";
 import { ExploreCanvas } from "./LazyExploreCanvas";
 import { Inspector } from "./Inspector";
@@ -281,7 +286,12 @@ export function ScenarioWorkspace({
           </div>
         )}
         {catalog.isPending && <Loader size="sm" m="md" aria-label="Загружаем каталог" />}
-        {catalog.isError && (
+        {catalog.isError && isFlowNotImported(catalog.error) && (
+          <Text size="xs" c="dimmed" p="md">
+            {flowNotImportedTitle}.
+          </Text>
+        )}
+        {catalog.isError && !isFlowNotImported(catalog.error) && (
           <Text size="xs" c="red" p="md">
             Каталог недоступен.{" "}
             <Button size="compact-xs" variant="subtle" onClick={() => void catalog.refetch()}>
@@ -306,7 +316,13 @@ export function ScenarioWorkspace({
         )}
       </aside>
       <div className={styles.stage}>
-        {flow.isError ? (
+        {flow.isError && isFlowNotImported(flow.error) ? (
+          <div className={styles.empty}>
+            <Alert color="gray" title={flowNotImportedTitle}>
+              {flowNotImportedText}
+            </Alert>
+          </div>
+        ) : flow.isError ? (
           <div className={styles.empty}>
             <Alert color="red" title="Сценарий недоступен">
               Не удалось прочитать эту версию.

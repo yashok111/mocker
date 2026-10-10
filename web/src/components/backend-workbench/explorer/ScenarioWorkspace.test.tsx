@@ -3,6 +3,7 @@ import { cleanup, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { ComponentProps } from "react";
 import { renderWithProviders } from "@/test/render";
+import { ApiFailure } from "@/api/client";
 import { ScenarioWorkspace } from "./ScenarioWorkspace";
 import { readBehavior } from "./behaviorReads";
 import { readFlowMap, readSourceMap, readExploreNodes } from "./reads";
@@ -201,4 +202,26 @@ it("offers the existing entrypoint catalog instead of inventing a method access 
     wbMode: "flow",
     wbFlowPart: "entrypoints",
   });
+});
+it("explains a revision imported without runtime-flow instead of offering a retry", async () => {
+  vi.mocked(readFlowMap).mockRejectedValue(
+    new ApiFailure(
+      "Flow reads require a pinned runtime-flow source revision",
+      422,
+      "backend_unsupported_scope",
+    ),
+  );
+  const search = { revisionId, entrypointId: "op" };
+  const props = {
+    projectId,
+    target: { revisionId },
+    search,
+    onNavigate: vi.fn(),
+    list: false,
+    nav: { presentation: { search, scroll: 0 }, updateCamera: vi.fn() },
+  } as unknown as ComponentProps<typeof ScenarioWorkspace>;
+  renderWithProviders(<ScenarioWorkspace {...props} />);
+  expect(await screen.findByText("Сценариев нет в этой версии")).toBeTruthy();
+  expect(screen.queryByText("Сценарий недоступен")).toBeNull();
+  expect(screen.queryByRole("button", { name: "Повторить" })).toBeNull();
 });
