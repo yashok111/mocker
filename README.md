@@ -73,6 +73,9 @@ atomicity, application/migration execution and impact remain unverified or unava
 
 ### Real-source Backend Workbench checks
 
+The Backend Workbench is frozen since 2026-10-12 and hidden unless the server
+runs with `MOCKER_BACKEND_WORKBENCH=1`; the checks below assume it is enabled.
+
 The local repository `~/Documents/education-platform` is available as a real
 backend for Workbench experiments and verification. Read its local instructions
 before inspecting it. Use relevant source paths, the exact commit and file hashes
@@ -468,6 +471,7 @@ Nothing is read from a config file, only `MOCKER_*` (DESIGN §16):
 | `MOCKER_SHARED_PASSWORD_HASH` | — | argon2id hash, see below |
 | `MOCKER_DEFAULT_SPEC` | — | spec for workspace auto-creation (P1) |
 | `MOCKER_DATA_DIR` | `/data` | volume with SQLite |
+| `MOCKER_BACKEND_WORKBENCH` | off | `1` enables the frozen Backend Workbench: its routes, MCP tools, guide topics and screens |
 | `MOCKER_MAX_BODY` | `10mb` | request body limit |
 | `MOCKER_MAX_RESPONSE` | `4mb` | cap on the generated response |
 | `MOCKER_MAX_ENTITIES` | `1000` | cap on entities per resource |

@@ -205,6 +205,19 @@ type Config struct {
 	// Dev relaxes cookie hardening so the admin UI works over plain http on
 	// localhost. Never set it in a deployment.
 	Dev bool
+
+	// BackendWorkbenchFrozen hides the Backend Workbench (every route under
+	// /api/backend-projects, its MCP tools, its guide topics and its
+	// screens) from this process. The owner froze the workbench on
+	// 2026-10-12 because its results were not good enough to show; the
+	// code stays in the tree, compiled and tested, so it can be thawed
+	// with MOCKER_BACKEND_WORKBENCH=1 instead of being dug out of history.
+	//
+	// The field is spelled as the FROZEN state on purpose: config.Load
+	// sets it (the workbench is off unless asked for), while the many
+	// test fixtures that build a Config literal keep the zero value and
+	// so keep exercising the workbench exactly as before.
+	BackendWorkbenchFrozen bool
 }
 
 // CookieSecure reports whether session cookies carry the Secure attribute.
@@ -237,6 +250,8 @@ func Load() (*Config, error) {
 		DataDir: strings.TrimRight(env("MOCKER_DATA_DIR", "/data"), "/"),
 
 		Dev: boolEnv("MOCKER_DEV"),
+
+		BackendWorkbenchFrozen: !boolEnv("MOCKER_BACKEND_WORKBENCH"),
 	}
 
 	c.TestTargets = loadTestTargets(env("MOCKER_TEST_TARGETS", "[]"), &errs)

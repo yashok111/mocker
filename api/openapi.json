@@ -529,7 +529,8 @@
           "reservedPrefix",
           "baseDomain",
           "routing",
-          "limits"
+          "limits",
+          "backendWorkbench"
         ],
         "properties": {
           "reservedPrefix": {
@@ -658,6 +659,10 @@
                 "description": "MOCKER_STREAM_TRAFFIC_MAX_BYTES — bytes per row each way under \"all\""
               }
             }
+          },
+          "backendWorkbench": {
+            "type": "boolean",
+            "description": "MOCKER_BACKEND_WORKBENCH. False (the default since 2026-10-12) while the Backend Workbench is frozen: every /api/backend-projects route answers 404 and the panel hides the workbench's navigation entry and screens."
           }
         }
       },

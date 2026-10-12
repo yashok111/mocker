@@ -195,6 +195,26 @@ describe("AppShell server status", () => {
       expect(screen.queryByTestId("workspace-switcher")).toBeNull();
     });
 
+    // The Backend Workbench is frozen on the server by default (2026-10-12):
+    // its entry is shown only when the session's config says it is enabled.
+    it("hides «Бэкенд-проекты» unless the server enables the Backend Workbench", async () => {
+      route({
+        "GET /readyz": () => json(200, { ok: true }),
+        "GET /healthz": () => json(200, { ok: true }),
+      });
+      const { unmount } = renderInRouter(<AppShell user={userFixture()}>x</AppShell>);
+      expect(await screen.findByTestId("nav-workspaces")).toBeInTheDocument();
+      expect(screen.queryByTestId("nav-backend-projects")).toBeNull();
+      unmount();
+
+      renderInRouter(
+        <AppShell user={userFixture()} backendWorkbench>
+          x
+        </AppShell>,
+      );
+      expect(await screen.findByTestId("nav-backend-projects")).toHaveTextContent("Бэкенд-проекты");
+    });
+
     it("offers a switcher on a workspace route, current workspace selected, and navigates on change", async () => {
       route({
         "GET /readyz": () => json(200, { ok: true }),

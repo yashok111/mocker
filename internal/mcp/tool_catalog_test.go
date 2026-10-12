@@ -30,9 +30,9 @@ import (
 // a catalog that dropped or rewrote a field cannot agree with itself.
 var registeredSurface = sync.OnceValues(func() (map[string]map[string]any, error) {
 	srv := sdk.NewServer(&sdk.Implementation{Name: "oracle", Version: "0"}, nil)
-	registerTools(srv, newLoopback(fixtureCaller{}))
+	registerTools(srv, newLoopback(fixtureCaller{}), false)
 	addConfigTools(srv, testConfig())
-	addDescribeTools(srv, &toolCatalog{})
+	addDescribeTools(srv, &toolCatalog{}, false)
 	ctx := context.Background()
 	serverTransport, clientTransport := sdk.NewInMemoryTransports()
 	serverSession, err := srv.Connect(ctx, serverTransport, nil)

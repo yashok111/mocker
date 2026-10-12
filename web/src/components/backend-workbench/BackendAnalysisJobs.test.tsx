@@ -7,7 +7,7 @@ import { QueryClientProvider } from "@tanstack/react-query";
 import { createMemoryHistory, createRouter, RouterProvider } from "@tanstack/react-router";
 import { routeTree } from "@/routeTree.gen";
 import { makeQueryClient, renderWithProviders } from "@/test/render";
-import { authResponseFixture } from "@/test/fixtures";
+import { authResponseFixture, serverConfigFixture } from "@/test/fixtures";
 import { BackendAnalysisJobs } from "./BackendAnalysisJobs";
 import { analysisTestDetail, analysisTestManifest } from "./backendAnalysisTestFixtures";
 import { changeTestID, changeNextID, changeHash } from "./backendChangeTestFixtures";
@@ -45,7 +45,11 @@ it("opens saved source checks from the actual project route without analysis aut
     vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(String(input), "http://localhost");
       const path = url.pathname;
-      if (path === "/api/me") return json(authResponseFixture());
+      // The workbench is frozen by default; this test drives its real route.
+      if (path === "/api/me")
+        return json(
+          authResponseFixture({ config: serverConfigFixture({ backendWorkbench: true }) }),
+        );
       if (path === `/api/backend-projects/${changeTestID}`) return json(project);
       if (path === `/api/backend-projects/${changeTestID}/revisions/${changeTestID}`)
         return json(revision);

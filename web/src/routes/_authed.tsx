@@ -23,7 +23,7 @@ export const Route = createFileRoute("/_authed")({
 function AuthedLayout() {
   const { session } = Route.useRouteContext();
   return (
-    <AppShell user={session.user}>
+    <AppShell user={session.user} backendWorkbench={session.config.backendWorkbench}>
       <Outlet />
     </AppShell>
   );

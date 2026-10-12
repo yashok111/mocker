@@ -48,11 +48,23 @@ function tableOfContents(source: string): TocEntry[] {
     .map((t) => ({ id: slugify(t.text), text: t.text }));
 }
 
-export function GuidePage() {
-  const { html, toc } = useMemo(
-    () => ({ html: md.parse(guideSource, { async: false }), toc: tableOfContents(guideSource) }),
-    [],
-  );
+// The Backend Workbench is frozen on the server unless MOCKER_BACKEND_WORKBENCH=1
+// (2026-10-12). USER-GUIDE.md fences its workbench passages between these two
+// comment lines (invisible on a forge), and a frozen server's panel leaves the
+// fenced text out; the marker lines themselves are dropped either way.
+const workbenchRegion = /^<!-- backend-workbench -->\n[\s\S]*?^<!-- \/backend-workbench -->\n/gm;
+const workbenchMarker = /^<!-- \/?backend-workbench -->\n/gm;
+
+export function guideForServer(source: string, backendWorkbench: boolean): string {
+  const text = backendWorkbench ? source : source.replace(workbenchRegion, "");
+  return text.replace(workbenchMarker, "");
+}
+
+export function GuidePage({ backendWorkbench = false }: { backendWorkbench?: boolean }) {
+  const { html, toc } = useMemo(() => {
+    const source = guideForServer(guideSource, backendWorkbench);
+    return { html: md.parse(source, { async: false }), toc: tableOfContents(source) };
+  }, [backendWorkbench]);
 
   return (
     <Box data-testid="guide-page" className={classes.guideLayout}>

@@ -11,11 +11,11 @@ import (
 )
 
 func TestGetGuideSelection(t *testing.T) {
-	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{GuideSetID: "unknown"})
+	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{GuideSetID: "unknown"}, false)
 	if err == nil || !strings.Contains(err.Error(), "unknown guide set") {
 		t.Fatalf("unknown set error = %v", err)
 	}
-	_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-overview", GuideSetID: guide.CurrentGuideSetID()})
+	_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-overview", GuideSetID: guide.CurrentGuideSetID()}, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -23,7 +23,7 @@ func TestGetGuideSelection(t *testing.T) {
 		t.Fatalf("selected guide = %#v", out)
 	}
 	for _, topic := range []string{"overview", "tools", "shapes", "cookbook", "http", "design", "functions"} {
-		_, legacy, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: topic})
+		_, legacy, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: topic}, false)
 		if err != nil || legacy.Topic != topic || legacy.Markdown == "" || len(legacy.Topics) == 0 {
 			t.Errorf("legacy %s: %#v, %v", topic, legacy, err)
 		}
@@ -45,7 +45,7 @@ func TestStandaloneImportReferencesThroughPinnedMCP(t *testing.T) {
 
 func TestObsoleteB03GuideSetDoesNotSubstitutePackagedImport(t *testing.T) {
 	const previous = "sha256:78d12f5701030ccfbcccf4969ceae196b97d20f2fe4262e10d9897fbde6b8d7f"
-	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous})
+	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous}, false)
 	if err == nil || !strings.Contains(err.Error(), "unknown guide set") {
 		t.Fatalf("obsolete B0.3 procedure substituted: %v", err)
 	}
@@ -201,11 +201,11 @@ func TestGuideRequiredCapabilitiesHaveMCPTools(t *testing.T) {
 
 func TestObsoleteImportGuideSetDoesNotSubstituteV4(t *testing.T) {
 	const previous = "sha256:6f352e4838720bf9447956681574dd16b64ef94f0d7a2700c512da5b9bc6c33f"
-	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous})
+	_, _, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: previous}, false)
 	if err == nil || !strings.Contains(err.Error(), "unknown guide set") {
 		t.Fatalf("obsolete pinned guide silently substituted: %v", err)
 	}
-	_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: guide.CurrentGuideSetID()})
+	_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: "backend-import", GuideSetID: guide.CurrentGuideSetID()}, false)
 	if err != nil {
 		t.Fatal(err)
 	}

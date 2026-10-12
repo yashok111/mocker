@@ -10,6 +10,44 @@ approach that was tried and reverted, with the measurement.
 
 Not "forgotten" but deferred — so that a hole does not read as an oversight:
 
+## Backend Workbench frozen (2026-10-12)
+
+DECIDED by the owner: the Backend Workbench is frozen, not deleted. In his
+words, «законсервировал заморозил что связано с work составляющей проекта
+мне не нравятся результаты … чтобы её не видно было в MCP … код оставим
+тоже замороженным пусть лежит в проекте вдруг когда-нибудь вернёмся и
+сделаем по нормальному» (a Russian string quoted as data: freeze the work
+part, its results are not good; hide it from MCP; keep the code in the
+project in case it is redone properly some day).
+
+- **Mechanism: one switch, `MOCKER_BACKEND_WORKBENCH`, off by default.** Off
+  hides the 127 `/api/backend-projects` routes (404 naming the switch), the
+  119 workbench MCP tools, every `backend-*` guide topic and the workbench
+  passages of the shared topics (a filtered view, `internal/guide/frozen.go`),
+  and the «Бэкенд-проекты» screens. The full list is in
+  `docs/agent/config.md`.
+- **The code, the 8 `skills/mocker-backend-*` skills, the migrations and
+  the tables stay, and the test suites keep running the workbench** (test
+  fixtures build a `Config` literal whose zero value is "not frozen"), so
+  a thaw does not start from rotted code. The embedded guide texts and
+  `skills/` were NOT edited: they are a hashed guide set
+  (`manifest.json`, `scripts/guide-sync.py`), and reissuing it for a
+  reversible switch is the wrong trade.
+- **Not hidden on purpose:** `api/openapi.json` still describes the 127
+  routes (the contract test checks the table, not the mounted mux), the
+  `mocker backend-storage` offline subcommand still works, startup still
+  recovers interrupted analysis and replay jobs, and `MOCKER_TEST_TARGETS`
+  is still parsed. The API-design routes the workbench pinned into
+  (`.../artifact-snapshot`) stay mounted for the editors; only their two MCP
+  tools, registered by the workbench's tool group, are hidden.
+- **The workbench's read-only projection panel inside the API designer and
+  the sequence canvas** (`BackendArtifactProjections`) is not gated on the
+  flag: it mounts only for a URL carrying a backend return pin, which only
+  the frozen screens generate. An old bookmark of such a URL shows the panel
+  failing on 404.
+- **The decision a thaw needs:** either redo the workbench "properly" or
+  delete it. Do not build on it while it is frozen.
+
 ## Backend Workbench review (2026-10-06)
 
 The review of 2026-10-06 (`docs/backend-workbench-review-2026-10-06.*`, kept

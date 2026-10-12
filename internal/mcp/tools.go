@@ -36,7 +36,12 @@ import (
 // write, not a merge. No earlier draft of the P3b orchestration script named
 // this file, and the four resource tools would have had nowhere to be
 // registered without it.
-func registerTools(srv *sdk.Server, lb *loopback) {
+//
+// frozen is config.Config.BackendWorkbenchFrozen: the Backend Workbench's
+// tools are left out of the registry entirely (so tools/list, describe_tool
+// and tools/call all lose them through the one registry they share), and
+// get_guide serves its frozen view.
+func registerTools(srv *sdk.Server, lb *loopback, frozen bool) {
 	addOperationTools(srv, lb)
 	addTrafficTools(srv, lb)
 	addReadTools(srv, lb)
@@ -56,7 +61,9 @@ func registerTools(srv *sdk.Server, lb *loopback) {
 	addProxyTools(srv, lb)
 	addDesignTools(srv, lb)
 	addAPIDesignTools(srv, lb)
-	addBackendTools(srv, lb)
+	if !frozen {
+		addBackendTools(srv, lb)
+	}
 	addStateDiagramTools(srv, lb)
 	addResponseRuleTools(srv, lb)
 	addResponseRuleExecutionTools(srv, lb)
@@ -65,5 +72,5 @@ func registerTools(srv *sdk.Server, lb *loopback) {
 	addResourceMapTools(srv, lb)
 	addDesignScenarioTools(srv, lb)
 	// The guide takes no loopback: it calls no admin route (tools_guide.go).
-	addGuideTools(srv)
+	addGuideTools(srv, frozen)
 }

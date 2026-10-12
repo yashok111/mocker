@@ -81,6 +81,8 @@ export function serverConfigFixture(overrides: Partial<ServerConfigView> = {}): 
     reservedPrefix: "/__test-prefix",
     baseDomain: "mock.corp.internal",
     routing: "host",
+    // The server's default since the 2026-10-12 freeze.
+    backendWorkbench: false,
     // A9: the effective limits, deliberately NOT the defaults for the same
     // reason as the prefix above — a strip that hard-coded 4 MiB would pass
     // against these numbers only if it read them.

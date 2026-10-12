@@ -59,7 +59,7 @@ func TestRuntimeLeafOlderNewerSetRefusalAndCurrentFallback(t *testing.T) {
 			if !ok {
 				t.Fatalf("compatible advertised fallback missing for %s", topic)
 			}
-			_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: topic, GuideSetID: owner.GuideSetID})
+			_, out, err := handleGetGuide(t.Context(), nil, GetGuideInput{Topic: topic, GuideSetID: owner.GuideSetID}, false)
 			if err != nil || out.WorkflowID != owner.WorkflowID || out.WorkflowVersion != owner.WorkflowVersion || out.ManifestHash != owner.ManifestHash {
 				t.Fatalf("compatible fallback left its complete owner identity: %#v %v", out, err)
 			}

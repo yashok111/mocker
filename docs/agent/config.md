@@ -53,3 +53,25 @@ The admin host is **forbidden** to sit under the base domain — the config cras
 with `MOCKER_ADMIN_HOST (…) must not sit under MOCKER_BASE_DOMAIN (…)`, and that is exactly
 why the browser cannot derive a workspace address from `window.location`.
 
+`MOCKER_BACKEND_WORKBENCH` — off by default since 2026-10-12, when the owner
+froze the Backend Workbench because its results were not good enough to
+show. Off (unset, `0`, anything but `1`/`true`/`yes`/`on`): every route under
+`/api/backend-projects` is left out of the admin mux and answers 404 with a
+message naming this variable (the browser and `CallAsMCP` lose them through
+the same mux); the MCP endpoint registers none of the workbench tools (119:
+every `*_backend_*` tool plus the two artifact-snapshot reads the workbench
+group registers), serves `internal/guide/instructions-frozen.md` as its
+`initialize` instructions, and `get_guide` neither lists nor serves a
+`backend-*` topic and serves the shared topics through
+`guide.FrozenTopic`, a filtered view with the workbench passages removed and
+the `contentHash` of what was actually served; `/api/me` reports
+`config.backendWorkbench: false`, and the panel hides «Бэкенд-проекты» (a
+Russian string in the product), redirects `/backend-projects*` to `/`, and
+`/guide` leaves out the passages of `docs/USER-GUIDE.md` fenced between
+`<!-- backend-workbench -->` and `<!-- /backend-workbench -->` (fence any new
+workbench passage the same way).
+`1` thaws all of it. The code, the migrations and the tables stay; the
+startup recovery of analysis and replay jobs still runs either way, so a
+thaw finds a consistent database. The flag is spelled
+`config.Config.BackendWorkbenchFrozen` so test fixtures that build a
+`Config` literal keep exercising the workbench.

@@ -39,7 +39,13 @@ next to it, so open the one the task is actually about:
   the argument for each; an item leaves it for `HISTORY.md` when it ships or
   for `CARVE-OUTS.md` when it is refused.
 
-For Backend Workbench validation on a real backend, read the
+**The Backend Workbench is FROZEN since 2026-10-12** (the owner did not like
+its results): `MOCKER_BACKEND_WORKBENCH` is off by default, which hides every
+`/api/backend-projects` route, its MCP tools and guide topics, and its
+screens; the code stays in the tree, compiled and tested, and `=1` thaws it.
+Do not extend it or build on it unless the owner thaws it — what the switch
+covers is in `docs/agent/config.md`, the decision in `CARVE-OUTS.md`.
+For Backend Workbench validation on a real backend (thawed), read the
 [local real-source checks](README.md#real-source-backend-workbench-checks) before
 planning QA. That section records the available repository and artifact locations.
 
@@ -215,7 +221,7 @@ OVERLAY, never run bare, driven by `scripts/compose-tls.sh`; every curl at
 it needs `--noproxy '*'` on this box), `mocker setup` (`A16`) and the npm
 release recipe (`A17`) are in `docs/agent/ops.md`.
 
-**Configuration — through the environment only: 40 `MOCKER_*` variables,
+**Configuration — through the environment only: 41 `MOCKER_*` variables,
 all with defaults in `internal/config`; the full list with comments —
 `.env.example`, the rule each one enforces at startup —
 `docs/agent/config.md`.** Two that bite first: `MOCKER_ADMIN_HOST` may not

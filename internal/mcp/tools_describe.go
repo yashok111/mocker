@@ -29,8 +29,12 @@ import (
 // raw path writes jsonx's own bytes, and its arguments are validated the
 // way every raw tool here validates them: a schema compiled once from the
 // registered input schema, unknown members refused.
-func addDescribeTools(s *sdk.Server, catalog *toolCatalog) {
-	addImportDiagnosticTool(s, catalog)
+func addDescribeTools(s *sdk.Server, catalog *toolCatalog, frozen bool) {
+	// diagnose_backend_import_request belongs to the Backend Workbench and
+	// is hidden with it (see registerTools).
+	if !frozen {
+		addImportDiagnosticTool(s, catalog)
+	}
 	tool := &sdk.Tool{
 		Name: "describe_tool",
 		Description: "Returns one tool's full description and argument schema; tools/list carries only a one-sentence summary and top-level argument names. " +

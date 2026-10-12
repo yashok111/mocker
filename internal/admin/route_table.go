@@ -22,8 +22,10 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/yashok111/mocker/internal/checkpoints"
+	"github.com/yashok111/mocker/internal/httpx"
 )
 
 // Handler builds the admin plane's HTTP handler: the route set below, the
@@ -724,7 +726,15 @@ func (s *Server) routes() []route {
 func (s *Server) routeMux() *http.ServeMux {
 	s.routeMuxOnce.Do(func() {
 		mux := http.NewServeMux()
+		frozen := s.cfg != nil && s.cfg.BackendWorkbenchFrozen
+		if frozen {
+			mux.HandleFunc(backendWorkbenchPrefix, handleBackendWorkbenchFrozen)
+			mux.HandleFunc(backendWorkbenchPrefix+"/", handleBackendWorkbenchFrozen)
+		}
 		for _, rt := range s.routes() {
+			if frozen && isBackendWorkbenchRoute(rt.pattern) {
+				continue
+			}
 			handler := rt.handler
 			if rt.checkpoint.label != "" && s.cfg.CheckpointDebounce > 0 {
 				handler = s.withAutoCheckpoint(rt.checkpoint.label, handler)
@@ -735,6 +745,30 @@ func (s *Server) routeMux() *http.ServeMux {
 		s.routeMuxVal = mux
 	})
 	return s.routeMuxVal
+}
+
+// backendWorkbenchPrefix is the one path prefix every Backend Workbench
+// route lives under: 127 rows of [Server.routes], and no workbench route
+// outside it (checked when the workbench was frozen, 2026-10-12, and held
+// by TestBackendWorkbenchFrozen_hidesEveryWorkbenchRoute).
+const backendWorkbenchPrefix = "/api/backend-projects"
+
+// isBackendWorkbenchRoute reports whether a "METHOD /path" pattern belongs
+// to the Backend Workbench.
+func isBackendWorkbenchRoute(pattern string) bool {
+	_, path, _ := strings.Cut(pattern, " ")
+	return path == backendWorkbenchPrefix || strings.HasPrefix(path, backendWorkbenchPrefix+"/")
+}
+
+// handleBackendWorkbenchFrozen answers every workbench path while the
+// workbench is frozen (config.Config.BackendWorkbenchFrozen). The rows are
+// left out of the mux rather than guarded one by one, so [Server.CallAsMCP]
+// loses them through the same mux the browser does; this catch-all exists
+// only so an operator who still calls one by curl reads WHY it is gone
+// instead of a bare 404 from the SPA fallback.
+func handleBackendWorkbenchFrozen(w http.ResponseWriter, _ *http.Request) {
+	httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound,
+		"the Backend Workbench is frozen on this server; set MOCKER_BACKEND_WORKBENCH=1 to enable it")
 }
 
 // withAutoCheckpoint wraps handler so [Server.autoCheckpoint] runs to

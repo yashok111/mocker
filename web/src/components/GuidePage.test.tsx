@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { screen, within } from "@testing-library/react";
-import { GuidePage } from "./GuidePage";
+import { GuidePage, guideForServer } from "./GuidePage";
+import guideSource from "../../../docs/USER-GUIDE.md?raw";
 import { renderWithProviders } from "@/test/render";
 
 // The guide makes no request, so there is nothing to stub: the assertions
@@ -32,5 +33,30 @@ describe("GuidePage", () => {
   it("names the agent's own way in", () => {
     renderWithProviders(<GuidePage />);
     expect(screen.getByTestId("guide-page")).toHaveTextContent("get_guide");
+  });
+
+  // The Backend Workbench is frozen by default (2026-10-12): its fenced
+  // passages of USER-GUIDE.md are left out unless the server enables it.
+  it("leaves the Backend Workbench passages out unless the server enables it", () => {
+    const frozen = guideForServer(guideSource, false);
+    const enabled = guideForServer(guideSource, true);
+    for (const text of [frozen, enabled]) {
+      expect(text).not.toContain("backend-workbench -->");
+    }
+    for (const marker of ["Backend Workbench", "mocker-backend-import", "query_backend_lineage"]) {
+      expect(frozen).not.toContain(marker);
+      expect(enabled).toContain(marker);
+    }
+    for (const kept of [
+      "## 7. Агент и MCP",
+      "--skill mocker -a claude-code",
+      "Разрушающие действия",
+      "## 10. Чего mocker не делает",
+    ]) {
+      expect(frozen).toContain(kept);
+    }
+
+    renderWithProviders(<GuidePage />);
+    expect(screen.getByTestId("guide-body")).not.toHaveTextContent("Backend Workbench");
   });
 });

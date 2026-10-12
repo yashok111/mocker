@@ -93,6 +93,15 @@ func New(calls Caller, key string, cfg *config.Config, log *slog.Logger) *Endpoi
 		panic("mcp.New: MOCKER_MCP_KEY must not be empty — the caller must not build an MCP endpoint at all when the key is unset (§A2)")
 	}
 
+	// The Backend Workbench is frozen unless MOCKER_BACKEND_WORKBENCH says
+	// otherwise (config.Config.BackendWorkbenchFrozen, 2026-10-12): its
+	// tools are not registered and the orientation text does not mention
+	// them. A nil cfg is a test fixture that wants nothing hidden.
+	frozen := cfg != nil && cfg.BackendWorkbenchFrozen
+	instructions := guide.Instructions()
+	if frozen {
+		instructions = guide.FrozenInstructions()
+	}
 	srv := sdk.NewServer(&sdk.Implementation{Name: "mocker", Version: serverVersion}, &sdk.ServerOptions{
 		// The orientation every client receives in initialize's result
 		// (A7). An MCP host puts it in front of the model on every session,
@@ -100,7 +109,7 @@ func New(calls Caller, key string, cfg *config.Config, log *slog.Logger) *Endpoi
 		// full text sits behind the get_guide tool instead. This is a FIELD
 		// of the initialize result, not a capability: DESIGN §14.2's "only
 		// tools, without resources and prompts" still holds.
-		Instructions: guide.Instructions(),
+		Instructions: instructions,
 	})
 
 	// Refuse subscriptions/listen (SEP-2575) before it ever reaches the
@@ -120,12 +129,12 @@ func New(calls Caller, key string, cfg *config.Config, log *slog.Logger) *Endpoi
 	catalog := &toolCatalog{}
 	srv.AddReceivingMiddleware(catalog.middleware)
 
-	registerTools(srv, newLoopback(calls))
+	registerTools(srv, newLoopback(calls), frozen)
 	// A9: the config tool reads cfg itself — no loopback, no route.
 	addConfigTools(srv, cfg)
 	// F23: describe_tool reads the registry through the catalog — no
 	// loopback, no route.
-	addDescribeTools(srv, catalog)
+	addDescribeTools(srv, catalog, frozen)
 
 	getServer := func(*http.Request) *sdk.Server { return srv }
 

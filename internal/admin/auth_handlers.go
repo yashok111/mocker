@@ -38,14 +38,20 @@ type serverConfigView struct {
 	// hands an agent, so the panel's caps strip shows the effective numbers
 	// rather than a copy of the validator's constants.
 	Limits config.Limits `json:"limits"`
+	// BackendWorkbench is false while the workbench is frozen
+	// (MOCKER_BACKEND_WORKBENCH unset, the default since 2026-10-12): the
+	// panel hides its navigation entry and its screens, because every
+	// /api/backend-projects route they would call answers 404.
+	BackendWorkbench bool `json:"backendWorkbench"`
 }
 
 func newServerConfigView(cfg *config.Config) serverConfigView {
 	return serverConfigView{
-		ReservedPrefix: cfg.ReservedPrefix,
-		BaseDomain:     cfg.BaseDomain,
-		Routing:        string(cfg.Routing),
-		Limits:         cfg.Limits(),
+		ReservedPrefix:   cfg.ReservedPrefix,
+		BaseDomain:       cfg.BaseDomain,
+		Routing:          string(cfg.Routing),
+		Limits:           cfg.Limits(),
+		BackendWorkbench: !cfg.BackendWorkbenchFrozen,
 	}
 }
 

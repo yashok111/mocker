@@ -56,8 +56,20 @@ export function useCloseNavigation() {
 
 // AppShell is the frame every authenticated screen renders inside: the name of
 // the tool, who is logged in, and the way out. It owns no data of its own —
-// the user comes from the route guard that already resolved the session.
-export function AppShell({ user, children }: { user: UserView; children: ReactNode }) {
+// the user comes from the route guard that already resolved the session, and
+// so does backendWorkbench (the session's config.backendWorkbench): the
+// Backend Workbench is frozen on the server unless MOCKER_BACKEND_WORKBENCH=1
+// (2026-10-12), and a frozen server answers 404 on every route its screens
+// call, so its navigation entry is hidden rather than left to fail.
+export function AppShell({
+  user,
+  backendWorkbench = false,
+  children,
+}: {
+  user: UserView;
+  backendWorkbench?: boolean;
+  children: ReactNode;
+}) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const location = useLocation();
@@ -85,24 +97,26 @@ export function AppShell({ user, children }: { user: UserView; children: ReactNo
     },
   });
 
-  const globalLinks = [
-    { to: "/", label: "Воркспейсы", icon: IconLayoutGrid, testId: "nav-workspaces" },
-    { to: "/designs", label: "Проектирование API", icon: IconRoute, testId: "nav-designs" },
-    {
-      to: "/backend-projects",
-      label: "Бэкенд-проекты",
-      icon: IconDatabase,
-      testId: "nav-backend-projects",
-    },
-    {
-      to: "/design-scenarios",
-      label: "Сценарии взаимодействия",
-      icon: IconChartArrowsVertical,
-      testId: "nav-design-scenarios",
-    },
-    { to: "/specs", label: "Спеки", icon: IconFileCode, testId: "nav-specs" },
-    { to: "/guide", label: "Руководство", icon: IconBook2, testId: "nav-guide" },
-  ] as const;
+  const globalLinks = (
+    [
+      { to: "/", label: "Воркспейсы", icon: IconLayoutGrid, testId: "nav-workspaces" },
+      { to: "/designs", label: "Проектирование API", icon: IconRoute, testId: "nav-designs" },
+      {
+        to: "/backend-projects",
+        label: "Бэкенд-проекты",
+        icon: IconDatabase,
+        testId: "nav-backend-projects",
+      },
+      {
+        to: "/design-scenarios",
+        label: "Сценарии взаимодействия",
+        icon: IconChartArrowsVertical,
+        testId: "nav-design-scenarios",
+      },
+      { to: "/specs", label: "Спеки", icon: IconFileCode, testId: "nav-specs" },
+      { to: "/guide", label: "Руководство", icon: IconBook2, testId: "nav-guide" },
+    ] as const
+  ).filter((link) => backendWorkbench || link.to !== "/backend-projects");
   const navigation = (
     <nav
       aria-label="Основная навигация"

@@ -715,6 +715,9 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) (runEr
 		"admin_host", a.cfg.AdminHost,
 		"workspace_host_pattern", workspaceHostPattern(a.cfg),
 		"routing", string(a.cfg.Routing),
+		// Frozen since 2026-10-12 unless MOCKER_BACKEND_WORKBENCH=1; said
+		// here so an operator looking for the workbench finds the switch.
+		"backend_workbench", !a.cfg.BackendWorkbenchFrozen,
 	)
 
 	select {

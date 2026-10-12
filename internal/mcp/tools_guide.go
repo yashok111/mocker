@@ -22,6 +22,8 @@ package mcp
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"strings"
 
@@ -30,31 +32,47 @@ import (
 	"github.com/yashok111/mocker/internal/guide"
 )
 
-func addGuideTools(s *sdk.Server) {
+// get_guide's description in three parts, so a server whose Backend
+// Workbench is frozen (config.Config.BackendWorkbenchFrozen) publishes it
+// without the middle one.
+const (
+	guideDescriptionMocks = "Returns mocker's own usage guide for agents, as markdown, one topic per call. " +
+		"Call it FIRST in a session that is about to configure anything. Topics: " +
+		"\"overview\" (the default — what mocker is, the two planes and four response layers, " +
+		"the order of reads and writes, and the rules a first call gets wrong: whole-object " +
+		"writes replace, editVersion compare-and-swap, confirmSlug, opKey encoding); " +
+		"\"tools\" (every tool with its inputs, outputs and gotchas); \"shapes\" (the JSON " +
+		"documents you write: override, when[], recipes, custom endpoint, stream, session " +
+		"directive, settings, resources, assets, the error envelope); \"cookbook\" (twelve " +
+		"ordered recipes: stand up a workspace, make login work, force an error, shape a body, " +
+		"add a route, confirm a resource, scenarios, undo, streams, spec drift, debugging, " +
+		"assets); \"http\" (the same over curl for scripts and CI, plus MCP client config). "
+	guideDescriptionBackend = "For backend project preparation read \"backend-overview\" and pin guideSetId after capability discovery. Unknown guide sets fail explicitly. " +
+		"For source import, same-provider reconciliation and pinned revision comparison select the compatible \"backend-import\" workflow and its guideSetId. Relational import requires schema2 and every declared capability; foundation-only fallback cannot perform a relational task. " +
+		"Load shared topics progressively from that same set: \"backend-model\" for records and evidence, \"backend-import-protocol\" before staging, \"backend-recovery\" before commit/resume, \"backend-examples\" for worked fixtures, and \"backend-profile-go-sql\" for the relational source profile. " +
+		"For database inspection and typed draft proposals select \"backend-database\" and load \"backend-database-reference\" as needed. For source3 flow or imported data accesses select \"backend-inspect\", with \"backend-flow-reference\" and \"backend-analysis\" owned by inspect. Runtime import requires runtime-flow-v1/schema3 and every declared capability. Model/recovery/profile topics belong to import. Verify each actual owner's advertised identity, all required schemas/capabilities and topic hash in the same guideSetId/manifestHash. For saved authored editor content select inspect10 with backend-editor-projections/backend-editor-artifacts-v1 and read \"backend-editor-projections\" for full rosters, exact linked/copy provenance, budgets and retry. For source5 event routes/jobs/service calls select inspect10 with backend-events-query and read \"backend-events\"; import8 owns events-service-v1/schema5 and explicit4→5 extension. Pure inspection writes nothing; an authorized resolvable source gap uses the full compatible whole-scope import and audit procedure. " +
+		"For composed source6 synchronization select sync2 and read \"backend-sync\" for selected-partition extension, qualified claims, conflicts, incremental scopes and exact request recovery. For full desired edits select change4 and read \"backend-change-proposals\" for immutable baselines, typed intent, preview/apply/history and permanent command IDs. Read \"backend-change-rebase\" for reasoned B/O/N conflicts and exact preview/apply; read \"backend-analysis-jobs\" for start/poll/frozen pages, explicit retry/cancel and exact report-to-ready. Static reports do not verify runtime. Project2 owns \"backend-annotations\" for metadata notes, CAS, cursor conflicts and orphans. Import8 retains legacy extraction procedures and owns schema6 representation import; inspect10/database7 describe their exact source/legacy/full targets and SavedView-v2. Current READY candidates expose basic graph/node/evidence/coverage/assertions only. " +
+		"For exact C4 architecture mappings, aggregate members and diagram-view-v1 read backend-architecture under inspect10. Architecture and static interactions are supported; read backend-interactions before the read-only candidate builder; source assertions, authored intent and gaps remain distinct. " +
+		"For verification and transfer read backend-verify, backend-diagnostics, backend-observations, backend-correlation, backend-measurements, backend-benchmarks, backend-replay and backend-portable; backend-lifecycle and backend-business-map cover the other diagram kinds. "
+	guideDescriptionTail = "Static text: calls no admin route, reads no workspace, changes nothing."
+)
+
+// addGuideTools registers get_guide. frozen hides the Backend Workbench: its
+// topics are neither listed nor served, and every other topic is served
+// through [guide.FrozenTopic], with the workbench passages removed.
+func addGuideTools(s *sdk.Server, frozen bool) {
+	description := guideDescriptionMocks + guideDescriptionBackend + guideDescriptionTail
+	if frozen {
+		description = guideDescriptionMocks + guideDescriptionTail
+	}
 	sdk.AddTool(s, &sdk.Tool{
-		Name: "get_guide",
-		Description: "Returns mocker's own usage guide for agents, as markdown, one topic per call. " +
-			"Call it FIRST in a session that is about to configure anything. Topics: " +
-			"\"overview\" (the default — what mocker is, the two planes and four response layers, " +
-			"the order of reads and writes, and the rules a first call gets wrong: whole-object " +
-			"writes replace, editVersion compare-and-swap, confirmSlug, opKey encoding); " +
-			"\"tools\" (every tool with its inputs, outputs and gotchas); \"shapes\" (the JSON " +
-			"documents you write: override, when[], recipes, custom endpoint, stream, session " +
-			"directive, settings, resources, assets, the error envelope); \"cookbook\" (twelve " +
-			"ordered recipes: stand up a workspace, make login work, force an error, shape a body, " +
-			"add a route, confirm a resource, scenarios, undo, streams, spec drift, debugging, " +
-			"assets); \"http\" (the same over curl for scripts and CI, plus MCP client config). " +
-			"For backend project preparation read \"backend-overview\" and pin guideSetId after capability discovery. Unknown guide sets fail explicitly. " +
-			"For source import, same-provider reconciliation and pinned revision comparison select the compatible \"backend-import\" workflow and its guideSetId. Relational import requires schema2 and every declared capability; foundation-only fallback cannot perform a relational task. " +
-			"Load shared topics progressively from that same set: \"backend-model\" for records and evidence, \"backend-import-protocol\" before staging, \"backend-recovery\" before commit/resume, \"backend-examples\" for worked fixtures, and \"backend-profile-go-sql\" for the relational source profile. " +
-			"For database inspection and typed draft proposals select \"backend-database\" and load \"backend-database-reference\" as needed. For source3 flow or imported data accesses select \"backend-inspect\", with \"backend-flow-reference\" and \"backend-analysis\" owned by inspect. Runtime import requires runtime-flow-v1/schema3 and every declared capability. Model/recovery/profile topics belong to import. Verify each actual owner's advertised identity, all required schemas/capabilities and topic hash in the same guideSetId/manifestHash. For saved authored editor content select inspect10 with backend-editor-projections/backend-editor-artifacts-v1 and read \"backend-editor-projections\" for full rosters, exact linked/copy provenance, budgets and retry. For source5 event routes/jobs/service calls select inspect10 with backend-events-query and read \"backend-events\"; import8 owns events-service-v1/schema5 and explicit4→5 extension. Pure inspection writes nothing; an authorized resolvable source gap uses the full compatible whole-scope import and audit procedure. " +
-			"For composed source6 synchronization select sync2 and read \"backend-sync\" for selected-partition extension, qualified claims, conflicts, incremental scopes and exact request recovery. For full desired edits select change4 and read \"backend-change-proposals\" for immutable baselines, typed intent, preview/apply/history and permanent command IDs. Read \"backend-change-rebase\" for reasoned B/O/N conflicts and exact preview/apply; read \"backend-analysis-jobs\" for start/poll/frozen pages, explicit retry/cancel and exact report-to-ready. Static reports do not verify runtime. Project2 owns \"backend-annotations\" for metadata notes, CAS, cursor conflicts and orphans. Import8 retains legacy extraction procedures and owns schema6 representation import; inspect10/database7 describe their exact source/legacy/full targets and SavedView-v2. Current READY candidates expose basic graph/node/evidence/coverage/assertions only. " +
-			"For exact C4 architecture mappings, aggregate members and diagram-view-v1 read backend-architecture under inspect10. Architecture and static interactions are supported; read backend-interactions before the read-only candidate builder; source assertions, authored intent and gaps remain distinct. " +
-			"For verification and transfer read backend-verify, backend-diagnostics, backend-observations, backend-correlation, backend-measurements, backend-benchmarks, backend-replay and backend-portable; backend-lifecycle and backend-business-map cover the other diagram kinds. " +
-			"Static text: calls no admin route, reads no workspace, changes nothing.",
-		InputSchema: getGuideInputSchema(),
+		Name:        "get_guide",
+		Description: description,
+		InputSchema: getGuideInputSchema(frozen),
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
-	}, handleGetGuide)
+	}, func(ctx context.Context, req *sdk.CallToolRequest, in GetGuideInput) (*sdk.CallToolResult, GetGuideOutput, error) {
+		return handleGetGuide(ctx, req, in, frozen)
+	})
 }
 
 // getGuideInputSchema is GetGuideInput's schema with the topic list taken
@@ -62,13 +80,17 @@ func addGuideTools(s *sdk.Server) {
 // the struct tag that stopped at backend-replay while the guide served forty
 // topics, so ten (backend-portable, -verify, -measurements among them) were
 // invisible to an agent reading the input schema.
-func getGuideInputSchema() map[string]any {
+func getGuideInputSchema(frozen bool) map[string]any {
+	topics := guide.Topics()
+	if frozen {
+		topics = guide.FrozenTopics()
+	}
 	return map[string]any{
 		"type":                 "object",
 		"additionalProperties": false,
 		"properties": map[string]any{
 			"guideSetId": map[string]any{"type": "string", "description": "optional immutable guide set selector; unknown selectors fail explicitly"},
-			"topic":      map[string]any{"type": "string", "description": "one of " + strings.Join(guide.Topics(), ", ") + "; omitted means overview"},
+			"topic":      map[string]any{"type": "string", "description": "one of " + strings.Join(topics, ", ") + "; omitted means overview"},
 		},
 	}
 }
@@ -91,7 +113,7 @@ type GetGuideOutput struct {
 	Markdown        string   `json:"markdown"`
 }
 
-func handleGetGuide(_ context.Context, _ *sdk.CallToolRequest, in GetGuideInput) (*sdk.CallToolResult, GetGuideOutput, error) {
+func handleGetGuide(_ context.Context, _ *sdk.CallToolRequest, in GetGuideInput, frozen bool) (*sdk.CallToolResult, GetGuideOutput, error) {
 	if in.GuideSetID != "" && in.GuideSetID != guide.CurrentGuideSetID() {
 		return nil, GetGuideOutput{}, fmt.Errorf("get_guide: unknown guide set %q", in.GuideSetID)
 	}
@@ -99,9 +121,15 @@ func handleGetGuide(_ context.Context, _ *sdk.CallToolRequest, in GetGuideInput)
 	if topic == "" {
 		topic = guide.TopicOverview
 	}
+	topics := guide.Topics()
 	text, ok := guide.Topic(topic)
+	changed := false
+	if frozen {
+		topics = guide.FrozenTopics()
+		text, changed, ok = guide.FrozenTopic(topic)
+	}
 	if !ok {
-		return nil, GetGuideOutput{}, fmt.Errorf("get_guide: unknown topic %q; one of %s", in.Topic, strings.Join(guide.Topics(), ", "))
+		return nil, GetGuideOutput{}, fmt.Errorf("get_guide: unknown topic %q; one of %s", in.Topic, strings.Join(topics, ", "))
 	}
 	workflow, ok := guide.WorkflowForTopic(topic)
 	if !ok {
@@ -114,7 +142,14 @@ func handleGetGuide(_ context.Context, _ *sdk.CallToolRequest, in GetGuideInput)
 			break
 		}
 	}
-	return nil, GetGuideOutput{Topic: topic, Topics: guide.Topics(), Markdown: text,
+	if changed {
+		// The frozen view is not the text the manifest hashed; report the
+		// hash of what was actually served, so a client that verifies
+		// contentHash against the markdown it received still can.
+		sum := sha256.Sum256([]byte(text))
+		contentHash = "sha256:" + hex.EncodeToString(sum[:])
+	}
+	return nil, GetGuideOutput{Topic: topic, Topics: topics, Markdown: text,
 		GuideSetID: workflow.GuideSetID, ManifestHash: workflow.ManifestHash,
 		ContentHash: contentHash, WorkflowID: workflow.WorkflowID, WorkflowVersion: workflow.WorkflowVersion}, nil
 }
