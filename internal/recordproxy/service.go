@@ -16,6 +16,7 @@ import (
 	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/luafn"
 	"github.com/yashok111/mocker/internal/probe"
 	"github.com/yashok111/mocker/internal/traffic"
 	"github.com/yashok111/mocker/internal/workspaces"
@@ -71,7 +72,7 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 	}
 	key := RequestKey(fmt.Sprintf("%s|auth=%t|cookies=%t", strings.TrimRight(c.Upstream, "/"), c.ForwardAuth, c.ForwardCookies), r, body)
 	if mode == "replay" {
-		s.replay(w, r, ws.ID, key, c.Version, auth)
+		s.replay(w, r, ws.ID, key, c, operation, auth)
 		return true
 	}
 	cookiePath := "/"
@@ -91,8 +92,17 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 		refuseUnsafeType(w)
 		return true
 	}
+	// The patch is a presentation transform: the recording keeps the
+	// ORIGINAL upstream bytes and replay re-applies the patch, so changing
+	// the function re-patches every stored response. A failed patch serves
+	// the body as it arrived under a `failed` mark rather than a 502 — the
+	// upstream response is a valid answer and the mock plane answers.
+	serveBody, patched := s.patchBody(r.Context(), c, operation, response.Header.Get("Content-Type"), response.Status, response.Body)
+	if patched != "" {
+		w.Header().Set("X-Mocker-Patch", patched)
+	}
 	if mode == "record" {
-		s.record(w, r, ws, c, key, response, auth, capture)
+		s.record(w, r, ws, c, key, response, serveBody, auth, capture)
 	}
 	for name, values := range response.Header {
 		w.Header()[name] = values
@@ -102,8 +112,27 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.WriteHeader(response.Status)
-	_, _ = w.Write(response.Body)
+	_, _ = w.Write(serveBody)
 	return true
+}
+
+// patchBody runs the operation's Lua patch over a JSON body and reports the
+// outcome as the value of the X-Mocker-Patch header: "" (no patch configured,
+// non-JSON body, empty body), "applied" or "failed". A failure returns the
+// ORIGINAL body — a broken patch must not take the response down with it.
+func (s *Service) patchBody(ctx context.Context, c Config, operation, contentType string, status int, body []byte) ([]byte, string) {
+	source := c.OperationPatches[operation]
+	if source == "" || len(body) == 0 || !jsonEssence(contentType) {
+		return body, ""
+	}
+	patched, changed, err := luafn.RunPatch(ctx, source, body, status, nil)
+	if err != nil {
+		return body, "failed"
+	}
+	if !changed {
+		return body, ""
+	}
+	return patched, "applied"
 }
 
 // readProxyBody reads the request body up to the policy's MaxBody, answering
@@ -144,7 +173,12 @@ func writeProxyExchangeError(w http.ResponseWriter, err error) {
 	}
 	httpx.Err(w, code, "proxy_upstream_failed", "Не удалось получить ответ upstream: проверьте адрес, доступ, сертификат и лимиты")
 }
-func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, c Config, key string, response probe.ProxyResponse, auth bool, capture func([]byte) (int, error)) {
+
+// record stores the recording and runs the entity capture. rec carries the
+// ORIGINAL upstream body (see patchBody's caller); served is what the client
+// is being answered with — the patched body when a patch applied — and the
+// capture sees THAT, because what got imported should be what got served.
+func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.Workspace, c Config, key string, response probe.ProxyResponse, served []byte, auth bool, capture func([]byte) (int, error)) {
 	status := "skipped"
 	defer func() { w.Header().Set("X-Mocker-Recording", status) }()
 	if auth {
@@ -190,13 +224,19 @@ func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.
 		// in _key refused the whole batch. The same rule refuses turning
 		// redacted traffic into overrides (traffic.Row.Redacted). Capturing
 		// the unredacted body instead was rejected: it would write the very
-		// secrets redaction exists to keep out of the store.
-		if changed {
+		// secrets redaction exists to keep out of the store. The SERVED body
+		// goes through the same gate: a patch that injected a field named
+		// password gets the same redaction the upstream's own field would.
+		capBody, capChanged := served, changed
+		if !sameBytes(served, response.Body) {
+			capBody, capChanged = traffic.RedactBody(served, ct)
+		}
+		if capChanged {
 			w.Header().Set("X-Mocker-Entities-Imported", "0")
 			w.Header().Set("X-Mocker-Entities-Result", "skipped-redacted")
 			return
 		}
-		n, err := capture(redacted)
+		n, err := capture(capBody)
 		w.Header().Set("X-Mocker-Entities-Imported", strconv.Itoa(n))
 		if err != nil {
 			w.Header().Set("X-Mocker-Entities-Result", "partial-or-refused")
@@ -206,8 +246,10 @@ func (s *Service) record(w http.ResponseWriter, r *http.Request, ws *workspaces.
 	}
 }
 
-func (s *Service) replay(w http.ResponseWriter, r *http.Request, workspaceID int64, key string, version int64, auth bool) {
-	rec, err := s.repo.Lookup(r.Context(), workspaceID, key, version)
+func sameBytes(a, b []byte) bool { return len(a) == len(b) && (len(a) == 0 || string(a) == string(b)) }
+
+func (s *Service) replay(w http.ResponseWriter, r *http.Request, workspaceID int64, key string, c Config, operation string, auth bool) {
+	rec, err := s.repo.Lookup(r.Context(), workspaceID, key, c.Version)
 	if errors.Is(err, ErrNotFound) || auth {
 		httpx.Err(w, http.StatusNotFound, "proxy_replay_miss", "Для этого запроса нет сохранённого ответа")
 		return
@@ -234,13 +276,24 @@ func (s *Service) replay(w http.ResponseWriter, r *http.Request, workspaceID int
 		refuseUnsafeType(w)
 		return
 	}
+	// The patch rides at SERVE time on the stored body, exactly as it rides
+	// on the live exchange: the recording is the original bytes and the
+	// function is config, so a changed function re-patches what it stored.
+	serveBody, patched := s.patchBody(r.Context(), c, operation, rec.ContentType, rec.Status, rec.Body)
+	if int64(len(serveBody)) > s.policy.MaxResponse {
+		httpx.Err(w, http.StatusBadGateway, "proxy_response_too_large", "Записанный ответ превышает текущий лимит")
+		return
+	}
+	if patched != "" {
+		w.Header().Set("X-Mocker-Patch", patched)
+	}
 	if rec.ContentType != "" {
 		w.Header().Set("Content-Type", rec.ContentType)
 	}
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("X-Mocker-Recording", "replayed")
 	w.WriteHeader(rec.Status)
-	_, _ = w.Write(rec.Body)
+	_, _ = w.Write(serveBody)
 }
 
 // servableType decides the Content-Type a proxied upstream response goes out

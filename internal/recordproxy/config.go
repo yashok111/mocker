@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/yashok111/mocker/internal/luafn"
 	"github.com/yashok111/mocker/internal/probe"
 )
 
@@ -19,10 +20,15 @@ type Config struct {
 	Overwrite       string            `json:"overwrite"`
 	CaptureEntities bool              `json:"captureEntities"`
 	Operations      map[string]string `json:"operations"`
+	// OperationPatches maps an operation key (the same "METHOD /path" shape
+	// Operations uses) to a Lua patch body applied to that operation's
+	// upstream response before it is served. It rides BESIDE Operations
+	// rather than inside it so an old stored config unmarshals unchanged.
+	OperationPatches map[string]string `json:"operationPatches"`
 }
 
 func DefaultConfig() Config {
-	return Config{Mode: "off", TimeoutSeconds: 15, Overwrite: "last", Operations: map[string]string{}}
+	return Config{Mode: "off", TimeoutSeconds: 15, Overwrite: "last", Operations: map[string]string{}, OperationPatches: map[string]string{}}
 }
 func (c Config) Validate(allowlist []string) error {
 	switch c.Mode {
@@ -41,6 +47,22 @@ func (c Config) Validate(allowlist []string) error {
 	}
 	if len(c.Operations) > 1000 {
 		return errors.New("at most 1000 operation policies")
+	}
+	if len(c.OperationPatches) > 1000 {
+		return errors.New("at most 1000 operation patches")
+	}
+	for key := range c.OperationPatches {
+		if err := validOperationKey(key); err != nil {
+			return err
+		}
+	}
+	// Compiled at WRITE time (the same D8 rule the endpoint functions and
+	// the stream hooks follow): a syntax error is a 400 carrying the
+	// parser's own words, never a failed patch on the first proxied request.
+	for key, source := range c.OperationPatches {
+		if err := luafn.ValidatePatch(source); err != nil {
+			return fmt.Errorf("operation patch for %q does not compile: %w", key, err)
+		}
 	}
 	network, err := c.validateOperationPolicies()
 	if err != nil {
@@ -79,14 +101,8 @@ func (c Config) EffectiveMode(operation string) string {
 func (c Config) validateOperationPolicies() (bool, error) {
 	network := c.Mode == "record" || c.Mode == "passthrough"
 	for key, policy := range c.Operations {
-		parts := strings.SplitN(key, " ", 2)
-		if len(key) > 2048 || len(parts) != 2 || !strings.HasPrefix(parts[1], "/") {
-			return false, fmt.Errorf("invalid operation key %q", key)
-		}
-		switch parts[0] {
-		case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
-		default:
-			return false, errors.New("invalid operation method")
+		if err := validOperationKey(key); err != nil {
+			return network, err
 		}
 		switch policy {
 		case "default", "mock", "proxy":
@@ -98,4 +114,20 @@ func (c Config) validateOperationPolicies() (bool, error) {
 		}
 	}
 	return network, nil
+}
+
+// validOperationKey is the one key-shape rule both maps answer to, so a
+// policy and a patch for the same operation can never disagree about what
+// the key looks like.
+func validOperationKey(key string) error {
+	parts := strings.SplitN(key, " ", 2)
+	if len(key) > 2048 || len(parts) != 2 || !strings.HasPrefix(parts[1], "/") {
+		return fmt.Errorf("invalid operation key %q", key)
+	}
+	switch parts[0] {
+	case "GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS":
+	default:
+		return errors.New("invalid operation method")
+	}
+	return nil
 }

@@ -42275,6 +42275,13 @@
               ]
             },
             "description": "Keys are METHOD /relative/path/{parameter}; mock overrides workspace mode, proxy enables passthrough even when workspace mode is off."
+          },
+          "operationPatches": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Keys are the same METHOD /relative/path/{parameter}; values are Lua patch bodies applied to that operation's upstream JSON response before it is served (passthrough, record and replay alike). The recording keeps the original bytes and replay re-applies the patch; a failed patch serves the original under X-Mocker-Patch: failed. Each body compiles at write time."
           }
         },
         "required": [

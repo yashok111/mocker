@@ -181,8 +181,8 @@ func Run(ctx context.Context, source string, req Request, host Host) (Response, 
 	// table, the deadline on top of the caller's, and the caller-context
 	// -before-deadline classification at the exit. Run keeps only what is
 	// its own — the argument it builds and the return it reads.
-	l, done, err := call(ctx, argRequest, source, func(st *lua.LState) lua.LValue {
-		return requestTable(st, req)
+	l, done, err := call(ctx, argRequest, source, func(st *lua.LState) []lua.LValue {
+		return []lua.LValue{requestTable(st, req)}
 	}, host)
 	if err != nil {
 		return Response{}, err

@@ -55,6 +55,9 @@ func (r *Repo) Get(ctx context.Context, id int64) (Config, error) {
 		if c.Operations == nil {
 			c.Operations = map[string]string{}
 		}
+		if c.OperationPatches == nil {
+			c.OperationPatches = map[string]string{}
+		}
 		return nil
 	})
 	return c, err
@@ -82,6 +85,9 @@ func advanceVersion(ctx context.Context, tx *sql.Tx, id int64) error {
 func (r *Repo) Save(ctx context.Context, id int64, c Config) (Config, error) {
 	if c.Operations == nil {
 		c.Operations = map[string]string{}
+	}
+	if c.OperationPatches == nil {
+		c.OperationPatches = map[string]string{}
 	}
 	expected := c.Version
 	err := r.db.Write(ctx, func(tx *sql.Tx) error {

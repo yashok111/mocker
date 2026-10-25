@@ -7,7 +7,7 @@ import (
 
 func TestProxyToolsUseAdminRoutes(t *testing.T) {
 	for _, tc := range []struct{ name, args, method, path, body string }{
-		{"get_workspace_proxy", `{"workspaceId":4}`, "GET", "/api/workspaces/4/proxy", `{"config":{"version":0,"mode":"off","upstream":"","timeoutSeconds":15,"forwardAuth":false,"forwardCookies":false,"overwrite":"last","captureEntities":false,"operations":{}},"allowedOrigins":[]}`},
+		{"get_workspace_proxy", `{"workspaceId":4}`, "GET", "/api/workspaces/4/proxy", `{"config":{"version":0,"mode":"off","upstream":"","timeoutSeconds":15,"forwardAuth":false,"forwardCookies":false,"overwrite":"last","captureEntities":false,"operations":{},"operationPatches":{}},"allowedOrigins":[]}`},
 		{"list_proxy_recordings", `{"workspaceId":4}`, "GET", "/api/workspaces/4/proxy/recordings", `{"items":[]}`},
 		{"delete_proxy_recording", `{"workspaceId":4,"recordingId":2,"version":3}`, "DELETE", "/api/workspaces/4/proxy/recordings/2", `{"ok":true}`},
 		{"clear_proxy_recordings", `{"workspaceId":4,"version":3,"confirmSlug":"demo"}`, "POST", "/api/workspaces/4/proxy/recordings/clear", `{"ok":true}`},

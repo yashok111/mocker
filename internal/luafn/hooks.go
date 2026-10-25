@@ -63,15 +63,15 @@ const (
 	HookOnFrame = "onFrame"
 )
 
-// call is the whole of what the three contracts share: a fresh VM, the
-// sandbox, the mock table, this package's deadline on top of the caller's,
-// the load, and the call with one argument. It leaves the results ON THE
-// STACK for the caller's own reader, because what a return means is exactly
-// the part the three do not share.
+// call is the whole of what the contracts share: a fresh VM, the sandbox,
+// the mock table, this package's deadline on top of the caller's, the load,
+// and the call with the arguments the contract pushes. It leaves the results
+// ON THE STACK for the caller's own reader, because what a return means is
+// exactly the part the contracts do not share.
 //
 // The caller must close the state, which is why it comes back rather than
 // being closed here: reading the results needs the VM alive.
-func call(ctx context.Context, arg, source string, push func(*lua.LState) lua.LValue, host Host) (*lua.LState, func(), error) {
+func call(ctx context.Context, arg, source string, push func(*lua.LState) []lua.LValue, host Host) (*lua.LState, func(), error) {
 	runCtx, cancel := context.WithTimeout(ctx, Timeout)
 
 	l := newState()
@@ -85,9 +85,12 @@ func call(ctx context.Context, arg, source string, push func(*lua.LState) lua.LV
 		return nil, nil, fmt.Errorf("%w: %s", ErrFailed, err.Error())
 	}
 	l.Push(fn)
-	l.Push(push(l))
+	args := push(l)
+	for _, value := range args {
+		l.Push(value)
+	}
 
-	if err := l.PCall(1, lua.MultRet, nil); err != nil {
+	if err := l.PCall(len(args), lua.MultRet, nil); err != nil {
 		defer done()
 		switch {
 		case ctx.Err() != nil:
@@ -114,8 +117,8 @@ func call(ctx context.Context, arg, source string, push func(*lua.LState) lua.LV
 // caller, beside the byte cap a generated frame is already checked against,
 // so that one body cannot break SSE framing while the other cannot.
 func RunTick(ctx context.Context, source string, ordinal int, host Host) (body []byte, send bool, err error) {
-	l, done, err := call(ctx, argOrdinal, source, func(*lua.LState) lua.LValue {
-		return lua.LNumber(ordinal)
+	l, done, err := call(ctx, argOrdinal, source, func(*lua.LState) []lua.LValue {
+		return []lua.LValue{lua.LNumber(ordinal)}
 	}, host)
 	if err != nil {
 		return nil, false, err
@@ -190,14 +193,14 @@ var ErrLongCloseReason = fmt.Errorf("luafn: a close reason must be at most %d by
 // frame carrying a JSON object matches, anything else does not) and two
 // answers to it would be two contracts for one wire.
 func RunOnFrame(ctx context.Context, source string, frame []byte, frameIsObject bool, host Host) (FrameAction, error) {
-	l, done, err := call(ctx, argFrame, source, func(st *lua.LState) lua.LValue {
+	l, done, err := call(ctx, argFrame, source, func(st *lua.LState) []lua.LValue {
 		if !frameIsObject {
 			// D3's body rule, one shape everywhere: what does not decode as
 			// an object arrives as the raw string rather than as a table
 			// the author would have to guess the shape of.
-			return lua.LString(frame)
+			return []lua.LValue{lua.LString(frame)}
 		}
-		return bodyValue(st, frame)
+		return []lua.LValue{bodyValue(st, frame)}
 	}, host)
 	if err != nil {
 		return FrameAction{}, err

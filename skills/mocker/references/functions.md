@@ -286,6 +286,32 @@ called.
 The call runs on the reader goroutine, so reply order follows frame order and
 a slow hook blocks only that connection's reads.
 
+### Proxy response patches — `config.operationPatches`
+
+A proxied workspace can reshape an upstream response on its way to the client.
+`operationPatches` maps an operation key (the same `"METHOD /path"` shape
+`operations` uses) to a Lua body; it runs on the JSON response that operation
+got from the upstream, in `passthrough`, `record` and `replay` alike.
+
+```jsonc
+{ "operationPatches": { "GET /users/{id}": "if status < 400 then body.source = \"upstream\" end\nreturn body" } }
+```
+
+Two arguments: `body` (JSON decodes to a value, an empty body is nil, anything
+else is the raw string) and `status` (the upstream's own code). Return a table
+(JSON-encoded), a string (raw bytes), or nil / nothing to leave the body
+unchanged. Only a JSON response is patched; a non-JSON body passes through
+untouched.
+
+The recording keeps the ORIGINAL upstream bytes and replay re-applies the
+patch, so changing the function re-patches stored responses. A patch that
+errors or runs past the 2 s budget serves the ORIGINAL body with the
+`X-Mocker-Patch: failed` header; an applied one sets `X-Mocker-Patch:
+applied`. Entity capture (`captureEntities`) sees the PATCHED body — what got
+imported is what got served. Patches compile at write time: a source that does
+not parse is a 400 from `set_workspace_proxy`, never a failed patch on a live
+request.
+
 ### Previewing a stream draft
 
 `preview_endpoint` runs a `tick.lua` draft for real, on the honest clock, with

@@ -65,7 +65,7 @@ workspace bound to the spec.
 | tool | purpose | input | output | gotchas |
 |---|---|---|---|---|
 | `get_workspace_proxy` | Read local proxy controls and allowed origins | `workspaceId`* | `config`, `allowedOrigins[]` | `config.version` is independent of workspace `editVersion`. |
-| `set_workspace_proxy` | Replace local proxy controls | `workspaceId`*, `config`* | `config`, `allowedOrigins[]` | Echo version. Full config: `mode`, `upstream`, `timeoutSeconds`, `forwardAuth`, `forwardCookies`, `overwrite`, `captureEntities`, `operations`. |
+| `set_workspace_proxy` | Replace local proxy controls | `workspaceId`*, `config`* | `config`, `allowedOrigins[]` | Echo version. Full config: `mode`, `upstream`, `timeoutSeconds`, `forwardAuth`, `forwardCookies`, `overwrite`, `captureEntities`, `operations`, `operationPatches`. |
 | `list_proxy_recordings` | Inspect recorded redacted JSON responses | `workspaceId`* | `items[]` with id/method/path/status/contentType/bodyText/redacted/timestamps | `bodyText` preserves exact JSON numbers. Up to 500 responses / 32 MiB; no request credentials, query values or bodies. |
 | `delete_proxy_recording` | Delete one response | `workspaceId`*, `recordingId`*, `version`* | `ok` | Advances config version; reload before another mutation. |
 | `clear_proxy_recordings` | Clear all recorded responses | `workspaceId`*, `version`*, `confirmSlug`* | `ok` | Does not delete captured entity rows. |
