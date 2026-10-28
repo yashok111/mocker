@@ -637,7 +637,7 @@ func TestFindOperations_seesCustomEndpoints(t *testing.T) {
 	if row.OpKey != "" {
 		t.Fatalf("OpKey = %q, want empty — a custom row is addressed by endpointId, never by an opKey", row.OpKey)
 	}
-	if row.Method != "POST" || row.Path != "/group-assignments" {
+	if row.Method != http.MethodPost || row.Path != "/group-assignments" {
 		t.Fatalf("route = %s %s", row.Method, row.Path)
 	}
 	if len(row.Statuses) != 2 || row.Statuses[0] != 200 || row.Statuses[1] != 404 {

@@ -764,14 +764,14 @@ func (r *Repo) resetTx(ctx context.Context, tx *sql.Tx, workspaceID int64, core 
 	}
 	// Step 4b (A23): the lua_state wipe, in the SAME transaction as the
 	// entity deletes — a reset never leaves state behind, and the wipe's
-	// count joins the no-op decision so "nothing to reset" stays true only
-	// when BOTH stores are already empty. Deleted keeps counting entity
-	// rows; Changed covers both.
+	// count joins the no-op decision (resetIsNoOp) so "nothing to reset"
+	// stays true only when BOTH stores are already empty. Deleted keeps
+	// counting entity rows; Changed covers both.
 	stateWiped, werr := luastate.WipeTx(ctx, tx, workspaceID)
 	if werr != nil {
 		return ResetOutcome{}, werr
 	}
-	if entityCount == 0 && stateWiped == 0 && (mode == ResetModeClear || len(prepared) == 0) {
+	if resetIsNoOp(mode, entityCount, stateWiped, int64(len(prepared))) {
 		return ResetOutcome{Changed: false, Skipped: skipped}, nil
 	}
 
@@ -833,6 +833,16 @@ func (r *Repo) resetTx(ctx context.Context, tx *sql.Tx, workspaceID int64, core 
 	// data no runtime caches, wiped above, counted into Changed but never
 	// into a revision.
 	return ResetOutcome{Changed: deleted > 0 || inserted > 0 || stateWiped > 0, Deleted: deleted, Skipped: skipped}, nil
+}
+
+// resetIsNoOp is [Repo.resetTx]'s no-op verdict, a function so the compound
+// condition reads once instead of living inline in an already-branching
+// transaction body (A23 added the state half): nothing to delete, nothing
+// wiped, and — for reseed — no family prepared a population. Clause 14's
+// own subject: the inputs are the IN-transaction counts, never the
+// pre-transaction read.
+func resetIsNoOp(mode ResetMode, entityCount, stateWiped, preparedCount int64) bool {
+	return entityCount == 0 && stateWiped == 0 && (mode == ResetModeClear || preparedCount == 0)
 }
 
 // countEntitiesTx counts every entity row of workspaceID's resources, live,

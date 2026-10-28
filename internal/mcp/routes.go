@@ -299,6 +299,7 @@ var toolRoutes = map[string][]string{
 	// Custom endpoints and traffic conversions.
 	"create_endpoint":       {"POST /api/workspaces/{id}/endpoints"},
 	"update_endpoint":       {"PUT /api/workspaces/{id}/endpoints/{eid}"},
+	"set_endpoint_function": {"PUT /api/workspaces/{id}/endpoints/{eid}/function"},
 	"delete_endpoint":       {"DELETE /api/workspaces/{id}/endpoints/{eid}"},
 	"override_from_traffic": {"POST /api/workspaces/{id}/traffic/{tid}/to-override"},
 	"endpoint_from_traffic": {"POST /api/workspaces/{id}/traffic/{tid}/to-endpoint"},

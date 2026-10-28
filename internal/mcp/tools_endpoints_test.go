@@ -113,7 +113,8 @@ const updateEndpointRespFixture = `{
   "listSize": {"min": 2, "max": 6},
   "delayMs": 100,
   "createdAt": 1700000000,
-  "updatedAt": 1700000900
+  "updatedAt": 1700000900,
+  "editVersion": 5
 }`
 
 // TestUpdateEndpoint_happyPath is §C-b's own full-replacement proof, applied
@@ -605,5 +606,69 @@ func TestCreateEndpoint_functionReachesTheWire(t *testing.T) {
 	sent := decodeBody(t, fc.calls[0].body)
 	if sent["function"] != src {
 		t.Fatalf("sent = %+v, want function=%q on the wire", sent, src)
+	}
+}
+
+// --- A23: set_endpoint_function -------------------------------------------
+
+// TestSetEndpointFunction_happyPath is the point-edit proof: exactly three
+// fields reach the wire — status, function, editVersion — at the /function
+// subroute, never the whole responses map updateEndpoint resends.
+func TestSetEndpointFunction_happyPath(t *testing.T) {
+	t.Parallel()
+	fc := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusOK, body: updateEndpointRespFixture}}}
+	lb := newLoopback(fc)
+
+	_, out, err := handleSetEndpointFunction(lb)(opsTestCtx(), nil, SetEndpointFunctionInput{
+		WorkspaceID: 7, EndpointID: 9, Status: 200,
+		Function:    `local n = mock.state.get("hits") or 0; return 200, {seen = n}`,
+		EditVersion: 3,
+	})
+	if err != nil {
+		t.Fatalf("handleSetEndpointFunction: %v", err)
+	}
+
+	if len(fc.calls) != 1 {
+		t.Fatalf("calls = %d, want 1", len(fc.calls))
+	}
+	wantPath := "/api/workspaces/7/endpoints/9/function"
+	if fc.calls[0].method != http.MethodPut || fc.calls[0].path != wantPath {
+		t.Errorf("call = %s %s, want PUT %s", fc.calls[0].method, fc.calls[0].path, wantPath)
+	}
+	sent := decodeBody(t, fc.calls[0].body)
+	if len(sent) != 3 {
+		t.Fatalf("sent body = %v, want exactly status, function, editVersion", sent)
+	}
+	if sent["status"] != float64(200) || sent["editVersion"] != float64(3) {
+		t.Errorf("sent status/editVersion = %v/%v, want 200/3", sent["status"], sent["editVersion"])
+	}
+	if sent["function"] != `local n = mock.state.get("hits") or 0; return 200, {seen = n}` {
+		t.Errorf("sent function = %v, want the source verbatim — a mangled body would store a different function than the caller wrote", sent["function"])
+	}
+	if out.Endpoint.ActiveStatus != 503 {
+		t.Errorf("Endpoint = %+v, want the admin plane's projection", out.Endpoint)
+	}
+}
+
+// TestSetEndpointFunction_conflictIsAField is the CAS half: a 409
+// edit_conflict with details is a populated conflict field (the same
+// document updateEndpoint hands back), never a plain tool error.
+func TestSetEndpointFunction_conflictIsAField(t *testing.T) {
+	t.Parallel()
+	conflict := `{"error":{"code":"edit_conflict","message":"editVersion no longer matches","details":` + updateEndpointRespFixture + `}}`
+	fc := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusConflict, body: conflict}}}
+	lb := newLoopback(fc)
+
+	_, out, err := handleSetEndpointFunction(lb)(opsTestCtx(), nil, SetEndpointFunctionInput{
+		WorkspaceID: 7, EndpointID: 9, Status: 200, Function: `return 200`, EditVersion: 1,
+	})
+	if err != nil {
+		t.Fatalf("handleSetEndpointFunction: %v — a conflict is a field, not an error", err)
+	}
+	if out.Conflict == nil || out.Conflict.Gone || out.Conflict.Document == nil {
+		t.Fatalf("Conflict = %+v, want the populated document to retry with", out.Conflict)
+	}
+	if out.Conflict.Document.EditVersion == 0 {
+		t.Errorf("Document.EditVersion = 0, want the server's own version to retry with")
 	}
 }

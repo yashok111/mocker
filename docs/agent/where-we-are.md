@@ -158,6 +158,16 @@ split with one `QueryState`, the AST coverage scanner; two bugs fixed on
 the way — an oversized body answered 400 instead of 413, and the recipe
 post-pass size gate marshalling the very 161 MB body it was measuring — no
 route, no tool, no migration, no variable).
+→ `A23` (the Lua feedback fixes, 2026-10-28: four consumer-reported gaps
+from the quiz-custom-groups integration shipped whole on «фикси сразу все
+и вливай в main» — `mock.array` for the empty-array trap, `mock.state`
+(the workspace KV, new leaf `internal/luastate`, migration `0031`, wiped
+by `reset-data`, deliberately outside bundle/scenarios), `find_operations`
+searching custom endpoints beside the spec operations, and
+`set_endpoint_function`, the CAS point edit of one variant's Lua beside
+`update_endpoint`'s full replacement — one route, one tool, one migration,
+no variable; `HISTORY.md` and `CARVE-OUTS.md` carry the record and the
+holes).
 What each of them SHIPPED is in "Architecture"
 above; HOW each arrived — gates, fleet runs, the lessons paid for — is
 `HISTORY.md`.

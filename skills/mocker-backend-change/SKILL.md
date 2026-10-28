@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-graph-v1\",\"backend-diagram-v1\",\"diagram-view-v1\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-change-proposals\",\"backend-change-typed-edits\",\"backend-source-assertions\",\"backend-representations\",\"backend-analysis-jobs\",\"backend-analysis-diff\",\"backend-analysis-impact\",\"backend-change-rebase\",\"backend-change-ready\",\"backend-change-package\",\"backend-conformance\",\"backend-endpoint-review\",\"backend-change-implemented\",\"backend-change-archive\",\"backend-change-unarchive\",\"backend-diagrams\",\"backend-architecture\",\"backend-diagram-views\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:5c5f61789cb28d0584020af407b91b0c06b81a1bbf02e6b9a636520d7d81fc81"
-  manifestHash: "sha256:5c5f61789cb28d0584020af407b91b0c06b81a1bbf02e6b9a636520d7d81fc81"
+  guideSetId: "sha256:1b9e597a32fcadff6fe825a75739cb12d8ba741cc4932e9172d981d3eeeea6fd"
+  manifestHash: "sha256:1b9e597a32fcadff6fe825a75739cb12d8ba741cc4932e9172d981d3eeeea6fd"
 ---
 
 # Prepare a full graph proposal

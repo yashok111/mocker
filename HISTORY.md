@@ -3295,3 +3295,54 @@ with the argument in the review document: a generic keyed map, one
 `make ui-test` and `make ui-lint` green; `//nolint` stays at 39 (none
 removed, none added — `serveCustom`'s reason text updated), goleak 37
 packages with `internal/testkit`.
+
+## `A23` — the Lua feedback fixes (2026-10-28)
+
+**What the owner relayed.** Consumer feedback from the quiz-custom-groups
+integration (GET group-assignments proposed to a backend, not yet merged —
+the route lived as a CUSTOM endpoint), five points, two critical. Point 4
+(`workspaceId` vs `workspace_id`) was answered, not shipped: every tool
+argument is camelCase and the input schemas are closed, so the lost call was
+a client-side validation gap, not a product defect. The other four shipped
+whole, on the owner's «фикси сразу все и вливай в main»; the plan is
+`docs/a23-lua-feedback-fixes-plan.md`, the decided holes in `CARVE-OUTS.md`.
+
+1. **`mock.array`** — the empty-table trap. Lua has one container type and
+   an empty table encodes as `{}`; `{ groups = {} }` served
+   `{"groups":{}}`, valid JSON an arktype-style client silently refuses.
+   The consumer's workaround was a raw-string body with hand-written JSON.
+   The escape hatch is a metatable mark the converter reads for the EMPTY
+   case only — a mark that could override a non-empty shape could drop
+   keys, and nothing in this tree drops keys silently. Verified against
+   `#`/`==`/`pairs`/`ipairs`/`table.insert`/`concat` on a marked table: the
+   mark disturbs none of them (gopher-lua's `#` reads the array part with
+   or without a metatable — the "__len undefined" the first draft hit was
+   `#nil`, a test bug, not a mark cost).
+2. **`mock.state`** — the workspace KV. `mock.entities` needs a confirmed
+   resource family from the bound spec; a custom endpoint's route is in no
+   spec, so "POST assigned → GET shows" had nowhere to keep rows and the
+   consumer froze per-session fixtures. New leaf `internal/luastate` owns
+   the `lua_state` table (0031, `IF NOT EXISTS` — testkit's
+   EditLegacyBackendFixture stamps user_version back to 26 and replays the
+   migration; a plain CREATE TABLE failed three backend tests downstream).
+   `resources.ResetData` wipes it inside its own transaction — including
+   the empty-roster path, which previously wrote nothing at all and is
+   precisely the custom-endpoint-only workspace this table exists for.
+3. **`find_operations` × custom endpoints** — the search answered 0 for the
+   consumer's main route because it searched only the merged SPEC
+   operations. Custom rows now come back with `kind: "custom"` and an
+   `endpointId` and no `opKey` — the two address spaces answer different
+   tools, and one key shape for both would invite feeding an endpoint id
+   where an opKey belongs.
+4. **`set_endpoint_function`** — the point edit. Changing one Lua branch
+   meant resending the whole `responses` map through `update_endpoint`
+   (full replacement), a real risk of silently dropping a neighboring
+   status on every edit. The new route CAS-writes ONE variant's function
+   through the same `UpdateExpecting`, the same compile-at-write gate and
+   the same conflict answer; `when`/`headers`/`schema` are kept, every
+   producer field cleared.
+
+**What came back on the record as already right**: the CAS conflict
+document, compile-at-write, and curl-verification against the mock plane —
+the consumer named all three as the parts that behaved exactly as
+documented.

@@ -630,6 +630,11 @@ func (s *Server) routes() []route {
 		// endpoint_handlers.go's handleUpdateEndpoint owns it, a full
 		// replacement of the row's definition, not a partial merge.
 		{"PUT /api/workspaces/{id}/endpoints/{eid}", s.handleUpdateEndpoint, mcpAllow, cpLabelled("правка кастомного endpoint'а")},
+		// A23: the point edit of one variant's Lua source — update_endpoint
+		// above stays the full replacement. The label is this row's own
+		// (the auto-checkpoint snapshots before the write, MCP calls
+		// included, since CallAsMCP dispatches through the same mux).
+		{"PUT /api/workspaces/{id}/endpoints/{eid}/function", s.handleSetEndpointFunction, mcpAllow, cpLabelled("правка функции кастомного endpoint'а")},
 		{"DELETE /api/workspaces/{id}/endpoints/{eid}", s.handleDeleteEndpoint, mcpAllow, cpLabelled("удаление кастомного endpoint'а")},
 
 		{"POST /api/workspaces/{id}/traffic/{tid}/to-override", s.handleToOverride, mcpAllow, cpLabelled("правка из трафика")},

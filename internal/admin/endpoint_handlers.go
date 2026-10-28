@@ -626,6 +626,114 @@ func (s *Server) handleUpdateEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// setEndpointFunctionRequest is PUT .../endpoints/{eid}/function's body
+// (A23): ONE variant's Lua source, addressed by status. Function is a plain
+// string, not a pointer — an empty string is a refusal (clearing a variant's
+// function back to a pinned body is update_endpoint's full-replacement job,
+// and a half-empty request must not read as "clear it"), and EditVersion is
+// REQUIRED with the same word update_endpoint uses.
+type setEndpointFunctionRequest struct {
+	Status      int    `json:"status"`
+	Function    string `json:"function"`
+	EditVersion *int64 `json:"editVersion"`
+}
+
+// handleSetEndpointFunction answers PUT /api/workspaces/{id}/endpoints/{eid}/function
+// (A23): a point edit of ONE variant's Lua source, where update_endpoint is a
+// FULL REPLACEMENT of the whole responses map. The feedback's own scenario —
+// change one Lua branch, resend everything else — carried a real risk of
+// silently dropping a neighboring status on every edit, and a CAS-guarded
+// single-variant write removes it: the caller reads with list_endpoints (or
+// any prior write), addresses one status, and every other variant of the row
+// is untouchable from here. The compare-and-swap, the conflict answer, the
+// compile-at-write gate (normalizeAndValidate → ValidateVariant →
+// luafn.Validate) and the projection are update_endpoint's own — the handler
+// only narrows what the write may touch.
+//
+// The new variant keeps `when` (selection is unchanged, per D5's "a function
+// runs only when its variant is selected") and `headers` (not in
+// validateFunctionVariant's refusal list — a function may ALSO return
+// headers, and a declared Content-Type the writer already guards), and
+// replaces everything else: body, bodyEncoding, bodyRef, mediaType, recipes,
+// schemaPatch and schema are cleared, because function exclusivity refuses
+// them and a stale neighbor field the caller did not resend must not
+// resurrect under the new source. Refusals: not_found (eid), bad_request
+// (missing editVersion, empty function, a status with no variant, kind sse/
+// ws), the CAS conflict answer update_endpoint gives.
+func (s *Server) handleSetEndpointFunction(w http.ResponseWriter, r *http.Request) {
+	if _, ok := s.requireUser(w, r); !ok {
+		return
+	}
+	id, ok := parseWorkspaceID(w, r)
+	if !ok {
+		return
+	}
+	ws, ok := s.loadWorkspace(w, r, id)
+	if !ok {
+		return
+	}
+	eid, ok := parsePathInt64(w, r, "eid")
+	if !ok {
+		return
+	}
+
+	var body setEndpointFunctionRequest
+	if !decodeBody(w, r, &body) {
+		return
+	}
+	if body.EditVersion == nil {
+		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "editVersion is required")
+		return
+	}
+	if body.Function == "" {
+		httpx.Err(w, http.StatusBadRequest, httpx.CodeBadRequest, "function is required; clearing one is update_endpoint's full-replacement job")
+		return
+	}
+	statusKey := strconv.Itoa(body.Status)
+
+	stored, err := s.customepRepo.UpdateExpecting(r.Context(), ws.ID, eid, body.EditVersion, func(cur *customep.Row) error {
+		if cur.Kind != customep.KindHTTP && cur.Kind != "" {
+			// The same refusal create_endpoint names for a function on a
+			// stream row: a stream has tick.lua/onFrame, never a variant
+			// function.
+			return fmt.Errorf("%w: %w", customep.ErrInvalidRow, customep.ErrFunctionOnStream)
+		}
+		v, ok := cur.Responses[statusKey]
+		if !ok {
+			return fmt.Errorf("%w: no response is pinned for status %d; add it with update_endpoint first", customep.ErrInvalidRow, body.Status)
+		}
+		cur.Responses[statusKey] = overrides.Variant{
+			Mode:    v.Mode,
+			When:    v.When,
+			Headers: v.Headers,
+			Schema:  v.Schema,
+			// Schema stays: it is the response schema the row DECLares
+			// (P7a), walked by the contract tab and export — not a body
+			// producer, so function exclusivity does not refuse it, and a
+			// point edit that silently rewrote the row's declared contract
+			// would be exactly the surprise this route exists to remove.
+			Function: body.Function,
+		}
+		return nil
+	})
+	var conflict *store.EditConflictError
+	switch {
+	case err == nil:
+		httpx.JSON(w, http.StatusOK, newEndpointView(stored))
+	case errors.As(err, &conflict):
+		s.answerEndpointEditConflict(w, conflict)
+	case errors.Is(err, customep.ErrNotFound):
+		httpx.Err(w, http.StatusNotFound, httpx.CodeNotFound, "endpoint not found")
+	case errors.Is(err, customep.ErrWorkspaceNotFound):
+		answerWorkspaceGone(w)
+	case errors.Is(err, customep.ErrInvalidRow):
+		httpx.Err(w, http.StatusBadRequest, refusalCode(err), err.Error())
+	default:
+		s.log.Error("set endpoint function", "err", err)
+		httpx.Err(w, http.StatusInternalServerError, httpx.CodeInternal, "failed to set endpoint function")
+	}
+}
+
 // handleDeleteEndpoint answers DELETE /api/workspaces/{id}/endpoints/{eid}.
 func (s *Server) handleDeleteEndpoint(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireUser(w, r); !ok {

@@ -113,6 +113,8 @@ function loadRoutes(): RouteInfo[] {
 // withdrawal, in this comment.
 // B4.1 sync setup/upload/abort now have reachable UI callers; their exemptions are withdrawn.
 const EXEMPT: Record<string, string> = {
+	"PUT /api/workspaces/{id}/endpoints/{eid}/function":
+		"set_endpoint_function is the A23 point edit of one variant's Lua source; the UI edits the whole responses map through updateEndpoint (VariantEditor).",
 	"POST /api/backend-projects/{id}/coverage/query": "query_backend_coverage exposes compact pinned import inventories to MCP readers.",
 	"GET /api/backend-projects/import-schema": "get_backend_import_schema provides focused authoring schemas to MCP importers.",
 	"POST /api/backend-projects/{id}/imports/{iid}/validate": "validate_backend_import_batch checks file/MCP authoring inputs without staging.",

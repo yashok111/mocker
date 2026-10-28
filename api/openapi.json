@@ -2716,6 +2716,28 @@
           }
         }
       },
+      "SetEndpointFunctionRequest": {
+        "type": "object",
+        "required": [
+          "status",
+          "function",
+          "editVersion"
+        ],
+        "properties": {
+          "status": {
+            "type": "integer",
+            "description": "The response status whose variant carries the function. The variant must already exist (updateEndpoint adds statuses)."
+          },
+          "function": {
+            "type": "string",
+            "description": "The Lua source producing this variant's response; the stored source IS the body (`return 200, {ok = true}` is a complete function). See the mock.functions guide topic."
+          },
+          "editVersion": {
+            "type": "integer",
+            "description": "A3's per-row compare-and-swap token, from the most recent read or write of this endpoint."
+          }
+        }
+      },
       "ToOverrideView": {
         "type": "object",
         "required": [
@@ -120634,6 +120656,87 @@
                 "$ref": "#/components/schemas/QueryBackendCoverageRequest"
               }
             }
+          }
+        }
+      }
+    },
+    "/api/workspaces/{id}/endpoints/{eid}/function": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/workspaceId"
+        },
+        {
+          "name": "eid",
+          "in": "path",
+          "required": true,
+          "description": "Custom endpoint id.",
+          "schema": {
+            "type": "integer",
+            "format": "int64"
+          }
+        }
+      ],
+      "put": {
+        "tags": [
+          "endpoints"
+        ],
+        "operationId": "setEndpointFunction",
+        "summary": "Replace one response variant's Lua function",
+        "description": "Point edit, not the full replacement updateEndpoint performs: exactly one response variant's function is written, addressed by status; every other variant of the row is untouchable from this route. The new variant keeps when, headers and schema, and clears body, bodyEncoding, bodyRef, mediaType, recipes and schemaPatch (function exclusivity refuses them). The Lua source is compiled at write time; a syntax error answers 400 carrying the parser's own words. Refusals: 400 for a status with no response, an empty function, or a stream row (streams take tick.lua/onFrame, never a variant function).",
+        "security": [
+          {
+            "sessionCookie": [],
+            "csrfToken": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEndpointFunctionRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Replaced.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointView"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "409": {
+            "description": "edit_conflict (A3): editVersion no longer matches the row's stored edit_version, another write landed between this caller's read and this write; details is the endpoint's current document (EndpointConflictDetails) or, when the row was deleted meanwhile, the gone tombstone {\"gone\": true, \"editVersion\": null}.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EndpointPutConflict"
+                }
+              }
+            }
+          },
+          "415": {
+            "$ref": "#/components/responses/UnsupportedMediaType"
+          },
+          "500": {
+            "$ref": "#/components/responses/Internal"
           }
         }
       }

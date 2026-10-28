@@ -170,6 +170,25 @@ func addEndpointTools(s *sdk.Server, lb *loopback) {
 	}, handleUpdateEndpoint(lb))
 
 	sdk.AddTool(s, &sdk.Tool{
+		Name: "set_endpoint_function",
+		Description: "The POINT edit for one custom endpoint variant's Lua function: addresses ONE " +
+			"status of the row's responses map and replaces that variant's function source, leaving " +
+			"every other status untouchable — update_endpoint is a FULL REPLACEMENT of the whole " +
+			"responses map, and resending it to change one Lua branch risks silently dropping a " +
+			"neighboring status. The variant must already exist (updateEndpoint adds statuses; this " +
+			"tool does not); the variant keeps its when/headers/schema and clears body, bodyEncoding, " +
+			"bodyRef, mediaType, recipes and schemaPatch — a function builds its own body. The source " +
+			"is compiled at write time: a syntax error answers 400 carrying the parser's own words, " +
+			"never a 500 on the first request. Stream rows are refused (they take tick.lua and " +
+			"onFrame, never a variant function), and an empty function is a refusal — clearing a " +
+			"variant's function is updateEndpoint's full-replacement job. editVersion is REQUIRED, " +
+			"the exact value the last read or write reported for this row; a change made since " +
+			"answers a 409 edit_conflict carried as a populated conflict field with the current " +
+			"definition and the real editVersion to retry with. Call list_endpoints first.",
+		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: false, IdempotentHint: true},
+	}, handleSetEndpointFunction(lb))
+
+	sdk.AddTool(s, &sdk.Tool{
 		Name: "delete_endpoint",
 		Description: "Permanently deletes one custom endpoint by id. The row itself is not undone by " +
 			"anything on this surface; a checkpoint's config snapshot DOES carry custom endpoints " +
@@ -510,6 +529,69 @@ func handleUpdateEndpoint(lb *loopback) sdk.ToolHandlerFor[UpdateEndpointInput, 
 			return nil, UpdateEndpointOutput{Conflict: conflict}, nil
 		}
 		return nil, UpdateEndpointOutput{Endpoint: toEndpointLine(wire)}, nil
+	}
+}
+
+// ---- set_endpoint_function (A23) ----
+
+// SetEndpointFunctionInput is set_endpoint_function's input: ONE variant's
+// Lua source, addressed by status — the point edit update_endpoint's full
+// replacement was the only door to, where resending the whole responses map
+// to change one Lua branch risked silently dropping a neighboring status on
+// every edit. EditVersion is A3's REQUIRED expectation exactly as
+// UpdateEndpointInput's is (a plain non-pointer int64, 0 refused — the row
+// addressed by {eid} always exists).
+type SetEndpointFunctionInput struct {
+	WorkspaceID int64 `json:"workspaceId"`
+	EndpointID  int64 `json:"endpointId"`
+	// Status addresses ONE variant of the row's responses map — the variant
+	// must already exist (updateEndpoint adds statuses; this tool does not).
+	Status int `json:"status"`
+	// Function is the Lua source producing this variant's response; the
+	// stored source IS the body (`return 200, {ok = true}` is a complete
+	// function), compiled at write time — a syntax error is a 400 carrying
+	// the parser's own words, never a 500 on the first request. The variant
+	// keeps when/headers/schema and clears body, bodyEncoding, bodyRef,
+	// mediaType, recipes and schemaPatch (function exclusivity refuses
+	// them); an empty string is a REFUSAL — clearing a variant's function
+	// is updateEndpoint's full-replacement job.
+	Function    string `json:"function"`
+	EditVersion int64  `json:"editVersion"`
+}
+
+// SetEndpointFunctionOutput is set_endpoint_function's declared output —
+// the same projection update_endpoint answers with, plus Conflict on a
+// lost compare-and-swap.
+type SetEndpointFunctionOutput struct {
+	Endpoint EndpointLine            `json:"endpoint"`
+	Conflict *EndpointConflictDetail `json:"conflict,omitempty"`
+}
+
+func handleSetEndpointFunction(lb *loopback) sdk.ToolHandlerFor[SetEndpointFunctionInput, SetEndpointFunctionOutput] {
+	return func(ctx context.Context, _ *sdk.CallToolRequest, in SetEndpointFunctionInput) (*sdk.CallToolResult, SetEndpointFunctionOutput, error) {
+		body, err := jsonx.Marshal(struct {
+			Status      int    `json:"status"`
+			Function    string `json:"function"`
+			EditVersion int64  `json:"editVersion"`
+		}{Status: in.Status, Function: in.Function, EditVersion: in.EditVersion})
+		if err != nil {
+			return nil, SetEndpointFunctionOutput{}, fmt.Errorf("mcp: encode set_endpoint_function request: %w", err)
+		}
+
+		var wire endpointWire
+		method, path := toolPath("set_endpoint_function", "PUT /api/workspaces/{id}/endpoints/{eid}/function", in.WorkspaceID, in.EndpointID)
+		details, err := writeEditGuarded(ctx, lb, method, path, body, &wire)
+		if err != nil {
+			return nil, SetEndpointFunctionOutput{}, err
+		}
+		if details != nil {
+			conflict, cerr := decodeEndpointConflict(details)
+			if cerr != nil {
+				return nil, SetEndpointFunctionOutput{}, cerr
+			}
+			return nil, SetEndpointFunctionOutput{Conflict: conflict}, nil
+		}
+		return nil, SetEndpointFunctionOutput{Endpoint: toEndpointLine(wire)}, nil
 	}
 }
 

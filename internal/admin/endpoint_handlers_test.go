@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/yashok111/mocker/internal/overrides"
@@ -686,5 +687,239 @@ func TestP1c2Endpoints_updateEditConflictMismatch(t *testing.T) {
 	}
 	if conflict.Error.Details.EditVersion != first.EditVersion {
 		t.Errorf("conflict details.editVersion = %d, want %d (the version the server actually holds)", conflict.Error.Details.EditVersion, first.EditVersion)
+	}
+}
+
+// --- A23: PUT .../endpoints/{eid}/function — the point edit ----------------
+
+// a23SetFunction is the one-line helper the tests below share: PUT the new
+// function for one status and require the given HTTP answer.
+func a23SetFunction(t *testing.T, ts *p1c2TestServer, cookie *http.Cookie, csrfToken string, wsID, eid int64, body map[string]any, wantStatus int) p1c2EndpointJSON {
+	t.Helper()
+	url := fmt.Sprintf("%s/function", p1c2EndpointURL(ts, wsID, eid))
+	req := jsonRequest(t, http.MethodPut, url, body, cookie, csrfToken)
+	rec := ts.do(req)
+	if rec.Code != wantStatus {
+		t.Fatalf("set endpoint function: status = %d, want %d; body = %s", rec.Code, wantStatus, rec.Body.String())
+	}
+	var got p1c2EndpointJSON
+	if wantStatus == http.StatusOK {
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode set function response: %v", err)
+		}
+	}
+	return got
+}
+
+// a23UpdateEndpoint is the full-replacement PUT, for tests that need a row
+// state create cannot express (two statuses) — and, in refusals, for the
+// contrast the route's own doc comment draws.
+func a23UpdateEndpoint(t *testing.T, ts *p1c2TestServer, cookie *http.Cookie, csrfToken string, wsID, eid int64, body map[string]any, wantStatus int) p1c2EndpointJSON {
+	t.Helper()
+	req := jsonRequest(t, http.MethodPut, p1c2EndpointURL(ts, wsID, eid), body, cookie, csrfToken)
+	rec := ts.do(req)
+	if rec.Code != wantStatus {
+		t.Fatalf("update endpoint: status = %d, want %d; body = %s", rec.Code, wantStatus, rec.Body.String())
+	}
+	var got p1c2EndpointJSON
+	if wantStatus == http.StatusOK {
+		if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+			t.Fatalf("decode update response: %v", err)
+		}
+	}
+	return got
+}
+
+// TestP1c2Endpoints_setFunction_replacesOneVariantOnly is the route's own
+// clause: ONE status's variant is rewritten (and only its producer fields —
+// when stays), the neighbor status is untouched, and the write answers the
+// same projection update does with a FRESH editVersion.
+func TestP1c2Endpoints_setFunction_replacesOneVariantOnly(t *testing.T) {
+	t.Parallel()
+	ts := p1c2NewTestServer(t)
+	cookie, csrfToken, id, _ := ts.p1c2CreateWorkspace(t, "Alex", "Demo")
+
+	// create_endpoint pins ONE status; the 404 neighbor arrives through the
+	// full-replacement PUT, which is also how a real operator reaches this
+	// state.
+	created := p1c2CreateEndpoint(t, ts, cookie, csrfToken, id, map[string]any{
+		"method": "POST", "path": "/group-assignments", "status": 200,
+		"body": map[string]any{"old": true},
+	}, http.StatusCreated)
+	created = a23UpdateEndpoint(t, ts, cookie, csrfToken, id, created.ID, map[string]any{
+		"method": "POST", "path": "/group-assignments", "activeStatus": 200,
+		"responses": map[string]any{
+			"200": map[string]any{"mode": "pinned", "body": map[string]any{"old": true}},
+			"404": map[string]any{"mode": "pinned", "body": map[string]any{"gone": true}},
+		},
+		"editVersion": created.EditVersion,
+	}, http.StatusOK)
+
+	got := a23SetFunction(t, ts, cookie, csrfToken, id, created.ID, map[string]any{
+		"status": 200, "function": `local n = mock.state.get("hits") or 0; return 200, {seen = n}`, "editVersion": created.EditVersion,
+	}, http.StatusOK)
+	if got.EditVersion == created.EditVersion {
+		t.Fatalf("editVersion unchanged after the write — the CAS token must advance")
+	}
+
+	// The full row, re-read: 200 carries the function and no body, 404 keeps
+	// its pinned body byte for byte.
+	list := p1c2ListEndpoints(t, ts, cookie, id)
+	var responses map[string]map[string]any
+	if err := json.Unmarshal(list.Endpoints[0].Responses, &responses); err != nil {
+		t.Fatal(err)
+	}
+	v200 := responses["200"]
+	if v200["function"] == nil || v200["body"] != nil {
+		t.Fatalf("200 variant = %v, want the function and no body", v200)
+	}
+	v404 := responses["404"]
+	if v404["body"] == nil || v404["function"] != nil {
+		t.Fatalf("404 variant = %v, want the pinned body untouched", v404)
+	}
+}
+
+// TestP1c2Endpoints_setFunction_keepsWhen is D5's selection rule: `when`
+// belongs to SELECTION, the function only produces the body — a point edit
+// must not silently drop either half.
+func TestP1c2Endpoints_setFunction_keepsWhen(t *testing.T) {
+	t.Parallel()
+	ts := p1c2NewTestServer(t)
+	cookie, csrfToken, id, _ := ts.p1c2CreateWorkspace(t, "Alex", "Demo")
+
+	// The function+when state itself arrives through the full-replacement
+	// PUT (create pins only top-level body/status); the point edit must
+	// preserve what that PUT wrote.
+	created := p1c2CreateEndpoint(t, ts, cookie, csrfToken, id, map[string]any{
+		"method": "POST", "path": "/sign-in", "status": 200,
+		"body": map[string]any{"v": 1},
+	}, http.StatusCreated)
+	created = a23UpdateEndpoint(t, ts, cookie, csrfToken, id, created.ID, map[string]any{
+		"method": "POST", "path": "/sign-in", "activeStatus": 200,
+		"responses": map[string]any{
+			"200": map[string]any{
+				"function": `return 200, {v = 1}`,
+				"when":     []any{map[string]any{"in": "header", "name": "X-Tenant", "op": "equals", "value": "acme"}},
+			},
+		},
+		"editVersion": created.EditVersion,
+	}, http.StatusOK)
+
+	a23SetFunction(t, ts, cookie, csrfToken, id, created.ID, map[string]any{
+		"status": 200, "function": `return 200, {v = 2}`, "editVersion": created.EditVersion,
+	}, http.StatusOK)
+
+	list := p1c2ListEndpoints(t, ts, cookie, id)
+	var responses map[string]map[string]any
+	if err := json.Unmarshal(list.Endpoints[0].Responses, &responses); err != nil {
+		t.Fatal(err)
+	}
+	when, ok := responses["200"]["when"].([]any)
+	if !ok || len(when) != 1 {
+		t.Fatalf("when = %v, want the one condition preserved", responses["200"]["when"])
+	}
+}
+
+// TestP1c2Endpoints_setFunction_refusals: an empty function, a status with
+// no variant, a stale editVersion (the CAS conflict answer update gives), an
+// unknown eid, and a source that does not compile — the parser's own words
+// at write time, never a 500 on the first request.
+func TestP1c2Endpoints_setFunction_refusals(t *testing.T) {
+	t.Parallel()
+	ts := p1c2NewTestServer(t)
+	cookie, csrfToken, id, _ := ts.p1c2CreateWorkspace(t, "Alex", "Demo")
+
+	created := p1c2CreateEndpoint(t, ts, cookie, csrfToken, id, map[string]any{
+		"method": "GET", "path": "/one", "status": 200,
+		"body": map[string]any{"ok": true},
+	}, http.StatusCreated)
+
+	// An empty function is a refusal, not a silent clear.
+	url := fmt.Sprintf("%s/function", p1c2EndpointURL(ts, id, created.ID))
+	req := jsonRequest(t, http.MethodPut, url, map[string]any{
+		"status": 200, "function": "", "editVersion": created.EditVersion,
+	}, cookie, csrfToken)
+	if rec := ts.do(req); rec.Code != http.StatusBadRequest {
+		t.Fatalf("empty function: status = %d, want 400; body = %s", rec.Code, rec.Body.String())
+	}
+
+	// A status the row does not carry: bad_request, and nothing written.
+	req = jsonRequest(t, http.MethodPut, url, map[string]any{
+		"status": 404, "function": `return 404`, "editVersion": created.EditVersion,
+	}, cookie, csrfToken)
+	if rec := ts.do(req); rec.Code != http.StatusBadRequest {
+		t.Fatalf("absent status: status = %d, want 400; body = %s", rec.Code, rec.Body.String())
+	}
+
+	// A source that does not compile: 400 with the parser's own words.
+	req = jsonRequest(t, http.MethodPut, url, map[string]any{
+		"status": 200, "function": `return 200, {`, "editVersion": created.EditVersion,
+	}, cookie, csrfToken)
+	rec := ts.do(req)
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("syntax error: status = %d, want 400; body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "bad_function") {
+		t.Fatalf("syntax error body = %s, want overrides' own refusal name", rec.Body.String())
+	}
+
+	// A stale editVersion answers the CAS conflict, with the current
+	// document to retry against.
+	req = jsonRequest(t, http.MethodPut, url, map[string]any{
+		"status": 200, "function": `return 200`, "editVersion": created.EditVersion - 1,
+	}, cookie, csrfToken)
+	rec = ts.do(req)
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("stale editVersion: status = %d, want 409; body = %s", rec.Code, rec.Body.String())
+	}
+	if !strings.Contains(rec.Body.String(), "edit_conflict") {
+		t.Fatalf("conflict body = %s, want the edit_conflict code", rec.Body.String())
+	}
+
+	// An unknown eid WITH an expectation answers the A3 gone tombstone —
+	// the same 409 an unknown id gives update_endpoint, decided by the one
+	// unscoped owner read (repo.go's UpdateExpecting comment), not a 404.
+	missing := jsonRequest(t, http.MethodPut, fmt.Sprintf("%s/function", p1c2EndpointURL(ts, id, created.ID+999)), map[string]any{
+		"status": 200, "function": `return 200`, "editVersion": 1,
+	}, cookie, csrfToken)
+	if rec := ts.do(missing); rec.Code != http.StatusConflict {
+		t.Fatalf("unknown eid: status = %d, want 409 (the gone tombstone)", rec.Code)
+	} else if !strings.Contains(rec.Body.String(), `"gone":true`) {
+		t.Fatalf("unknown eid body = %s, want the gone tombstone", rec.Body.String())
+	}
+
+	// A stream row takes tick.lua/onFrame, never a variant function —
+	// the same refusal create names.
+	stream := p1c2CreateEndpoint(t, ts, cookie, csrfToken, id, map[string]any{
+		"method": "GET", "path": "/events", "kind": "sse",
+		"stream": map[string]any{
+			"timeline": map[string]any{"frames": []any{map[string]any{"delayMs": 10, "data": "x"}}, "loop": false},
+		},
+	}, http.StatusCreated)
+	surl := fmt.Sprintf("%s/function", p1c2EndpointURL(ts, id, stream.ID))
+	sreq := jsonRequest(t, http.MethodPut, surl, map[string]any{
+		"status": 200, "function": `return 200`, "editVersion": stream.EditVersion,
+	}, cookie, csrfToken)
+	if srec := ts.do(sreq); srec.Code != http.StatusBadRequest {
+		t.Fatalf("stream row: status = %d, want 400; body = %s", srec.Code, srec.Body.String())
+	} else if !strings.Contains(srec.Body.String(), "function_on_stream") {
+		t.Fatalf("stream row body = %s, want function_on_stream", srec.Body.String())
+	}
+
+	// Nothing above may have rewritten the row: the 200 variant still pins
+	// its body and no function.
+	list := p1c2ListEndpoints(t, ts, cookie, id)
+	var ep p1c2EndpointJSON
+	for _, e := range list.Endpoints {
+		if e.ID == created.ID {
+			ep = e
+		}
+	}
+	var responses map[string]map[string]any
+	if err := json.Unmarshal(ep.Responses, &responses); err != nil {
+		t.Fatal(err)
+	}
+	if responses["200"]["function"] != nil || responses["200"]["body"] == nil {
+		t.Fatalf("200 variant = %v, want the pinned body untouched by every refusal", responses["200"])
 	}
 }

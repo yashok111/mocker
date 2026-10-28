@@ -119,7 +119,7 @@ constant-time comparison, no cookies read), it is deliberately NOT in
 perimeter must not include it), and every tool that touches the domain goes
 through `admin.Server.CallAsMCP` — an in-process call into the same admin
 route table under an MCP identity, never straight into a repository, so
-there is one validation path. 263 tools; a tool with an empty `toolRoutes`
+there is one validation path. 264 tools; a tool with an empty `toolRoutes`
 row (`get_guide`, `get_server_config`, `describe_tool`) calls no handler.
 `tools/list` is a light summary (name, one distinct sentence, top-level
 argument names; ~112 KB) and `describe_tool {name}` serves one tool's full
@@ -427,7 +427,12 @@ one vcodex over thirteen vectors, eleven builder commits — one route table,
 page bundles split with one `QueryState`, `internal/testkit`, the AST
 coverage scanner; two bugs fixed on the way, a 413 answered as 400 and a
 size gate that marshalled the 161 MB body it was measuring) — fifty-odd
-slices. The full list with one line
+slices, then `A23` (2026-10-28, the Lua feedback fixes from the
+quiz-custom-groups integration: `mock.array`, `mock.state` — the workspace
+KV in new leaf `internal/luastate`, wiped by reset-data — find_operations
+seeing custom endpoints, and `set_endpoint_function`, the point edit one
+variant's Lua; the record in `HISTORY.md`, the holes in `CARVE-OUTS.md`).
+The full list with one line
 each, the ranked argument for what is NEXT and where each slice's
 decisions live: `docs/agent/where-we-are.md` and `HISTORY.md`. Streaming
 (§30), `P4` (drift, the bundle over HTTP, the fork) and §34 (API design)
