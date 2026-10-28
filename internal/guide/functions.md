@@ -54,7 +54,7 @@ Returning nothing at all fails the request: a function must decide a status.
 
 ## 2. Helpers — the `mock` table
 
-`mock` holds exactly five things and nothing else.
+`mock` holds exactly six things and nothing else.
 
 - **`mock.jwt(claims)` → token, or nil + err.** Signs with the WORKSPACE's own
   `settings.auth`, the same signer the `jwt` recipe uses. Answers
@@ -123,6 +123,38 @@ Returning nothing at all fails the request: a function must decide a status.
     simply unreachable until an ancestor exists. Writes are data,
     not configuration: they bump no revision, appear in no checkpoint's
     config, and are reset by `reset-data` like any other row.
+- **`mock.state` — the workspace KV.** The persistence `mock.entities` could
+  not give you: entities need a CONFIRMED resource family from the bound
+  spec, and a custom endpoint's route is by definition in no spec. State is
+  keyed per workspace, stores any JSON value, and survives requests and
+  restarts until `reset-data` or a workspace delete takes it.
+  - **`mock.state.get(key)` → value, or nil.** A miss is nil, not an error —
+    the cold start of a session is the ordinary first call:
+
+    ```lua
+    local n = mock.state.get("hits") or 0
+    mock.state.set("hits", n + 1)
+    return 200, { assigned = n > 0 }
+    ```
+  - **`mock.state.set(key, value)` → the stored value.** ANY JSON value: a
+    number, a string, a boolean, a table. The return is what the NEXT `get`
+    answers — the canonical form, keys sorted. A nil value is
+    `nil, "bad_data"`, never a delete: a Lua nil in argument position is an
+    absent argument, and guessing "you meant delete" would make
+    `mock.state.set(k, maybe_nil)` silently destroy rows. Deleting is what
+    the next entry is for.
+  - **`mock.state.delete(key)` → true | false.** `true` when a key went,
+    `false` when there was none — expiring a finished session is not an
+    error to branch on.
+  - Refusals, always nil + word: `nil, "bad_key"` for an absent, a
+    non-string, an empty or an over-200-byte key; `nil, "state_limit"` for a
+    value over 16 KiB of JSON or a workspace over 1000 keys; `nil,
+    "no_host"` in a preview, which has no workspace behind it.
+  - State is DATA, exactly like entity rows: no revision bump, no
+    checkpoint's config, NOT in the bundle (export/import/fork do not carry
+    it) and NOT in scenarios. `reset-data` wipes it in BOTH modes, in the
+    same transaction as the entity deletes; a workspace delete cascades it.
+
 - **`mock.generate(schema)` → value, or nil + err.** A body generated the way
   a generated response is, handed back as a table to edit. Two forms:
   - a string that is a JSON pointer into the bound spec —
@@ -165,7 +197,9 @@ entropy. It is NOT reproducible and there is no way to seed it.
 
 **Stateless by construction.** A fresh VM per invocation, closed when it
 returns. No global, no closure, no variable survives between two calls. The
-only thing a function can see that outlives the request is `mock.entities`.
+only things a function can see that outlive the request are `mock.entities`
+(confirmed resource families) and `mock.state` (the workspace KV); anything
+else a function wants to keep, it must put in one of those two.
 
 ## 4. Guards, and how each one is answered
 

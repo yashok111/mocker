@@ -13,6 +13,7 @@ package mockplane
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strconv"
@@ -25,6 +26,7 @@ import (
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/livestate"
 	"github.com/yashok111/mocker/internal/luafn"
+	"github.com/yashok111/mocker/internal/luastate"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/resources"
 	"github.com/yashok111/mocker/internal/traffic"
@@ -932,6 +934,102 @@ func TestLuaHost_entityWriters(t *testing.T) {
 		}
 		if _, err := newHost(&fakeEntityStore{}).EntityCreate(t.Context(), "/msgs", []string{"1", "2"}, map[string]any{}); err == nil || err.Error() != "bad_scope" {
 			t.Fatalf("err = %v, want bad_scope", err)
+		}
+	})
+}
+
+// --- A23: the state host half ----------------------------------------------
+
+// fakeStateStore records the workspace id every call carries — the seam's
+// scoping is the host's job, and this is where a leak across workspaces
+// would show.
+type fakeStateStore struct {
+	wsID   int64
+	data   map[string]jsonx.RawMessage
+	setErr error
+}
+
+func (f *fakeStateStore) Get(_ context.Context, workspaceID int64, key string) (jsonx.RawMessage, bool, error) {
+	f.wsID = workspaceID
+	raw, ok := f.data[key]
+	return raw, ok, nil
+}
+
+func (f *fakeStateStore) Set(_ context.Context, workspaceID int64, key string, value jsonx.RawMessage) error {
+	f.wsID = workspaceID
+	if f.setErr != nil {
+		return f.setErr
+	}
+	if f.data == nil {
+		f.data = map[string]jsonx.RawMessage{}
+	}
+	f.data[key] = value
+	return nil
+}
+
+func (f *fakeStateStore) Delete(_ context.Context, workspaceID int64, key string) (bool, error) {
+	f.wsID = workspaceID
+	_, ok := f.data[key]
+	delete(f.data, key)
+	return ok, nil
+}
+
+// TestLuaHost_state pins the host half of mock.state: the workspace id is
+// THIS request's, the sentinels map to the guide's words, and an unwired
+// store answers no_host — the preview's word — rather than panicking.
+func TestLuaHost_state(t *testing.T) {
+	t.Run("set and get carry THIS request's workspace id", func(t *testing.T) {
+		store := &fakeStateStore{}
+		p := respondTestPlane()
+		p.SetState(store)
+		h := &luaHost{p: p, ws: &workspaces.Workspace{ID: 7, Slug: "alex"}}
+		if err := h.StateSet(t.Context(), "k", jsonx.RawMessage(`1`)); err != nil {
+			t.Fatal(err)
+		}
+		if store.wsID != 7 {
+			t.Fatalf("store saw workspace %d, want 7", store.wsID)
+		}
+		raw, found, err := h.StateGet(t.Context(), "k")
+		if err != nil || !found || string(raw) != `1` {
+			t.Fatalf("get = %q, %v, %v", raw, found, err)
+		}
+		deleted, err := h.StateDelete(t.Context(), "k")
+		if err != nil || !deleted {
+			t.Fatalf("delete = %v, %v", deleted, err)
+		}
+	})
+
+	t.Run("the store's refusals arrive by name", func(t *testing.T) {
+		p := respondTestPlane()
+		p.SetState(&fakeStateStore{setErr: luastate.ErrTooManyKeys})
+		h := &luaHost{p: p, ws: &workspaces.Workspace{ID: 7, Slug: "alex"}}
+		if err := h.StateSet(t.Context(), "k", jsonx.RawMessage(`1`)); err == nil || err.Error() != "state_limit" {
+			t.Fatalf("err = %v, want state_limit", err)
+		}
+		p2 := respondTestPlane()
+		p2.SetState(&fakeStateStore{setErr: luastate.ErrBadKey})
+		h2 := &luaHost{p: p2, ws: &workspaces.Workspace{ID: 7, Slug: "alex"}}
+		if err := h2.StateSet(t.Context(), "k", jsonx.RawMessage(`1`)); err == nil || err.Error() != "bad_key" {
+			t.Fatalf("err = %v, want bad_key", err)
+		}
+		p3 := respondTestPlane()
+		p3.SetState(&fakeStateStore{setErr: errors.New("boom")})
+		h3 := &luaHost{p: p3, ws: &workspaces.Workspace{ID: 7, Slug: "alex"}}
+		if err := h3.StateSet(t.Context(), "k", jsonx.RawMessage(`1`)); err == nil || err.Error() != "state_failed" {
+			t.Fatalf("err = %v, want state_failed", err)
+		}
+	})
+
+	t.Run("an unwired store answers no_host", func(t *testing.T) {
+		h := &luaHost{p: respondTestPlane(), ws: &workspaces.Workspace{ID: 7, Slug: "alex"}}
+		if _, _, err := h.StateGet(t.Context(), "k"); err == nil || err.Error() != "no_host" {
+			t.Fatalf("err = %v, want no_host", err)
+		}
+		if err := h.StateSet(t.Context(), "k", jsonx.RawMessage(`1`)); err == nil || err.Error() != "no_host" {
+			t.Fatalf("err = %v, want no_host", err)
+		}
+		if _, err := h.StateDelete(t.Context(), "k"); err == nil || err.Error() != "no_host" {
+			t.Fatalf("err = %v, want no_host", err)
 		}
 	})
 }

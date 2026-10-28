@@ -7,6 +7,8 @@ import (
 	"time"
 
 	lua "github.com/yuin/gopher-lua"
+
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 // mockTableKeys is the whole of what `mock` holds, pinned here and asserted by
@@ -23,17 +25,22 @@ import (
 // POST/DELETE verbs are no longer the only things that create or delete an
 // entity row, and the two doors share one store and one set of caps.
 //
-// A23 adds `array`, the escape hatch for the one shape Lua cannot write: an
-// empty JSON array. `{}` is an object by this package's own conversion rule
-// (convert.go's header comment), and a schema-validating consumer of
-// `{ groups = mock.array() }` receives `{"groups":[]}` where `{ groups = {} }`
-// would have served `{"groups":{}}` — valid JSON that an arktype-style client
-// silently refuses. The mark is honored for the EMPTY case only; the
-// converter's comment owns the reasoning.
-var mockTableKeys = []string{"array", "entities", "generate", "jwt", "now"}
+// A23 adds two more: `array`, the escape hatch for the one shape Lua cannot
+// write — an empty JSON array — and `state`, a callable table like entities
+// whose `.get/.set/.delete` are the workspace KV (A23 review: stateTableKeys
+// pins the sub-keys). `array` needs no Host — it is a pure conversion mark —
+// while `state` is the second helper after `entities` that WRITES, and its
+// refusals (`bad_key`, `bad_data`, the caps) answer with the same nil + word
+// shape every helper uses.
+var mockTableKeys = []string{"array", "entities", "generate", "jwt", "now", "state"}
 
 // entitiesTableKeys pins what `mock.entities` carries beside its `__call`.
 var entitiesTableKeys = []string{"create", "delete", "update"}
+
+// stateTableKeys pins what `mock.state` carries — the same pinned-literal
+// discipline as mockTableKeys, because a grep for a `mock.state.write`-shaped
+// name would pass over a writer called anything else.
+var stateTableKeys = []string{"delete", "get", "set"}
 
 // installMock puts the helpers on the state. A nil Host is legal — a preview
 // has no live workspace behind it — and then every helper that needs one
@@ -66,6 +73,12 @@ func installMock(l *lua.LState, ctx context.Context, host Host) {
 	meta.RawSetString("__call", l.NewFunction(mockEntitiesCall(ctx, host)))
 	l.SetMetatable(entities, meta)
 	mock.RawSetString("entities", entities)
+
+	state := l.NewTable()
+	state.RawSetString("get", l.NewFunction(mockStateGet(ctx, host)))
+	state.RawSetString("set", l.NewFunction(mockStateSet(ctx, host)))
+	state.RawSetString("delete", l.NewFunction(mockStateDelete(ctx, host)))
+	mock.RawSetString("state", state)
 
 	l.SetGlobal("mock", mock)
 }
@@ -429,6 +442,100 @@ func mockEntityDelete(ctx context.Context, host Host) lua.LGFunction {
 			return fail(l, errBadScope)
 		}
 		deleted, err := host.EntityDelete(ctx, family, scope, key)
+		if err != nil {
+			return fail(l, err)
+		}
+		l.Push(lua.LBool(deleted))
+		return 1
+	}
+}
+
+// mockStateGet is `mock.state.get(key)` → value, or nil when there is none.
+// A miss is nil and not an error: the cold start of a session — the first
+// GET before any POST assigned — is the ordinary first call, and an error
+// would make every author guard it. `bad_key` for an absent or a non-string
+// key, `no_host` in a preview.
+func mockStateGet(ctx context.Context, host Host) lua.LGFunction {
+	return func(l *lua.LState) int {
+		if host == nil {
+			return failNoHost(l)
+		}
+		key, ok := l.Get(1).(lua.LString)
+		if !ok || key == "" {
+			return fail(l, errBadKey)
+		}
+		raw, found, err := host.StateGet(ctx, string(key))
+		if err != nil {
+			return fail(l, err)
+		}
+		if !found {
+			l.Push(lua.LNil)
+			return 1
+		}
+		var decoded any
+		if err := jsonx.Unmarshal(raw, &decoded); err != nil {
+			// A stored value is json_valid by the table's own CHECK, so this
+			// is a corrupt-row answer and not an author-facing refusal — but
+			// nil + a word still beats serving the raw bytes as a string the
+			// author would parse.
+			return fail(l, errStateUndecodable)
+		}
+		l.Push(goToLua(l, decoded))
+		return 1
+	}
+}
+
+// mockStateSet is `mock.state.set(key, value)` → the stored value, decoded
+// back — so an author sees the canonical form the next get will answer with,
+// the way mock.entities.create answers the stored row. ANY JSON-expressible
+// value is legal: a number, a string, a boolean, a table. A nil value is
+// `bad_data`, because a Lua nil in argument position is an absent argument
+// and guessing "you meant delete" would make `mock.state.set(k, maybe_nil)`
+// silently delete — the one way a typo could destroy a session's rows.
+// Deleting is what mock.state.delete is for.
+func mockStateSet(ctx context.Context, host Host) lua.LGFunction {
+	return func(l *lua.LState) int {
+		if host == nil {
+			return failNoHost(l)
+		}
+		key, ok := l.Get(1).(lua.LString)
+		if !ok || key == "" {
+			return fail(l, errBadKey)
+		}
+		if l.Get(2) == lua.LNil {
+			return fail(l, errBadData)
+		}
+		converted, err := luaToGo(l.Get(2))
+		if err != nil {
+			// A cycle or a too-deep value: the same refusal readReturn makes
+			// for a body, here before anything reached the store.
+			return fail(l, err)
+		}
+		encoded, err := jsonx.Marshal(converted)
+		if err != nil {
+			return fail(l, err)
+		}
+		if err := host.StateSet(ctx, string(key), encoded); err != nil {
+			return fail(l, err)
+		}
+		l.Push(goToLua(l, converted))
+		return 1
+	}
+}
+
+// mockStateDelete is `mock.state.delete(key)` → true when a key went, false
+// when there was none — the same boolean mock.entities.delete answers, and
+// expiring a finished session is not an error an author should branch on.
+func mockStateDelete(ctx context.Context, host Host) lua.LGFunction {
+	return func(l *lua.LState) int {
+		if host == nil {
+			return failNoHost(l)
+		}
+		key, ok := l.Get(1).(lua.LString)
+		if !ok || key == "" {
+			return fail(l, errBadKey)
+		}
+		deleted, err := host.StateDelete(ctx, string(key))
 		if err != nil {
 			return fail(l, err)
 		}

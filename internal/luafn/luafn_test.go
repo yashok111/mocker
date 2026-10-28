@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/yashok111/mocker/internal/jsonx"
 )
 
 func run(t *testing.T, src string, req Request, host Host) (Response, error) {
@@ -306,6 +308,7 @@ type recordingHost struct {
 	key     string
 	data    map[string]any
 	created bool
+	state   map[string]jsonx.RawMessage
 }
 
 func (h *recordingHost) JWT(context.Context, map[string]any) (string, error) { return "t", nil }
@@ -328,6 +331,27 @@ func (h *recordingHost) EntityUpdate(_ context.Context, family string, scope []s
 func (h *recordingHost) EntityDelete(_ context.Context, family string, scope []string, key string) (bool, error) {
 	h.family, h.scope, h.key = family, scope, key
 	return true, nil
+}
+
+// A23's three, recorded the same way: the store is a map of decoded values,
+// so a test can assert on what a set actually stored without a database.
+func (h *recordingHost) StateGet(_ context.Context, key string) (jsonx.RawMessage, bool, error) {
+	raw, ok := h.state[key]
+	return raw, ok, nil
+}
+
+func (h *recordingHost) StateSet(_ context.Context, key string, value jsonx.RawMessage) error {
+	if h.state == nil {
+		h.state = map[string]jsonx.RawMessage{}
+	}
+	h.state[key] = value
+	return nil
+}
+
+func (h *recordingHost) StateDelete(_ context.Context, key string) (bool, error) {
+	_, ok := h.state[key]
+	delete(h.state, key)
+	return ok, nil
 }
 
 func TestMockGenerate_argumentShapes(t *testing.T) {
@@ -545,5 +569,77 @@ func TestMockArray_refusesANonTableArgument(t *testing.T) {
 	}
 	if string(resp.Body) != `{"err":"bad_data","nil_first":true}` {
 		t.Fatalf("refusal = %s, want the nil + word shape every helper answers with", resp.Body)
+	}
+}
+
+// A23: mock.state through a real host — set, get, the nil-value refusal, and
+// the no-host preview answers. The recordingHost keeps a map, so the test
+// asserts on what actually crossed the seam.
+func TestMockState_roundTripThroughTheHost(t *testing.T) {
+	h := &recordingHost{}
+	resp, err := run(t, `
+local v = mock.state.set("session/1", { group = "g1", count = 2 })
+mock.state.set("kept", "x")
+local got = mock.state.get("session/1")
+local gone = mock.state.delete("session/1")
+return 200, { set_roundtrip = v.count == 2, got = got.group, delete = gone, after_nil = mock.state.get("session/1") == nil }
+`, Request{}, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.Body) != `{"after_nil":true,"delete":true,"got":"g1","set_roundtrip":true}` {
+		t.Fatalf("round trip = %s", resp.Body)
+	}
+	// The store kept the exact JSON bytes, keys sorted by the converter as
+	// for a body — the same bytes the next process reads. (session/1 is
+	// already deleted; kept is the row that survived the function.)
+	if string(h.state["kept"]) != `"x"` {
+		t.Fatalf("stored = %s", h.state["kept"])
+	}
+}
+
+func TestMockState_scalarsAndTheNilRefusal(t *testing.T) {
+	h := &recordingHost{}
+	resp, err := run(t, `
+local a, b = mock.state.set("n", 42)
+local c = mock.state.get("n")
+local d, e = mock.state.set("gone", nil)
+return 200, { n = c, scalar = a == 42, nil_refused = d == nil, err = e }
+`, Request{}, h)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.Body) != `{"err":"bad_data","n":42,"nil_refused":true,"scalar":true}` {
+		t.Fatalf("scalars = %s — a nil value must not silently delete", resp.Body)
+	}
+}
+
+func TestMockState_noHostAnswersNoHost(t *testing.T) {
+	resp, err := run(t, `
+local g, ge = mock.state.get("k")
+local s, se = mock.state.set("k", 1)
+local d, de = mock.state.delete("k")
+return 200, { g = ge, s = se, d = de }
+`, Request{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.Body) != `{"d":"no_host","g":"no_host","s":"no_host"}` {
+		t.Fatalf("preview = %s", resp.Body)
+	}
+}
+
+func TestMockState_badKeys(t *testing.T) {
+	resp, err := run(t, `
+local _, g = mock.state.get(nil)
+local _, s = mock.state.set(7, 1)
+local _, d = mock.state.delete("")
+return 200, { g = g, s = s, d = d }
+`, Request{}, &recordingHost{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.Body) != `{"d":"bad_key","g":"bad_key","s":"bad_key"}` {
+		t.Fatalf("bad keys = %s", resp.Body)
 	}
 }

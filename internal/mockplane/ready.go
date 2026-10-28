@@ -73,6 +73,9 @@ func (p *Plane) Ready() []string {
 	if p.entities == nil {
 		missing = append(missing, "SetEntities")
 	}
+	if p.state == nil {
+		missing = append(missing, "SetState")
+	}
 	if p.assets == nil {
 		missing = append(missing, "SetAssets")
 	}

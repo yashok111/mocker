@@ -30,6 +30,7 @@ type (
 	readyScenarios  struct{ mockplane.ScenarioSource }
 	readyResources  struct{ mockplane.ResourceSource }
 	readyEntities   struct{ mockplane.EntityStore }
+	readyState      struct{ mockplane.LuaStateStore }
 	readyAssetStore struct{ mockplane.AssetStore }
 )
 
@@ -50,6 +51,7 @@ var readySteps = []struct {
 	{"SetScenarios", func(p *mockplane.Plane) { p.SetScenarios(readyScenarios{}) }},
 	{"SetResources", func(p *mockplane.Plane) { p.SetResources(readyResources{}) }},
 	{"SetEntities", func(p *mockplane.Plane) { p.SetEntities(readyEntities{}) }},
+	{"SetState", func(p *mockplane.Plane) { p.SetState(readyState{}) }},
 	{"SetAssets", func(p *mockplane.Plane) { p.SetAssets(readyAssetStore{}) }},
 	{"SetStreams", func(p *mockplane.Plane) {
 		p.SetStreams(stream.NewWorkspaceRegistry(1), mockplane.StreamOptions{})

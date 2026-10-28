@@ -261,3 +261,36 @@ func TestSandbox_entitiesTableHoldsExactlyTheThreeWriters(t *testing.T) {
 		t.Fatal("mock.entities has no __call: the A18 spelling mock.entities(family) must still read")
 	}
 }
+
+// TestSandbox_stateTableHoldsExactlyTheNamedKeys is the state twin of the
+// mock-table pin above: `mock.state` is the second helper that WRITES, and a
+// writer named anything at all would pass a grep for `mock.state.write`.
+func TestSandbox_stateTableHoldsExactlyTheNamedKeys(t *testing.T) {
+	l := newState()
+	defer l.Close()
+	installMock(l, t.Context(), nil)
+
+	tbl, ok := l.GetGlobal("mock").(*lua.LTable)
+	if !ok {
+		t.Fatal("mock is not a table")
+	}
+	state, ok := tbl.RawGetString("state").(*lua.LTable)
+	if !ok {
+		t.Fatal("mock.state is not a table")
+	}
+	var got []string
+	state.ForEach(func(k, _ lua.LValue) {
+		if name, ok := k.(lua.LString); ok {
+			got = append(got, string(name))
+		}
+	})
+	sort.Strings(got)
+	if !reflect.DeepEqual(got, stateTableKeys) {
+		t.Fatalf("mock.state keys = %v, want %v", got, stateTableKeys)
+	}
+	// And unlike entities, state is NOT callable: mock.state(family) is an
+	// entities-shaped mistake and must fail loudly rather than read nothing.
+	if l.GetMetatable(state) != lua.LNil {
+		t.Fatal("mock.state carries a metatable; only entities is a callable table")
+	}
+}

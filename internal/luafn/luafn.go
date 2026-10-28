@@ -122,6 +122,18 @@ type Host interface {
 	EntityCreate(ctx context.Context, family string, scope []string, data map[string]any) (map[string]any, error)
 	EntityUpdate(ctx context.Context, family string, scope []string, key string, patch map[string]any) (map[string]any, error)
 	EntityDelete(ctx context.Context, family string, scope []string, key string) (bool, error)
+
+	// A23's three: the workspace KV a function reaches as mock.state.get/
+	// set/delete — the persistence mock.entities could not give a CUSTOM
+	// endpoint, whose route is in no spec and so has no confirmed family to
+	// anchor. Values travel as the exact JSON bytes the caller means to
+	// serve back (luastate stores them verbatim), so the round trip through
+	// Lua conversion is the caller's business and not the store's. A nil
+	// Host answers every one of these with `no_host`, the same word the
+	// helpers above answer with in a preview.
+	StateGet(ctx context.Context, key string) (jsonx.RawMessage, bool, error)
+	StateSet(ctx context.Context, key string, value jsonx.RawMessage) error
+	StateDelete(ctx context.Context, key string) (bool, error)
 }
 
 // The argument refusals the helpers make before a host is asked: the text of
@@ -132,6 +144,11 @@ var (
 	errBadKey    = errors.New("bad_key")
 	errBadFamily = errors.New("bad_family")
 	errBadScope  = errors.New("bad_scope")
+	// errStateUndecodable is the corrupt-row answer mock.state.get makes when
+	// a stored value fails to decode — unreachable through the writers (the
+	// table's json_valid CHECK and the marshal at set), kept as a named
+	// refusal so a hand-edited database cannot crash a request.
+	errStateUndecodable = errors.New("state_undecodable")
 )
 
 // Validate compiles the source and nothing else. Both writers run it before

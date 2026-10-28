@@ -100,6 +100,14 @@ type Plane struct {
 	// entities makes [resourceBranch] fall through just as a nil resources
 	// does, on the same "no source wired, no change" reasoning.
 	entities EntityStore
+
+	// state is the A23 LuaStateStore (luafn's mock.state), read and written
+	// per request like entities and never cached in a runtime. A nil state
+	// degrades inside the helper itself: luaHost answers `no_host` for the
+	// three mock.state.* verbs only, exactly the way a PREVIEW answers, so
+	// an unwired store is a visible "no persistence" rather than a panic —
+	// and Ready() still refuses to start production on it.
+	state LuaStateStore
 	// assets is the per-request AssetStore (A6, asset.go); read per request
 	// like entities, never cached in a runtime.
 	assets AssetStore
@@ -221,6 +229,16 @@ func (p *Plane) SetResources(src ResourceSource) {
 // else.
 func (p *Plane) SetEntities(store EntityStore) {
 	p.entities = store
+}
+
+// SetState wires repo as the Plane's [LuaStateStore] (A23, luafn's
+// mock.state). Call it once, during startup, right next to [Plane.
+// SetEntities] — the same startup-only contract, enforced by Ready() the
+// same way: a production Plane without it starts the mock.state.* helpers
+// answering `no_host`, persistence silently gone, which is exactly the
+// green-test-dead-in-production shape this setter exists to make impossible.
+func (p *Plane) SetState(store LuaStateStore) {
+	p.state = store
 }
 
 // ServeHTTP resolves the workspace from the request's Host header and hands

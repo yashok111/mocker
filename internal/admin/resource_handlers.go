@@ -666,8 +666,9 @@ type resetDataResponseView struct {
 // here, before either collapses into [resources.ResetMode]), dispatches,
 // and maps the five-row refusal matrix D14.2 declares. It writes nothing
 // of its own, opens no transaction and touches neither op_overrides nor
-// custom_endpoints nor checkpoints — reset-data changes ONLY entities, a
-// layer config_snap does not carry (D3 R5, R12).
+// custom_endpoints nor checkpoints — reset-data changes ONLY data: the
+// entity rows and, since A23, the lua_state KV, both wiped inside that
+// verb's own transaction, a layer config_snap does not carry (D3 R5, R12).
 func (s *Server) handleResetData(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.requireUser(w, r); !ok {
 		return

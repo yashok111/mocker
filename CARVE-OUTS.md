@@ -1870,6 +1870,40 @@ at some door, the way a bundle version does.
   `nil, "no_host"` — the same answer `entities` gives there, recorded once
   for A18 and unchanged.
 
+## A23 — mock.array, mock.state, find_operations × custom endpoints (2026-10-28)
+
+Owner feedback from the quiz-custom-groups integration, shipped whole; the
+plan is `docs/a23-lua-feedback-fixes-plan.md`. The decided holes:
+
+- **mock.state is NOT in the bundle.** `export_workspace` / `import_spec` /
+  `fork_workspace` stay mockerBundle **v6**: state is DATA beyond entities,
+  and carrying it is a v7 decision (a new document section, an
+  upgrade-downgrade story, a `includeData`-shaped knob) nobody was asked to
+  make. A forked workspace starts with empty state; the fork's functions
+  that read state see the miss and answer the cold-start shape. Recorded in
+  the guide's own state section.
+- **mock.state is NOT in scenarios.** A scenario is a snapshot of
+  CONFIGURATION (settings + overrides); entity rows are already outside it,
+  and state sits beside them, not beside the overrides.
+- **mock.state has no TTL and no admin route.** It is read and written by
+  functions and wiped by `reset-data` / workspace delete; a listing or a
+  manual edit route is an operator surface nobody asked for. The table is
+  reachable with `sqlite3` when someone truly must look.
+- **The state caps are constants, not knobs** — key ≤ 200 bytes, value ≤
+  16 KiB of JSON, ≤ 1000 keys per workspace — for the reason `luafn.Timeout`
+  is a constant: a knob is a carve-out away if a real load asks for one.
+- **The `mock.array` mark is read for the EMPTY case only.** A mark that
+  could override a non-empty shape could drop keys, and no converter in this
+  tree drops keys silently. A marked string-keyed table still encodes as an
+  object, exactly as unmarked.
+- **The empty-roster reset opens its own transaction.** Reset-data for a
+  workspace with no confirmed family used to write nothing and return
+  `changed: false`; that is precisely the custom-endpoint-only workspace
+  mock.state exists for, so the wipe runs in a second, state-only
+  transaction with the slug re-checked inside it. Not atomic with an entity
+  reset — there is no entity reset on this path. The non-empty-roster path
+  wipes state INSIDE the main transaction.
+
 ## Ideas refused — 2026-09-03
 
 Two `IDEAS.md` entries the owner turned down in his own words («1 - мне

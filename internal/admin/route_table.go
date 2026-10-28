@@ -682,8 +682,9 @@ func (s *Server) routes() []route {
 		// P3b (D3): the RESET half of P3's carve-out list — reset-data
 		// lives entirely inside internal/resources (resource_handlers.go's
 		// own doc comment on handleResetData says why) and takes
-		// cpNeverTouchesLayer, not a label: it changes ONLY entities, a
-		// layer config_snap does not carry, so a label here would promise
+		// cpNeverTouchesLayer, not a label: it changes ONLY data — the
+		// entity rows and, since A23, the lua_state KV — a layer
+		// config_snap does not carry, so a label here would promise
 		// an undo this build cannot perform — the identical reasoning
 		// resource-decisions' own comment above already gives. The exact
 		// precedent is DELETE /api/workspaces/{id}/traffic: a destructive

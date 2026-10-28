@@ -34,6 +34,7 @@ import (
 	"github.com/yashok111/mocker/internal/designscenario"
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/livestate"
+	"github.com/yashok111/mocker/internal/luastate"
 	"github.com/yashok111/mocker/internal/mcp"
 	"github.com/yashok111/mocker/internal/mockplane"
 	"github.com/yashok111/mocker/internal/overrides"
@@ -417,6 +418,12 @@ func (a *app) wireMockPlane() {
 	resourcesRepo := resources.NewRepo(a.db, a.specRepo, a.cfg.MaxResponse, a.cfg.TrafficMaxBody, int64(a.cfg.MaxEntities))
 	a.mockPlane.SetResources(resourcesRepo)
 	a.mockPlane.SetEntities(resourcesRepo)
+	// A23: mock.state's store — its own *luastate.Repo over the one
+	// *store.DB, read and written per request like entities. Left unwired,
+	// every mock.state.* verb answers no_host with every test still green,
+	// which is why Plane.Ready() names SetState and this file is the only
+	// caller that can forget it.
+	a.mockPlane.SetState(luastate.NewRepo(a.db))
 	a.mockPlane.SetProxy(recordproxy.NewService(recordproxy.NewRepo(a.db), a.cfg))
 	// A6 (DESIGN §32): the mock plane's read-only view of uploaded assets —
 	// its own *assets.Repo over the one *store.DB, the same two caps

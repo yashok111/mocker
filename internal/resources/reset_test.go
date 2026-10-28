@@ -14,6 +14,7 @@ import (
 	"github.com/yashok111/mocker/internal/bundle"
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/jsonx"
+	"github.com/yashok111/mocker/internal/luastate"
 	"github.com/yashok111/mocker/internal/specs"
 	"github.com/yashok111/mocker/internal/store"
 	"github.com/yashok111/mocker/internal/testkit"
@@ -1427,5 +1428,110 @@ func TestResetData_Reseed_StaleBasePathValuesWithScenarioActive(t *testing.T) {
 	}
 	if got := entityCount(t, db, res.ID); got != before {
 		t.Fatalf("entity rows changed after a refused reseed: %d, want %d", got, before)
+	}
+}
+
+// --- A23: reset-data owns lua_state as data -------------------------------
+
+// insertStateRow writes one lua_state row through the store's own Set, so
+// the test exercises the same write path a function's mock.state.set does.
+func insertStateRow(t *testing.T, db *store.DB, workspaceID int64, key, value string) {
+	t.Helper()
+	if err := luastate.NewRepo(db).Set(t.Context(), workspaceID, key, jsonx.RawMessage(value)); err != nil {
+		t.Fatalf("insert lua_state row %q: %v", key, err)
+	}
+}
+
+func stateCount(t *testing.T, db *store.DB, workspaceID int64) int {
+	t.Helper()
+	var n int
+	if err := db.R.QueryRowContext(t.Context(),
+		"SELECT COUNT(*) FROM lua_state WHERE workspace_id = ?", workspaceID).Scan(&n); err != nil {
+		t.Fatalf("count lua_state for %d: %v", workspaceID, err)
+	}
+	return n
+}
+
+// TestResetData_Clear_WipesLuaStateInBothModes' clear half: state goes with
+// the entities, in the same verdict, and Deleted keeps counting entity rows
+// only — the response's one number does not silently change meaning.
+func TestResetData_Clear_WipesLuaState(t *testing.T) {
+	t.Parallel()
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
+	specID := importFixtureSpec(t, db)
+	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 5})
+	repo := newTestRepo(t, db, 4<<20, 64<<10)
+
+	if _, err := repo.Confirm(t.Context(), wsID, familyWidgets); err != nil {
+		t.Fatalf("Confirm widgets: %v", err)
+	}
+	insertStateRow(t, db, wsID, "session/1", `{"group":"g1"}`)
+	insertStateRow(t, db, wsID, "session/2", `{"group":"g2"}`)
+
+	out, err := repo.ResetData(t.Context(), wsID, ResetModeClear, "alpha")
+	if err != nil {
+		t.Fatalf("ResetData(clear): %v", err)
+	}
+	if !out.Changed {
+		t.Errorf("Changed = false, want true")
+	}
+	if out.Deleted != 5 {
+		t.Errorf("Deleted = %d, want 5 — entity rows, never state keys", out.Deleted)
+	}
+	if stateCount(t, db, wsID) != 0 {
+		t.Fatalf("lua_state survived reset-data — the feedback's own contract")
+	}
+}
+
+// TestResetData_EmptyRoster_WipesLuaState is the custom-endpoint-only
+// workspace: NO confirmed family, so the roster is empty and the path this
+// reset took before A23 wrote nothing at all. The state wipe still runs —
+// and Changed says so, because a caller told "nothing was reset" while rows
+// went would trust the wrong answer next time.
+func TestResetData_EmptyRoster_WipesLuaState(t *testing.T) {
+	t.Parallel()
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
+	wsID := insertWorkspace(t, db, "solo", nil, domain.Settings{Seed: 1, ListSize: 5})
+	repo := newTestRepo(t, db, 4<<20, 64<<10)
+
+	insertStateRow(t, db, wsID, "hits", `7`)
+
+	out, err := repo.ResetData(t.Context(), wsID, ResetModeClear, "solo")
+	if err != nil {
+		t.Fatalf("ResetData(clear) on an empty roster: %v", err)
+	}
+	if !out.Changed {
+		t.Errorf("Changed = false, want true — state went, silence would lie")
+	}
+	if out.Deleted != 0 {
+		t.Errorf("Deleted = %d, want 0 — there were no entities", out.Deleted)
+	}
+	if stateCount(t, db, wsID) != 0 {
+		t.Fatalf("lua_state survived an empty-roster reset")
+	}
+}
+
+// TestResetData_NothingAtAll_IsANoOp: both stores empty → changed:false, the
+// contract clause 14 pinned for entities, now over both. The second of two
+// clears is how both stores arrive empty together.
+func TestResetData_NothingAtAll_IsANoOp(t *testing.T) {
+	t.Parallel()
+	db := testkit.NewDBAt(t, t.TempDir()+"/mocker.db")
+	specID := importFixtureSpec(t, db)
+	wsID := insertWorkspace(t, db, "alpha", &specID, domain.Settings{Seed: 1, ListSize: 5})
+	repo := newTestRepo(t, db, 4<<20, 64<<10)
+
+	if _, err := repo.Confirm(t.Context(), wsID, familyWidgets); err != nil {
+		t.Fatalf("Confirm widgets: %v", err)
+	}
+	if _, err := repo.ResetData(t.Context(), wsID, ResetModeClear, "alpha"); err != nil {
+		t.Fatalf("first ResetData(clear): %v", err)
+	}
+	out, err := repo.ResetData(t.Context(), wsID, ResetModeClear, "alpha")
+	if err != nil {
+		t.Fatalf("second ResetData(clear): %v", err)
+	}
+	if out.Changed || out.Deleted != 0 {
+		t.Fatalf("outcome = %+v, want the no-op verdict", out)
 	}
 }

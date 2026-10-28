@@ -28,6 +28,7 @@ import (
 
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/gen"
+	"github.com/yashok111/mocker/internal/luastate"
 	"github.com/yashok111/mocker/internal/router"
 )
 
@@ -661,7 +662,36 @@ func (r *Repo) ResetData(ctx context.Context, workspaceID int64, mode ResetMode,
 		return ResetOutcome{}, fmt.Errorf("reset data for workspace %d: %w", workspaceID, err)
 	}
 	if len(roster) == 0 {
-		return ResetOutcome{}, nil
+		// A23: this early return used to write nothing at all, and for the
+		// workspace lua_state exists FOR — a custom-endpoint-only workspace,
+		// whose route is in no spec and so confirms no family — an empty
+		// roster is the COMMON case, not the edge. The state wipe therefore
+		// still runs, in its own transaction with the slug re-checked inside
+		// it (the same authoritative re-read resetTx's step 3 makes; the
+		// pre-check above stays vacuous against a concurrent rename).
+		// Deleted keeps counting entity rows only; Changed is true when
+		// state went — the caller's "nothing was reset" must not fire while
+		// rows did.
+		var out ResetOutcome
+		writeErr := r.db.Write(ctx, func(tx *sql.Tx) error {
+			var liveSlug string
+			if err := tx.QueryRowContext(ctx, "SELECT slug FROM workspaces WHERE id = ?", workspaceID).Scan(&liveSlug); err != nil {
+				return fmt.Errorf("read workspace %d slug inside transaction: %w", workspaceID, err)
+			}
+			if serr := compareConfirmSlug(confirmSlug, liveSlug); serr != nil {
+				return serr
+			}
+			wiped, err := luastate.WipeTx(ctx, tx, workspaceID)
+			if err != nil {
+				return err
+			}
+			out = ResetOutcome{Changed: wiped > 0}
+			return nil
+		})
+		if writeErr != nil {
+			return ResetOutcome{}, writeErr
+		}
+		return out, nil
 	}
 
 	prepared, skipped, effSettings, wantBasePath, wantBasePathValues, err := r.prepareReset(ctx, workspaceID, mode, core, roster)
@@ -732,7 +762,16 @@ func (r *Repo) resetTx(ctx context.Context, tx *sql.Tx, workspaceID int64, core 
 	if cerr != nil {
 		return ResetOutcome{}, cerr
 	}
-	if entityCount == 0 && (mode == ResetModeClear || len(prepared) == 0) {
+	// Step 4b (A23): the lua_state wipe, in the SAME transaction as the
+	// entity deletes — a reset never leaves state behind, and the wipe's
+	// count joins the no-op decision so "nothing to reset" stays true only
+	// when BOTH stores are already empty. Deleted keeps counting entity
+	// rows; Changed covers both.
+	stateWiped, werr := luastate.WipeTx(ctx, tx, workspaceID)
+	if werr != nil {
+		return ResetOutcome{}, werr
+	}
+	if entityCount == 0 && stateWiped == 0 && (mode == ResetModeClear || len(prepared) == 0) {
 		return ResetOutcome{Changed: false, Skipped: skipped}, nil
 	}
 
@@ -790,8 +829,10 @@ func (r *Repo) resetTx(ctx context.Context, tx *sql.Tx, workspaceID int64, core 
 	// No [store.BumpRevisionTx] call, anywhere in this function (D3 R11):
 	// entities are never cached in the runtime, routeCache is keyed on
 	// configuration alone, and a bump would invalidate every runtime for a
-	// change no runtime holds.
-	return ResetOutcome{Changed: deleted > 0 || inserted > 0, Deleted: deleted, Skipped: skipped}, nil
+	// change no runtime holds. lua_state is the same shape of thing (A23):
+	// data no runtime caches, wiped above, counted into Changed but never
+	// into a revision.
+	return ResetOutcome{Changed: deleted > 0 || inserted > 0 || stateWiped > 0, Deleted: deleted, Skipped: skipped}, nil
 }
 
 // countEntitiesTx counts every entity row of workspaceID's resources, live,

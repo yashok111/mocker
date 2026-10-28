@@ -47,6 +47,7 @@ import (
 	"github.com/yashok111/mocker/internal/httpx"
 	"github.com/yashok111/mocker/internal/jsonx"
 	"github.com/yashok111/mocker/internal/luafn"
+	"github.com/yashok111/mocker/internal/luastate"
 	"github.com/yashok111/mocker/internal/openapi"
 	"github.com/yashok111/mocker/internal/overrides"
 	"github.com/yashok111/mocker/internal/recipes"
@@ -380,6 +381,77 @@ type luaHost struct {
 // "no host" and answers from inside Lua is the PREVIEW's literal nil
 // (previewFunction and PreviewStream), where there is no live workspace
 // behind the helpers to reach.
+
+// LuaStateStore is the A23 seam for mock.state — the workspace KV. It is the
+// same construct-and-receive split EntityStore keeps one file over, and for
+// the same reason: the leaf that runs Lua must not import the package that
+// owns the table. *luastate.Repo is the production answer; the values travel
+// as the exact JSON bytes stored, so the round trip through Lua conversion
+// happens on this side of the seam and never inside the store. The method
+// names are the store's own — an interface that renamed them would make the
+// production type satisfy it through adapters nobody can read.
+type LuaStateStore interface {
+	Get(ctx context.Context, workspaceID int64, key string) (jsonx.RawMessage, bool, error)
+	Set(ctx context.Context, workspaceID int64, key string, value jsonx.RawMessage) error
+	Delete(ctx context.Context, workspaceID int64, key string) (bool, error)
+}
+
+// The three mock.state.* implementations. An UNWIRED store answers no_host —
+// the preview's own word — rather than panicking: Ready() refuses to start a
+// production Plane on that, so this path is a test harness's visible
+// degradation and nobody's production answer. luastate's sentinels map onto
+// the helper vocabulary: bad_key verbatim, both caps as state_limit (the
+// author's next move is the same either way — a smaller value or fewer
+// keys), and the store's wrapped errors pass through trimmed, the way
+// storeErr passes the entity store's.
+func (h *luaHost) StateGet(ctx context.Context, key string) (jsonx.RawMessage, bool, error) {
+	if h.p.state == nil {
+		return nil, false, errNoHostInternal
+	}
+	raw, found, err := h.p.state.Get(ctx, h.ws.ID, key)
+	if err != nil {
+		return nil, false, stateErr(err)
+	}
+	return raw, found, nil
+}
+
+func (h *luaHost) StateSet(ctx context.Context, key string, value jsonx.RawMessage) error {
+	if h.p.state == nil {
+		return errNoHostInternal
+	}
+	if err := h.p.state.Set(ctx, h.ws.ID, key, value); err != nil {
+		return stateErr(err)
+	}
+	return nil
+}
+
+func (h *luaHost) StateDelete(ctx context.Context, key string) (bool, error) {
+	if h.p.state == nil {
+		return false, errNoHostInternal
+	}
+	deleted, err := h.p.state.Delete(ctx, h.ws.ID, key)
+	if err != nil {
+		return false, stateErr(err)
+	}
+	return deleted, nil
+}
+
+// errNoHostInternal is the luaHost's unwired-store answer; luafn's
+// failNoHost renders the same word for a nil Host, and this is the one
+// error a host may carry that means the same thing from inside.
+var errNoHostInternal = errors.New("no_host")
+
+// stateErr maps luastate's refusal set onto the words a function reads.
+func stateErr(err error) error {
+	switch {
+	case errors.Is(err, luastate.ErrBadKey):
+		return errors.New("bad_key")
+	case errors.Is(err, luastate.ErrValueTooBig), errors.Is(err, luastate.ErrTooManyKeys):
+		return errors.New("state_limit")
+	default:
+		return errors.New("state_failed")
+	}
+}
 func (p *Plane) newLuaHost(rt *runtime, ws *workspaces.Workspace, base resources.ScopeKey, outer []string, req gen.Request) luafn.Host {
 	return &luaHost{p: p, rt: rt, ws: ws, base: base, outer: outer, req: req}
 }
