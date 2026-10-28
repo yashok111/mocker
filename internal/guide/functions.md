@@ -54,7 +54,7 @@ Returning nothing at all fails the request: a function must decide a status.
 
 ## 2. Helpers — the `mock` table
 
-`mock` holds exactly four things and nothing else.
+`mock` holds exactly five things and nothing else.
 
 - **`mock.jwt(claims)` → token, or nil + err.** Signs with the WORKSPACE's own
   `settings.auth`, the same signer the `jwt` recipe uses. Answers
@@ -62,6 +62,29 @@ Returning nothing at all fails the request: a function must decide a status.
   signing key — an unsigned token pretending to be signed is worse than an
   error. The signing key never enters the Lua state.
 - **`mock.now(offsetSec?)` → unix seconds.** The REAL clock, plus the offset.
+- **`mock.array([table])` → table.** The escape hatch for the one shape Lua
+  cannot write: an empty JSON array. Lua has one container type, and `{}` —
+  an empty table — encodes as `{}`, an empty OBJECT. `return 200, { groups =
+  {} }` serves `{"groups":{}}`: valid JSON that a client validating against
+  `type: array` silently refuses, and the loudest trap in this contract.
+  `mock.array()` returns a fresh empty table that encodes as `[]`;
+  `mock.array(t)` marks an existing table in place and returns it, so a body
+  built conditionally can carry the mark from the start:
+
+  ```lua
+  local groups = mock.array({})
+  for _, row in ipairs(mock.entities("/groups")) do
+    groups[#groups + 1] = { id = row.id, name = row.name }
+  end
+  return 200, { groups = groups }   -- {"groups":[]} when there are no rows
+  ```
+
+  The mark is honored for the EMPTY case only — a filled 1..n table is
+  already an array and a string-keyed table stays an object with the mark
+  unread, because a mark that could override a shape could drop keys, and
+  nothing in this contract drops keys silently. Ordinary table operations
+  (`#`, `pairs`, `ipairs`, `table.insert`) work on a marked table unchanged.
+  The mark dies with the VM; it exists exactly as long as one response body.
 - **`mock.entities(family[, scopeArray])` → rows, or nil + err.** Reads a
   CONFIRMED resource family's rows as an array of tables.
   - `family` is the route family exactly as `list_workspace_resources` reports

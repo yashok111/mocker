@@ -464,3 +464,86 @@ func TestMockEntities_isCallableAndCarriesThreeWriters(t *testing.T) {
 		}
 	})
 }
+
+// A23: the empty-array trap and its escape hatch. `{}` encodes as an object —
+// the rule convert.go's header comment owns — and `mock.array` is the one way
+// a function says "empty ARRAY". The mark is read for the empty case only;
+// every other shape keeps the ordinary rules, because a mark that could
+// override a shape could drop keys, and dropping data silently is the one
+// thing this converter never does.
+func TestReturn_anEmptyMarkedTableIsAnArray(t *testing.T) {
+	resp, err := run(t, `return 200, { groups = mock.array() }`, Request{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.MediaType != "application/json" || string(resp.Body) != `{"groups":[]}` {
+		t.Fatalf("marked empty table = %+v — the whole point of mock.array", resp)
+	}
+}
+
+func TestMockArray_marksAnExistingTableInPlace(t *testing.T) {
+	// The build-the-body-then-maybe-fill-it shape: the mark is applied to the
+	// table before the branch, so the same source serves [] or a filled array
+	// depending on the data — and the ordinary table operations (#, pairs,
+	// table.insert) keep working on a marked table, which the metatable does
+	// not disturb.
+	resp, err := run(t, `
+local t = mock.array({})
+if req.query.fill then table.insert(t, req.query.fill) end
+return 200, t
+`, Request{Query: map[string][]string{}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.Body) != `[]` {
+		t.Fatalf("marked-and-left-empty = %s, want []", resp.Body)
+	}
+
+	filled, err := run(t, `
+local t = mock.array({})
+if req.query.fill then table.insert(t, req.query.fill) end
+return 200, t
+`, Request{Query: map[string][]string{"fill": {"x"}}}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(filled.Body) != `["x"]` {
+		t.Fatalf("marked-and-filled = %s, want [\"x\"]", filled.Body)
+	}
+}
+
+func TestMockArray_nonEmptyShapesKeepTheOrdinaryRules(t *testing.T) {
+	for name, src := range map[string]string{
+		"filled 1..n already an array without the mark": `return 200, mock.array({7, 8})`,
+		"string keys stay an object, mark ignored":      `return 200, mock.array({a = 1})`,
+		"mixed stays an object (existing rule)":         `return 200, mock.array({1, k = "v"})`,
+	} {
+		t.Run(name, func(t *testing.T) {
+			resp, err := run(t, src, Request{}, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := map[string]string{
+				`return 200, mock.array({7, 8})`:       `[7,8]`,
+				`return 200, mock.array({a = 1})`:      `{"a":1}`,
+				`return 200, mock.array({1, k = "v"})`: `{"1":1,"k":"v"}`,
+			}
+			if string(resp.Body) != want[src] {
+				t.Fatalf("body = %s, want %s", resp.Body, want[src])
+			}
+		})
+	}
+}
+
+func TestMockArray_refusesANonTableArgument(t *testing.T) {
+	// A nil first return is invisible in a table constructor — a Lua nil in
+	// `{a = a}` is an ABSENT key — so the assertion reads the two returns
+	// through a boolean instead.
+	resp, err := run(t, `local a, b = mock.array(5); return 200, {nil_first = a == nil, err = b}`, Request{}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(resp.Body) != `{"err":"bad_data","nil_first":true}` {
+		t.Fatalf("refusal = %s, want the nil + word shape every helper answers with", resp.Body)
+	}
+}

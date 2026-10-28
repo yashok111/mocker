@@ -106,6 +106,14 @@ var (
 // the numeric keys rendered as strings, because dropping half the data
 // silently is worse than a shape the author can see in the response.
 //
+// Lua cannot write an empty ARRAY literal — `{}` is an object — and that one
+// gap is the format's loudest trap for a schema-validating consumer. The
+// escape hatch is `mock.array(t)`, which marks the table through a metatable
+// field; this converter reads the mark for the EMPTY case only, and every
+// other shape keeps the rules above. Restricting the mark to the empty case
+// is what keeps it honest: a marked table can never lose keys to the mark,
+// because the mark's only power is turning "no keys at all" into `[]`.
+//
 // It refuses a table that contains itself and a table nested past
 // maxTableDepth; see that constant for why both are refusals and not
 // truncations. The guard is the set of tables on the CURRENT PATH and not a
@@ -167,6 +175,15 @@ func (c *converter) table(t *lua.LTable, depth int) (any, error) {
 		stringKeys = true
 	})
 
+	// The mock.array mark, read here and nowhere else: an EMPTY marked table
+	// is the array the author said they meant, where Lua's own `{}` gives the
+	// converter no way to tell. Anything non-empty is decided by the rules
+	// below with the mark unread — the mark adds a shape, it never overrides
+	// one.
+	if count == 0 && isArrayMarked(t) {
+		return []any{}, nil
+	}
+
 	if !stringKeys && maxIndex == count && count > 0 {
 		arr := make([]any, 0, count)
 		for i := 1; i <= count; i++ {
@@ -210,6 +227,23 @@ func (c *converter) table(t *lua.LTable, depth int) (any, error) {
 // tableToGo is luaToGo for a value already known to be a table; mock.jwt's
 // claims argument is its one caller.
 func tableToGo(t *lua.LTable) (any, error) { return luaToGo(t) }
+
+// arrayMetaKey is the metatable field mock.array sets. It lives here rather
+// than in mock.go because the CONVERTER is the mark's only reader and the
+// helper its only writer; one constant, two files, no third spelling.
+const arrayMetaKey = "__jsarray"
+
+// isArrayMarked answers whether t carries the mock.array mark. gopher-lua
+// keeps a table's metatable on the struct itself, so the read is one type
+// assertion and one field lookup — no LState, and therefore callable from
+// the converter's plain-value walk.
+func isArrayMarked(t *lua.LTable) bool {
+	meta, ok := t.Metatable.(*lua.LTable)
+	if !ok {
+		return false
+	}
+	return meta.RawGetString(arrayMetaKey) == lua.LBool(true)
+}
 
 // marshalLua encodes a Lua value as JSON through this package's own
 // converter. It is one function rather than three call sites writing

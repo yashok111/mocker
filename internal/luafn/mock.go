@@ -22,7 +22,15 @@ import (
 // quoted as data), reversing A18 D3's "no writer": the mock plane's own
 // POST/DELETE verbs are no longer the only things that create or delete an
 // entity row, and the two doors share one store and one set of caps.
-var mockTableKeys = []string{"entities", "generate", "jwt", "now"}
+//
+// A23 adds `array`, the escape hatch for the one shape Lua cannot write: an
+// empty JSON array. `{}` is an object by this package's own conversion rule
+// (convert.go's header comment), and a schema-validating consumer of
+// `{ groups = mock.array() }` receives `{"groups":[]}` where `{ groups = {} }`
+// would have served `{"groups":{}}` — valid JSON that an arktype-style client
+// silently refuses. The mark is honored for the EMPTY case only; the
+// converter's comment owns the reasoning.
+var mockTableKeys = []string{"array", "entities", "generate", "jwt", "now"}
 
 // entitiesTableKeys pins what `mock.entities` carries beside its `__call`.
 var entitiesTableKeys = []string{"create", "delete", "update"}
@@ -42,6 +50,7 @@ func installMock(l *lua.LState, ctx context.Context, host Host) {
 	mock.RawSetString("now", l.NewFunction(mockNow))
 	mock.RawSetString("jwt", l.NewFunction(mockJWT(ctx, host)))
 	mock.RawSetString("generate", l.NewFunction(mockGenerate(ctx, host)))
+	mock.RawSetString("array", l.NewFunction(mockArray))
 
 	// `mock.entities` is a table whose __call is the reader, so the A18
 	// spelling `mock.entities("/x")` is unchanged and the three writers hang
@@ -68,6 +77,50 @@ func mockNow(l *lua.LState) int {
 	offset := int64(l.OptNumber(1, 0))
 	l.Push(lua.LNumber(time.Now().Unix() + offset))
 	return 1
+}
+
+// mockArray is A23's `mock.array([table])`: the one way a function says
+// "this table is an ARRAY" in a language whose `{}` cannot. Called with no
+// argument it returns a fresh empty table — the `{ groups = mock.array() }`
+// shape the trap was caught by; called with a table it marks THAT table in
+// place and returns it, so `mock.array(mock.entities(f))` that happened to
+// be empty stays an array too.
+//
+// The mark lives on a metatable this file builds and never exposes. That is
+// not a sandbox boundary — getmetatable stays in the sandbox and a host-owned
+// table's metatable never was one (installMock's comment) — it is simply the
+// cheapest place to hang a value the converter reads. The mark dies with the
+// VM, which is exactly the lifetime a response body has; state that outlives
+// a request never passes through this helper.
+//
+// Anything that is not a table and not nil is `bad_data`, the same word the
+// other helpers refuse a mistyped argument with — a number or a string here
+// is a mistyped call, not an empty array.
+func mockArray(l *lua.LState) int {
+	switch arg := l.Get(1).(type) {
+	case *lua.LNilType:
+		t := l.NewTable()
+		markArray(l, t)
+		l.Push(t)
+		return 1
+	case *lua.LTable:
+		markArray(l, arg)
+		l.Push(arg)
+		return 1
+	default:
+		return fail(l, errBadData)
+	}
+}
+
+// markArray sets the metatable isArrayMarked reads. A fresh metatable per
+// call, never a shared one: a table handed two marks by two nested calls
+// keeps working either way, and a shared table would let one function's
+// `getmetatable(t).__jsarray = false` reach every other table marked in the
+// same VM — one allocation per call buys that isolation for free.
+func markArray(l *lua.LState, t *lua.LTable) {
+	meta := l.NewTable()
+	meta.RawSetString(arrayMetaKey, lua.LBool(true))
+	l.SetMetatable(t, meta)
 }
 
 // fail is the one shape every helper's refusal takes: nil plus a reason
