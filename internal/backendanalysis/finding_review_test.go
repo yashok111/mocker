@@ -116,7 +116,9 @@ func TestFindingResolutionRecheckMustNotTargetOlderRevision(t *testing.T) {
 				return e
 			}
 		}
-		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES (?,?,1,?,?,?)`, otherProject, "Other", foreign, "now", "now"); e != nil {
+		// Named columns — see repo_test.go's testRepo for the reason: 0030
+		// added start_view_json, positional VALUES break on the next column.
+		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects(id,name,version,current_revision_id,created_at,updated_at) VALUES (?,?,1,?,?,?)`, otherProject, "Other", foreign, "now", "now"); e != nil {
 			return e
 		}
 		_, e := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions VALUES (?,?,?)`, foreign, otherProject, `{}`)

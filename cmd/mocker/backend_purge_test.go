@@ -33,7 +33,9 @@ func TestBackendPurgePreviewConfirmationAndForeignHistory(t *testing.T) {
 	}
 	if err = db.Write(t.Context(), func(tx *sql.Tx) error {
 		for _, id := range []string{project, foreign} {
-			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES(?,'Fixture',1,?,'now','now')`, id, id); err != nil {
+			// Named columns — 0030 added start_view_json; positional VALUES
+			// break on any ALTER TABLE (see backendanalysis/repo_test.go).
+			if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_projects(id,name,version,current_revision_id,created_at,updated_at) VALUES(?,'Fixture',1,?,'now','now')`, id, id); err != nil {
 				return err
 			}
 			if _, err := backendblob.Exec(t.Context(), tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES(?,?,?)`, id, id, `{"schemaVersion":"1","summary":"`+secret+`"}`); err != nil {

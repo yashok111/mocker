@@ -54,8 +54,8 @@ func TestEmbeddedCopiesMatchTheSkill(t *testing.T) {
 		if got != string(want) {
 			t.Errorf("internal/guide/%s differs from %s — run `make guide-sync`", source.Embedded, owner)
 		}
-		for _, copy := range source.Copies {
-			alias := filepath.Join(root, copy.Package, copy.Path)
+		for _, aliasSrc := range source.Copies {
+			alias := filepath.Join(root, aliasSrc.Package, aliasSrc.Path)
 			data, err := os.ReadFile(alias)
 			if err != nil {
 				t.Fatalf("read compatibility copy %s: %v", alias, err)

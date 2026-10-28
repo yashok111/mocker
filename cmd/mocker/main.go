@@ -767,7 +767,11 @@ func (a *app) startAndDrain(ctx context.Context, stop context.CancelFunc) (runEr
 			runErr = fmt.Errorf("graceful shutdown: %w", err)
 		}
 		cancel()
-		<-serveErr // ListenAndServe always returns once Shutdown completes
+		// ListenAndServe always returns once Shutdown completes; the only
+		// error it can carry here is http.ErrServerClosed, and a real serve
+		// failure is answered by the OTHER case of this select. The receive
+		// is the join, not the error handling.
+		<-serveErr //nolint:errcheck // joining the serve goroutine after a graceful shutdown; the error it carries is ErrServerClosed by construction
 		// Only now, with the drain finished and every in-flight request
 		// answered, is it safe to let the recorder stop taking new events
 		// and run its final flush.

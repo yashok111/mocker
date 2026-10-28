@@ -44,7 +44,10 @@ func TestBackendStorageRebuildCanonicalizesProjectUUID(t *testing.T) {
 		t.Fatal(err)
 	}
 	err = db.Write(t.Context(), func(tx *sql.Tx) error {
-		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES(?,'P',1,'r','now','now')`, id); err != nil {
+		// Named columns — 0030 added start_view_json; a positional VALUES
+		// list must name every column and breaks on the next ALTER TABLE
+		// (see backendanalysis/repo_test.go's own comment).
+		if _, err := tx.ExecContext(t.Context(), `INSERT INTO backend_projects(id,name,version,current_revision_id,created_at,updated_at) VALUES(?,'P',1,'r','now','now')`, id); err != nil {
 			return err
 		}
 		if _, err := backendblob.Exec(t.Context(), tx, `INSERT INTO backend_revisions(id,project_id,document) VALUES('r',?,'{"schemaVersion":"6"}')`, id); err != nil {

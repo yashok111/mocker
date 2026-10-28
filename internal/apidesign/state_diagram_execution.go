@@ -46,24 +46,24 @@ func (r *Repo) StateDiagramExecution(ctx context.Context, id int64) (StateDiagra
 		return StateDiagramExecution{}, stateDiagramExecutionError(err)
 	}
 	result := StateDiagramExecution{DesignID: id, Version: design.Version, RevisionID: draft.ID, Diagrams: []StateDiagramExecutionState{}}
-	for _, copy := range execution.Diagrams {
-		if copy.Entity == nil {
+	for _, applied := range execution.Diagrams {
+		if applied.Entity == nil {
 			return StateDiagramExecution{}, invalidField("/"+statediagram.ExecutionExtension, "У применённой диаграммы отсутствует сущность")
 		}
 		state := "missing"
-		if i := slices.IndexFunc(authoring.Diagrams, func(diagram statediagram.Diagram) bool { return diagram.ID == copy.ID }); i >= 0 {
+		if i := slices.IndexFunc(authoring.Diagrams, func(diagram statediagram.Diagram) bool { return diagram.ID == applied.ID }); i >= 0 {
 			state = "outdated"
-			if reflect.DeepEqual(authoring.Diagrams[i], copy) {
+			if reflect.DeepEqual(authoring.Diagrams[i], applied) {
 				state = "current"
 			}
 		}
 		count := 0
 		for _, program := range programs {
-			if program.ID() == copy.ID {
+			if program.ID() == applied.ID {
 				count++
 			}
 		}
-		result.Diagrams = append(result.Diagrams, StateDiagramExecutionState{DiagramID: copy.ID, Name: copy.Name, Entity: *copy.Entity, State: state, OperationCount: count})
+		result.Diagrams = append(result.Diagrams, StateDiagramExecutionState{DiagramID: applied.ID, Name: applied.Name, Entity: *applied.Entity, State: state, OperationCount: count})
 	}
 	return result, nil
 }

@@ -27,7 +27,12 @@ func testRepo(t *testing.T) (*Repo, *store.DB) {
 	t.Helper()
 	db := testkit.NewDB(t)
 	err := db.Write(t.Context(), func(tx *sql.Tx) error {
-		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects VALUES (?,?,1,?,?,?)`, projectID, "Analysis", revisionID, "now", "now"); e != nil {
+		// Named columns, never positional: migration 0030 added
+		// backend_projects.start_view_json, and a VALUES list without a
+		// column list must supply EVERY column — one more ALTER TABLE and
+		// every fixture here breaks again. start_view_json is nullable and
+		// deliberately omitted.
+		if _, e := tx.ExecContext(t.Context(), `INSERT INTO backend_projects(id,name,version,current_revision_id,created_at,updated_at) VALUES (?,?,1,?,?,?)`, projectID, "Analysis", revisionID, "now", "now"); e != nil {
 			return e
 		}
 		_, e := testkit.ExecBackendOwner(t.Context(), tx, `INSERT INTO backend_revisions VALUES (?,?,?)`, revisionID, projectID, `{}`)

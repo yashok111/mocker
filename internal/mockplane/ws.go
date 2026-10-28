@@ -378,7 +378,9 @@ func (l *wsLoop) closeBounded(end closeReason) {
 		}
 	case <-time.After(l.opts.FrameTimeout):
 		_ = l.sock.CloseNow()
-		<-done
+		// The join, not the error handling: CloseNow made the helper return,
+		// and its outcome (a close that never completed) has no reader left.
+		<-done //nolint:errcheck // a channel receive is this line's only purpose — joining the helper goroutine (§30.8), discarding the deliberately-lost close result
 	}
 }
 

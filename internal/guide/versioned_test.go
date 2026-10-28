@@ -134,8 +134,8 @@ func TestGuideSyncDetectsChangesAndGeneratesStableIdentity(t *testing.T) {
 		if source.Package != "" {
 			packages[source.Package] = true
 		}
-		for _, copy := range source.Copies {
-			packages[copy.Package] = true
+		for _, aliasSrc := range source.Copies {
+			packages[aliasSrc.Package] = true
 		}
 	}
 	for name := range packages {

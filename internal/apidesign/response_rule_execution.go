@@ -42,18 +42,18 @@ func (r *Repo) ResponseRuleExecution(ctx context.Context, id int64) (ResponseRul
 		return ResponseRuleExecution{}, responseRuleError(err)
 	}
 	result := ResponseRuleExecution{DesignID: id, Version: d.Version, RevisionID: draft.ID, Rules: []ResponseRuleExecutionState{}}
-	for _, copy := range execution.Rules {
-		if copy.Binding == nil {
+	for _, applied := range execution.Rules {
+		if applied.Binding == nil {
 			return ResponseRuleExecution{}, invalidField("/"+responserules.ExecutionExtension, "У применённого правила отсутствует операция")
 		}
 		state := "missing"
-		if i := slices.IndexFunc(authoring.Rules, func(rule responserules.Rule) bool { return rule.ID == copy.ID }); i >= 0 {
+		if i := slices.IndexFunc(authoring.Rules, func(rule responserules.Rule) bool { return rule.ID == applied.ID }); i >= 0 {
 			state = "outdated"
-			if reflect.DeepEqual(responserules.ExecutionRule(authoring.Rules[i]), responserules.ExecutionRule(copy)) {
+			if reflect.DeepEqual(responserules.ExecutionRule(authoring.Rules[i]), responserules.ExecutionRule(applied)) {
 				state = "current"
 			}
 		}
-		result.Rules = append(result.Rules, ResponseRuleExecutionState{RuleID: copy.ID, Name: copy.Name, Binding: *copy.Binding, State: state})
+		result.Rules = append(result.Rules, ResponseRuleExecutionState{RuleID: applied.ID, Name: applied.Name, Binding: *applied.Binding, State: state})
 	}
 	return result, nil
 }
