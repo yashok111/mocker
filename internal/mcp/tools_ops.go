@@ -16,6 +16,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"sort"
 	"strings"
 
 	sdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -70,12 +71,15 @@ func addOperationTools(s *sdk.Server, lb *loopback) {
 
 	sdk.AddTool(s, &sdk.Tool{
 		Name: "find_operations",
-		Description: "Searches a workspace's operations by a case-insensitive substring over method " +
-			"and path, returning each match's opKey, declared statuses and whether it already has an " +
-			"override. Use this to locate the opKey get_operation and set_operation_response need — " +
-			"the result is capped and always says so via returned/total/truncated, so a capped list is " +
-			"never mistaken for \"no such operation\". For a sequence scenario, read get_api_design and copy " +
-			"x-mocker-canvas-operation-id from draft.document into operationKey; the workspace opKey returned here cannot bind a sequence step.",
+		Description: "Searches a workspace's routes by a case-insensitive substring over method " +
+			"and path — the spec's merged operations AND the workspace's custom endpoints (A23) — " +
+			"returning each match's statuses and address. A row with kind \"spec\" carries opKey, " +
+			"which get_operation and the set_* tools address; a row with kind \"custom\" has NO " +
+			"opKey and is addressed by endpointId through update_endpoint, delete_endpoint and " +
+			"preview_endpoint. The result is capped and always says so via returned/total/truncated, " +
+			"so a capped list is never mistaken for \"no such route\". For a sequence scenario, read " +
+			"get_api_design and copy x-mocker-canvas-operation-id from draft.document into operationKey; " +
+			"the workspace opKey returned here cannot bind a sequence step.",
 		Annotations: &sdk.ToolAnnotations{ReadOnlyHint: true, IdempotentHint: true},
 	}, handleFindOperations(lb))
 
@@ -343,6 +347,24 @@ func fetchMergedOperations(ctx context.Context, lb *loopback, tool string, works
 	return ops, nil
 }
 
+// fetchCustomEndpoints reads GET .../endpoints — A23's second leg of
+// find_operations, whose search space until now was the merged SPEC
+// operations only. A workspace built on custom endpoints (the feedback's
+// own shape: the route is proposed to a backend, not merged into a spec)
+// answered 0 for its main route, and the workflow step documented as
+// "find_operations → opKey" missed it. The full EndpointLine projection is
+// decoded (endpointWire, tools_read.go) and re-projected down to
+// OperationLine by the caller; this function exists so the ONE route
+// reference sits beside the toolRoutes row that allows it.
+func fetchCustomEndpoints(ctx context.Context, lb *loopback, tool string, workspaceID int64) ([]endpointWire, error) {
+	var list endpointListWire
+	method, path := toolPath(tool, "GET /api/workspaces/{id}/endpoints", workspaceID)
+	if err := lb.call(ctx, method, path, nil, &list); err != nil {
+		return nil, err
+	}
+	return list.Endpoints, nil
+}
+
 func findMergedOp(ops []mergedOpWire, opKey string) (mergedOpWire, bool) {
 	for _, op := range ops {
 		if op.OpKey == opKey {
@@ -368,12 +390,26 @@ type FindOperationsInput struct {
 // richer per-status shape once the caller has picked ONE operation to
 // inspect), and Overridden is only a bool — the override's own shape is
 // get_operation's job.
+//
+// A23 adds Kind, and with it the split the two address spaces make: a
+// `spec` row's OpKey addresses get_operation/set_operation_response/
+// set_operation_variant, a `custom` row has NO opKey and is addressed by
+// EndpointID through update_endpoint/delete_endpoint/preview_endpoint —
+// the two spaces answer different tools, and one key shape for both would
+// invite feeding an endpoint id where an opKey belongs.
 type OperationLine struct {
-	OpKey      string `json:"opKey"`
+	OpKey      string `json:"opKey,omitempty"`
 	Method     string `json:"method"`
 	Path       string `json:"path"`
 	Statuses   []int  `json:"statuses"`
 	Overridden bool   `json:"overridden"`
+	// Kind is "spec" for a merged spec operation, "custom" for a custom
+	// endpoint — always present, so a scan never has to infer from the
+	// shape of the key.
+	Kind string `json:"kind"`
+	// EndpointID is the custom_endpoints row id, custom rows only; a spec
+	// row has none.
+	EndpointID int64 `json:"endpointId,omitempty"`
 }
 
 // FindOperationsOutput is find_operations' declared output schema. Total
@@ -404,6 +440,21 @@ func handleFindOperations(lb *loopback) sdk.ToolHandlerFor[FindOperationsInput, 
 			}
 		}
 
+		// A23: the custom endpoints, fetched beside the merged operations
+		// and matched by the SAME rule. They come back AFTER the spec rows,
+		// in list_endpoints' own order — the position in the answer is
+		// never the rank; the query is.
+		endpoints, err := fetchCustomEndpoints(ctx, lb, "find_operations", in.WorkspaceID)
+		if err != nil {
+			return nil, FindOperationsOutput{}, err
+		}
+		matchedEndpoints := make([]endpointWire, 0, len(endpoints))
+		for _, ep := range endpoints {
+			if q == "" || strings.Contains(strings.ToLower(ep.Method+" "+ep.Path), q) {
+				matchedEndpoints = append(matchedEndpoints, ep)
+			}
+		}
+
 		limit := findOperationsDefaultLimit
 		if in.Limit > 0 {
 			limit = in.Limit
@@ -412,7 +463,7 @@ func handleFindOperations(lb *loopback) sdk.ToolHandlerFor[FindOperationsInput, 
 			limit = findOperationsMaxLimit
 		}
 
-		total := len(matched)
+		total := len(matched) + len(matchedEndpoints)
 		returned := total
 		if returned > limit {
 			returned = limit
@@ -420,17 +471,45 @@ func handleFindOperations(lb *loopback) sdk.ToolHandlerFor[FindOperationsInput, 
 
 		lines := make([]OperationLine, returned)
 		for i := 0; i < returned; i++ {
-			op := matched[i]
-			statuses := make([]int, len(op.Statuses))
-			for j, st := range op.Statuses {
-				statuses[j] = st.HTTPStatus
+			if i < len(matched) {
+				op := matched[i]
+				statuses := make([]int, len(op.Statuses))
+				for j, st := range op.Statuses {
+					statuses[j] = st.HTTPStatus
+				}
+				lines[i] = OperationLine{
+					OpKey:      op.OpKey,
+					Method:     op.Method,
+					Path:       op.Path,
+					Statuses:   statuses,
+					Overridden: op.Override != nil,
+					Kind:       "spec",
+				}
+				continue
 			}
+			ep := matchedEndpoints[i-len(matched)]
+			statuses := make([]int, 0, len(ep.Responses))
+			for status := range ep.Responses {
+				n := 0
+				for _, c := range status {
+					if c < '0' || c > '9' {
+						n = 0
+						break
+					}
+					n = n*10 + int(c-'0')
+				}
+				if n > 0 {
+					statuses = append(statuses, n)
+				}
+			}
+			sort.Ints(statuses)
 			lines[i] = OperationLine{
-				OpKey:      op.OpKey,
-				Method:     op.Method,
-				Path:       op.Path,
+				Method:     ep.Method,
+				Path:       ep.Path,
 				Statuses:   statuses,
-				Overridden: op.Override != nil,
+				Overridden: ep.OverrideOn,
+				Kind:       "custom",
+				EndpointID: ep.ID,
 			}
 		}
 

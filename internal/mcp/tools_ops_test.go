@@ -478,7 +478,14 @@ func threeOpsFixture() []fixtureOp {
 // must match the two /widgets operations and skip /gadgets, case-insensitively.
 func TestFindOperations_queryFilters(t *testing.T) {
 	t.Parallel()
-	fc := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusOK, body: marshalOps(t, threeOpsFixture())}}}
+	// Two canned responses since A23: the merged operations, then the custom
+	// endpoints the same search covers. The second call is part of the
+	// contract — a find_operations that stopped asking would silently go
+	// blind to custom endpoints again.
+	fc := &scriptedCaller{t: t, responses: []cannedResponse{
+		{status: http.StatusOK, body: marshalOps(t, threeOpsFixture())},
+		{status: http.StatusOK, body: `{"endpoints":[]}`},
+	}}
 	lb := newLoopback(fc)
 
 	_, out, err := handleFindOperations(lb)(opsTestCtx(), nil, FindOperationsInput{WorkspaceID: 12, Query: "WIDGET"})
@@ -487,6 +494,9 @@ func TestFindOperations_queryFilters(t *testing.T) {
 	}
 	if fc.calls[0].path != "/api/workspaces/12/operations" {
 		t.Errorf("call path = %q, want /api/workspaces/12/operations", fc.calls[0].path)
+	}
+	if fc.calls[1].path != "/api/workspaces/12/endpoints" {
+		t.Errorf("second call path = %q, want /api/workspaces/12/endpoints — the custom half of the search", fc.calls[1].path)
 	}
 	if out.Total != 2 || out.Returned != 2 || out.Truncated {
 		t.Errorf("Total/Returned/Truncated = %d/%d/%v, want 2/2/false", out.Total, out.Returned, out.Truncated)
@@ -535,7 +545,10 @@ func TestFindOperations_capTruncates(t *testing.T) {
 			Statuses: []fixtureStatus{{Selector: "200", HTTPStatus: 200, IsDefault: true}},
 		})
 	}
-	fc := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusOK, body: marshalOps(t, ops)}}}
+	fc := &scriptedCaller{t: t, responses: []cannedResponse{
+		{status: http.StatusOK, body: marshalOps(t, ops)},
+		{status: http.StatusOK, body: `{"endpoints":[]}`},
+	}}
 	lb := newLoopback(fc)
 
 	// Default limit (no Limit supplied): findOperationsDefaultLimit caps it.
@@ -555,7 +568,10 @@ func TestFindOperations_capTruncates(t *testing.T) {
 
 	// An explicit Limit above findOperationsMaxLimit is clamped, not honored
 	// verbatim — a caller cannot widen the cap past the hard ceiling.
-	fc2 := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusOK, body: marshalOps(t, ops)}}}
+	fc2 := &scriptedCaller{t: t, responses: []cannedResponse{
+		{status: http.StatusOK, body: marshalOps(t, ops)},
+		{status: http.StatusOK, body: `{"endpoints":[]}`},
+	}}
 	_, out2, err := handleFindOperations(newLoopback(fc2))(opsTestCtx(), nil, FindOperationsInput{WorkspaceID: 1, Limit: 10000})
 	if err != nil {
 		t.Fatalf("handleFindOperations: %v", err)
@@ -568,7 +584,10 @@ func TestFindOperations_capTruncates(t *testing.T) {
 	}
 
 	// A Limit below the default is honored as a narrower cap.
-	fc3 := &scriptedCaller{t: t, responses: []cannedResponse{{status: http.StatusOK, body: marshalOps(t, ops)}}}
+	fc3 := &scriptedCaller{t: t, responses: []cannedResponse{
+		{status: http.StatusOK, body: marshalOps(t, ops)},
+		{status: http.StatusOK, body: `{"endpoints":[]}`},
+	}}
 	_, out3, err := handleFindOperations(newLoopback(fc3))(opsTestCtx(), nil, FindOperationsInput{WorkspaceID: 1, Limit: 5})
 	if err != nil {
 		t.Fatalf("handleFindOperations: %v", err)
@@ -578,6 +597,77 @@ func TestFindOperations_capTruncates(t *testing.T) {
 	}
 	if !out3.Truncated {
 		t.Errorf("Truncated = false with Limit=5 over %d matches, want true", totalOps)
+	}
+}
+
+// TestFindOperations_seesCustomEndpoints is A23's own clause: the feedback
+// came from a workspace whose main route was a CUSTOM endpoint, and the
+// search answered 0 — "find_operations → opKey" missed the one route the
+// caller cared about. The custom rows come back after the spec rows, with
+// kind "custom", NO opKey and an endpointId; statuses are the endpoint's
+// own response keys; overridden mirrors overrideOn.
+func TestFindOperations_seesCustomEndpoints(t *testing.T) {
+	t.Parallel()
+	endpoints := `{"endpoints":[
+		{"id":41,"method":"POST","path":"/group-assignments","canonicalPath":"/group-assignments",
+		 "overrideOn":true,"routeOff":false,"activeStatus":200,
+		 "responses":{"200":{"mode":"function","function":"return 200, {}"},"404":{"mode":"pinned","body":"{}"}},
+		 "kind":"http","createdAt":0,"updatedAt":0,"editVersion":3},
+		{"id":42,"method":"GET","path":"/sessions","canonicalPath":"/sessions",
+		 "overrideOn":false,"routeOff":false,"activeStatus":200,
+		 "responses":{"200":{"mode":"generated"}},"kind":"http","createdAt":0,"updatedAt":0,"editVersion":4}
+	]}`
+	fc := &scriptedCaller{t: t, responses: []cannedResponse{
+		{status: http.StatusOK, body: marshalOps(t, threeOpsFixture())},
+		{status: http.StatusOK, body: endpoints},
+	}}
+	lb := newLoopback(fc)
+
+	_, out, err := handleFindOperations(lb)(opsTestCtx(), nil, FindOperationsInput{WorkspaceID: 12, Query: "group-assignments"})
+	if err != nil {
+		t.Fatalf("handleFindOperations: %v", err)
+	}
+	if out.Total != 1 || out.Returned != 1 {
+		t.Fatalf("Total/Returned = %d/%d, want 1/1 — the feedback's own query must hit the custom row", out.Total, out.Returned)
+	}
+	row := out.Operations[0]
+	if row.Kind != "custom" || row.EndpointID != 41 {
+		t.Fatalf("row = %+v, want kind custom, endpointId 41", row)
+	}
+	if row.OpKey != "" {
+		t.Fatalf("OpKey = %q, want empty — a custom row is addressed by endpointId, never by an opKey", row.OpKey)
+	}
+	if row.Method != "POST" || row.Path != "/group-assignments" {
+		t.Fatalf("route = %s %s", row.Method, row.Path)
+	}
+	if len(row.Statuses) != 2 || row.Statuses[0] != 200 || row.Statuses[1] != 404 {
+		t.Fatalf("Statuses = %v, want [200 404] sorted from the responses map", row.Statuses)
+	}
+	if !row.Overridden {
+		t.Fatalf("Overridden = false, want overrideOn:true")
+	}
+
+	// And the same query across BOTH halves reports the two spaces together,
+	// spec rows first.
+	fc2 := &scriptedCaller{t: t, responses: []cannedResponse{
+		{status: http.StatusOK, body: marshalOps(t, threeOpsFixture())},
+		{status: http.StatusOK, body: endpoints},
+	}}
+	_, out2, err := handleFindOperations(newLoopback(fc2))(opsTestCtx(), nil, FindOperationsInput{WorkspaceID: 12})
+	if err != nil {
+		t.Fatalf("handleFindOperations: %v", err)
+	}
+	if out2.Total != 5 || len(out2.Operations) != 5 {
+		t.Fatalf("Total/len = %d/%d, want 5/5 — three spec rows plus two custom", out2.Total, len(out2.Operations))
+	}
+	if out2.Operations[0].Kind != "spec" || out2.Operations[4].Kind != "custom" {
+		t.Fatalf("kinds = %s…%s, want spec rows first, custom rows after", out2.Operations[0].Kind, out2.Operations[4].Kind)
+	}
+	if out2.Operations[3].EndpointID != 41 || out2.Operations[4].EndpointID != 42 {
+		t.Fatalf("endpointIds = %d/%d, want 41/42", out2.Operations[3].EndpointID, out2.Operations[4].EndpointID)
+	}
+	if out2.Operations[3].OpKey != "" || out2.Operations[4].OpKey != "" {
+		t.Fatal("custom rows carry an opKey; the two address spaces just merged")
 	}
 }
 

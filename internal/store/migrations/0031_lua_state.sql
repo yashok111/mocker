@@ -12,7 +12,13 @@
 -- mock.state.get; json_valid keeps a stored value a JSON document the same
 -- way the bundle tables do. The workspace FK gives the delete-workspace
 -- cascade for free, the same way every workspace-owned table gets it.
-CREATE TABLE lua_state (
+--
+-- IF NOT EXISTS, the same replay safety 0028 carries: testkit's
+-- EditLegacyBackendFixture stamps user_version back to 26 and Migrate then
+-- replays this file against a store that already has the table — a plain
+-- CREATE TABLE would fail the fixture, and with it every legacy-shape test
+-- downstream.
+CREATE TABLE IF NOT EXISTS lua_state (
   workspace_id INTEGER NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   key TEXT NOT NULL,
   value TEXT NOT NULL CHECK(json_valid(value)),

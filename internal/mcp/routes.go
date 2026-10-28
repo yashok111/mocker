@@ -276,7 +276,7 @@ var toolRoutes = map[string][]string{
 	"list_specs":            {"GET /api/specs", "GET /api/specs/{id}/report"},
 	"get_spec":              {"GET /api/specs/{id}"},
 	"list_spec_operations":  {"GET /api/specs/{id}/operations"},
-	"find_operations":       {"GET /api/workspaces/{id}/operations"},
+	"find_operations":       {"GET /api/workspaces/{id}/operations", "GET /api/workspaces/{id}/endpoints"},
 	"get_operation":         {"GET /api/workspaces/{id}/operations", "GET /api/workspaces/{id}/operations/{opKey}"},
 	"get_auth_preset":       {"GET /api/workspaces/{id}/auth-preset"},
 	"get_session_directive": {"GET /api/workspaces/{id}/session"},
