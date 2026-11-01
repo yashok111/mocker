@@ -120,7 +120,7 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 // non-JSON body, empty body), "applied" or "failed". A failure returns the
 // ORIGINAL body — a broken patch must not take the response down with it.
 func (s *Service) patchBody(ctx context.Context, c Config, operation, contentType string, status int, body []byte) ([]byte, string) {
-	source := c.OperationPatches[operation]
+	source := lookupOperation(c.OperationPatches, operation)
 	if source == "" || len(body) == 0 || !jsonEssence(contentType) {
 		return body, ""
 	}

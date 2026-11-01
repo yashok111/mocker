@@ -87,7 +87,7 @@ func (c Config) Validate(allowlist []string) error {
 	return nil
 }
 func (c Config) EffectiveMode(operation string) string {
-	switch c.Operations[operation] {
+	switch lookupOperation(c.Operations, operation) {
 	case "mock":
 		return "off"
 	case "proxy":
@@ -130,4 +130,81 @@ func validOperationKey(key string) error {
 		return errors.New("invalid operation method")
 	}
 	return nil
+}
+
+// lookupOperation answers what keys (Operations or OperationPatches — both
+// maps resolve the same way, so a policy and a patch written under the same
+// key always reach the same requests) holds for operation, "" for nothing.
+//
+// operation is "METHOD /path": the matched spec route's template, or — when
+// no spec route matched, the usual case behind a proxy — the request's own
+// path below the base path. Keys are documented as "METHOD /path/{name}",
+// so an exact lookup alone left a template key dead for every request no
+// spec route matched (2026-11-01: a patch keyed by the upstream's template
+// never ran on the concrete path it was written for). Hence, in order:
+//
+//  1. the exact key, always first (a literal key keeps working, and on a
+//     spec route the key spelled exactly as its template stays the one);
+//  2. otherwise a key matching by shape: same method, same segment count,
+//     each literal segment equal, each "{name}" segment taking exactly one
+//     non-empty segment. A segment that only CONTAINS a brace pair
+//     ("file.{ext}") is literal. On a spec route the request's values are
+//     already gone, so its "{id}" is matched like any segment: a renamed
+//     parameter ("{widgetId}") matches it, a literal value never does;
+//  3. among several such keys, the one with the most literal segments, then
+//     the lexicographically smallest key — independent of map order.
+func lookupOperation(keys map[string]string, operation string) string {
+	if value, ok := keys[operation]; ok {
+		return value
+	}
+	method, path, _ := strings.Cut(operation, " ")
+	segments := operationSegments(path)
+	// best stays "" until a key matches: a match scores at least 0, and no
+	// valid key is "" (validOperationKey), so keys[""] is the empty answer.
+	best, bestLiterals := "", noOperationMatch
+	for key := range keys {
+		literals := matchOperationKey(key, method, segments)
+		if literals > bestLiterals || literals == bestLiterals && key < best {
+			best, bestLiterals = key, literals
+		}
+	}
+	return keys[best]
+}
+
+// noOperationMatch is [matchOperationKey]'s answer for a key that does not
+// match; any match counts its literal segments, so it scores 0 or more.
+const noOperationMatch = -1
+
+// matchOperationKey answers how many literal segments key has when it
+// matches method and segments by shape (see [lookupOperation]), and
+// [noOperationMatch] when it does not.
+func matchOperationKey(key, method string, segments []string) int {
+	keyMethod, keyPath, _ := strings.Cut(key, " ")
+	keySegments := operationSegments(keyPath)
+	if keyMethod != method || len(keySegments) != len(segments) {
+		return noOperationMatch
+	}
+	literals := 0
+	for i, k := range keySegments {
+		if isParameterSegment(k) {
+			if segments[i] == "" {
+				return noOperationMatch
+			}
+			continue
+		}
+		if k != segments[i] {
+			return noOperationMatch
+		}
+		literals++
+	}
+	return literals
+}
+
+// isParameterSegment reports a whole-segment "{name}" with a non-empty name.
+func isParameterSegment(segment string) bool {
+	return len(segment) > 2 && strings.HasPrefix(segment, "{") && strings.HasSuffix(segment, "}")
+}
+
+func operationSegments(path string) []string {
+	return strings.Split(strings.TrimPrefix(path, "/"), "/")
 }

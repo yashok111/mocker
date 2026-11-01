@@ -6,8 +6,8 @@ metadata:
   workflowVersion: "8"
   requiredModelSchemaVersions: "[\"1\",\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-source-import\",\"backend-source-reconcile\",\"backend-revision-compare\",\"backend-relational-import\",\"backend-database-query\",\"backend-database-er\",\"backend-runtime-flow-import\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-field-lineage-import\",\"backend-field-lineage-query\",\"backend-events-import\",\"backend-events-query\",\"backend-source-sync\",\"backend-representations\"]"
-  guideSetId: "sha256:f7bdb94e0cdd744624c8f7b0bbf1ad98898d6da285a395fbc999bc1bfebf4066"
-  manifestHash: "sha256:f7bdb94e0cdd744624c8f7b0bbf1ad98898d6da285a395fbc999bc1bfebf4066"
+  guideSetId: "sha256:4a48d3be4b4dd421e03098d5f19efa7334d351aba4b195e2c39849604970e200"
+  manifestHash: "sha256:4a48d3be4b4dd421e03098d5f19efa7334d351aba4b195e2c39849604970e200"
 ---
 
 # Source graph import and reconciliation

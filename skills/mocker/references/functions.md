@@ -383,6 +383,18 @@ got from the upstream, in `passthrough`, `record` and `replay` alike.
 { "operationPatches": { "GET /users/{id}": "if status < 400 then body.source = \"upstream\" end\nreturn body" } }
 ```
 
+How a request finds its key — the same rule for `operations` and
+`operationPatches`, whether or not the workspace's spec has the route. The
+request is `METHOD /path` below the base path (a spec route's own template
+when one matched). An exact key wins. Otherwise a key matches by shape: same
+method, same number of segments, literal segments equal, and each whole
+`{name}` segment takes exactly one non-empty segment — so
+`POST /campaigns/{campaignId}/{unitId}/budget` covers `POST /campaigns/7/24/budget`
+and not `/campaigns/7/budget`. On a spec route a renamed parameter matches
+(`GET /users/{userId}` covers the spec's `/users/{id}`), a literal value
+does not. Several matches: the most literal segments wins, then the
+alphabetically first key.
+
 Two arguments: `body` (JSON decodes to a value, an empty body is nil, anything
 else is the raw string) and `status` (the upstream's own code). Return a table
 (JSON-encoded), a string (raw bytes), or nil / nothing to leave the body
