@@ -275,3 +275,33 @@ than as new top-level keys — `mock.entities(family)` still reads through
   traffic token for a Lua write; `generate` is deterministic per schema
   within a request). `goToLua` learned Go `int`/`int64` because a host
   built in Go may hand it one; decoded JSON never does.
+
+## JSON shapes through a patch and a request body (2026-11-01)
+
+A proxy patch (`config.operationPatches`, `luafn.RunPatch`) re-encodes the
+body it was given, so every value it does not touch must come out as it
+went in. Four JSON shapes have no Lua twin, and before this change each was
+lost on the round trip of a real budget-view response: a null key dropped,
+`[1,null,3]` served as `{"1":1,"3":3}`, `[]` as `{}`, and an id past 2^53
+rounded. The fix is in `convert.go`, one decision each:
+
+- **null** — `toLua` takes the value a JSON null becomes. A PATCH body
+  passes the VM's `mock.null` (a per-VM userdata whose `Value` is
+  `jsonNull{}`; luaToGo renders every non-big-int userdata as null). Every
+  other input passes `lua.LNil`: the sentinel is TRUTHY, so switching
+  `req.body` to it would flip `if req.body.x then` in every existing
+  workspace function. `mock.null` is also the general way to WRITE a null.
+  It is per VM, not a package value, because gopher-lua's `setmetatable`
+  accepts a userdata.
+- **`[]`** — a decoded array that leaves its table empty (`[]`, or
+  all-null where null is nil) gets the `mock.array` mark. Applies to every
+  decoded input; it changes only what an echo serves.
+- **big integers** — `bodyValue` decodes with `UseNumber`, and
+  `numberToLua` wraps an integer literal outside ±2^53 as a userdata
+  holding the `jsonx.Number` (so does a literal outside float64's range,
+  `1e400`), with a per-VM metatable (`__tostring`,
+  `__concat`, `__eq`) in the registry; luaToGo emits the number verbatim.
+  Not arithmetic: an id is joined and compared, not summed.
+
+What a request body still loses on an echo: a null key and an array hole
+(`[1,null,3]`), by the decision above.

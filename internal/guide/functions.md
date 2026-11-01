@@ -38,6 +38,26 @@ return 401, { error = "bad credentials" }
 | `req.headers` | table | keys LOWERCASED; a repeated header is joined with `", "` |
 | `req.body` | table \| string | the decoded JSON when it parses, the raw string when it does not |
 
+Four JSON shapes have no native Lua twin. How each arrives in `req.body` (and
+in an `onFrame` frame), and what handing it back unchanged serves:
+
+| JSON | in `req.body` | echoed back |
+|---|---|---|
+| `null` | `nil` — test it with `== nil`; the key reads as absent | the key is dropped |
+| `[]` | an empty table carrying the `mock.array` mark | `[]` |
+| `[1,null,3]` | a table with a hole at 2 (`#` is any border) | `{"1":1,"3":3}`; an all-null array echoes as `[]` |
+| an integer past ±2^53 | a big integer (below) | the original digits, exactly |
+
+A **big integer** is what an integer a Lua number (a float64) cannot hold
+exactly arrives as, instead of a rounded number: `type(v)` is `"userdata"`,
+`tostring(v)` and `"id:" .. v` give its exact digits, and two big integers
+with the same digits are `==`. It is not a number: arithmetic and `<` raise
+an error, and it never equals a Lua number. `tonumber(tostring(v))` is the
+explicit, rounding, way to compute with one. A literal outside a float's
+range (`1e400`) arrives the same way and is re-emitted as written. Every
+other number — fractions and exponents included — is an ordinary Lua number. A proxy patch's `body`
+follows the same rules except for null (see "Proxy response patches").
+
 **Out** — `return status, body, headers`:
 
 - `status` — a number, 100..599. Anything else fails the request.
@@ -54,7 +74,7 @@ Returning nothing at all fails the request: a function must decide a status.
 
 ## 2. Helpers — the `mock` table
 
-`mock` holds exactly six things and nothing else.
+`mock` holds exactly seven things and nothing else.
 
 - **`mock.jwt(claims)` → token, or nil + err.** Signs with the WORKSPACE's own
   `settings.auth`, the same signer the `jwt` recipe uses. Answers
@@ -85,6 +105,15 @@ Returning nothing at all fails the request: a function must decide a status.
   nothing in this contract drops keys silently. Ordinary table operations
   (`#`, `pairs`, `ipairs`, `table.insert`) work on a marked table unchanged.
   The mark dies with the VM; it exists exactly as long as one response body.
+- **`mock.null` — a value, not a function.** JSON `null`. Lua's `nil` cannot
+  be one: assigning nil to a key deletes the key, and a nil inside an array is
+  a hole. `t.x = mock.null` emits `"x": null`, `{1, mock.null, 3}` emits
+  `[1,null,3]`, in a response body, a tick frame, a patch or a stored value
+  alike. It is also what a JSON null in a PROXY PATCH's `body` arrives as (see
+  "Proxy response patches"); everywhere else — `req.body`, an `onFrame`
+  frame, `mock.state`, entity rows — a JSON null still arrives as `nil`, so
+  `req.body.x == nil` keeps working. Unlike nil it is TRUTHY: test it with
+  `== mock.null`, never with `if t.x then`.
 - **`mock.entities(family[, scopeArray])` → rows, or nil + err.** Reads a
   CONFIRMED resource family's rows as an array of tables.
   - `family` is the route family exactly as `list_workspace_resources` reports
@@ -359,6 +388,37 @@ else is the raw string) and `status` (the upstream's own code). Return a table
 (JSON-encoded), a string (raw bytes), or nil / nothing to leave the body
 unchanged. Only a JSON response is patched; a non-JSON body passes through
 untouched.
+
+**A null in `body` is `mock.null`, not `nil`** — the one input where it is,
+because a patch re-encodes the very body it got: a null that became nil would
+drop its object key and leave a hole in its array, so an untouched field the
+upstream sent as `null` would vanish from what the client sees. With the
+sentinel a patch that touches nothing else returns every null in place,
+objects and arrays alike, positions kept. Test a field that may be absent OR
+null with both, and write a null with the same value:
+
+```lua
+for _, r in ipairs(body.rows) do
+  if r.discussionKey == nil or r.discussionKey == mock.null then
+    r.discussionKey = "u:" .. r.unitId
+  end
+  r.legacyField = mock.null           -- served as "legacyField": null
+end
+return body
+```
+
+`mock.null` is truthy, so `if r.editUrl then` is TRUE for an upstream
+`"editUrl": null`; write `if r.editUrl ~= nil and r.editUrl ~= mock.null`.
+A body that is JSON `null` itself arrives as `mock.null`, and returning it
+serves `null`.
+
+The same promise holds for the other three shapes Lua has no twin for, at any
+depth: a `[]` the patch leaves alone is served as `[]` (it arrives carrying
+the `mock.array` mark), an array containing nulls keeps its length with each
+null in place, and an integer past ±2^53 is served with its original digits
+(it arrives as a big integer — see the table under "The contract"). Other
+numbers re-encode through Lua's float: `1.0` is served as `1`, `1e3` as
+`1000`.
 
 The recording keeps the ORIGINAL upstream bytes and replay re-applies the
 patch, so changing the function re-patches stored responses. A patch that
