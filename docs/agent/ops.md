@@ -15,7 +15,14 @@ CPU-capped systemd scope through `scripts/ci-cap.sh` — pass `CAP=` (and
 nest. `make test` has its own cap (`TEST_CAP_MEM`, 8G) since 2026-10-07: under
 -race internal/mcp alone peaks at 3.6 GB and internal/backendmodel at 2.5 GB,
 and the shared 3G cap OOM-killed the suite every run (the Makefile comment
-holds the numbers). A release of the plugin is a
+holds the numbers). Since 2026-11-01 CI runs the race suite as a matrix of
+five shards, one runner each (`scripts/race-shard.sh`: backendmodel in three
+round-robin slices of its tests, mcp, the rest): as one job it was OOM-killed
+inside its 10G scope from 2146c1f on (backendmodel 8.2 GB + mcp 4.9 GB under
+-race; the step only says `Terminated`, exit 143, because systemd's
+`OOMPolicy=stop` SIGTERMs the scope after the kernel kills one process — the
+job's last step prints the kernel's line), and backendmodel alone runs ~29
+min. A release of the plugin is a
 tag `plugin-v<version>` (`.github/workflows/release-plugin.yml`).
 
 **`make test` is CPU-bound under `-race`, and three things keep it at ~1

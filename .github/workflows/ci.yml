@@ -75,16 +75,25 @@ jobs:
         run: scripts/ci-cap.sh make lint CAP=
 
   test:
-    name: go — race suite
+    name: go — race suite (${{ matrix.shard }})
     runs-on: ubuntu-latest
     timeout-minutes: 30
+    strategy:
+      # Five shards, one runner each (scripts/race-shard.sh holds the layout
+      # and the measurements): as one job the suite was OOM-killed inside its
+      # 10G scope (backendmodel 8.2 GB + mcp 4.9 GB under -race) and
+      # backendmodel alone needs ~29 min. The backendmodel slices are I/N
+      # with one N: list every I from 1 to N, or a slice's tests never run.
+      fail-fast: false
+      matrix:
+        shard: ["backendmodel:1/3", "backendmodel:2/3", "backendmodel:3/3", mcp, rest]
     env:
       # The suite is CPU-bound under -race (measured: 552 CPU-seconds for a
       # 127 s local run), so the scope gets all four of the runner's cores
       # and the Go tool plans for four; memory is the cap that matters, and
-      # four package binaries at once (TEST_P=4) fit a 10G scope with room —
-      # ~650 MB each under -race on the dev box's measurement. GOMEMLIMIT is
-      # a soft per-process ceiling below that: four of them plus the go tool.
+      # every shard fits a 10G scope (peaks measured alone: backendmodel 8.2 GB,
+      # mcp 4.9 GB, rest 4.4 GB at -p 4). GOMEMLIMIT is a soft per-process
+      # ceiling below that.
       GOMAXPROCS: "4"
       GOMEMLIMIT: 2GiB
       CI_CAP_MEM: 10G
@@ -112,8 +121,15 @@ jobs:
             [ "$(cut -d" " -f1 /sys/fs/cgroup$cg/cpu.max)" != max ] || { echo "::error::ci-cap: cpu cap did not apply" >&2; exit 1; }
             [ "$GITHUB_ACTIONS" = true ] || { echo "::error::ci-cap: the job environment did not reach the scope" >&2; exit 1; }
           '
-      - name: make test
-        run: scripts/ci-cap.sh make test CAP= TEST_CAP= TEST_P=4
+      - name: make test (one shard)
+        run: scripts/ci-cap.sh scripts/race-shard.sh "${{ matrix.shard }}"
+      - name: why the capped step died
+        # An OOM kill inside the scope reaches the step only as "Terminated"
+        # (exit 143): systemd's OOMPolicy=stop SIGTERMs the rest of the scope.
+        # The kernel and systemd lines name the process and the cgroup.
+        if: failure()
+        run: |
+          sudo journalctl --no-pager -o short-precise | grep -E 'Killed process|run-.*\.scope: (A process|Failed)' | tail -20 || true
 
   web:
     name: web — generated client, typecheck, vitest, oxlint

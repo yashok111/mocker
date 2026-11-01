@@ -195,7 +195,8 @@ make smoke-tls # the HTTPS overlay end to end: TLS, the proxy contract, SSE and 
 make plugin-test # @yashok111/mocker-test (packages/mocker-test): install, tsc, oxlint, vitest against ./bin/mocker
 ```
 
-All seven run in CI (`.github/workflows/ci.yml`: six jobs, the non-docker
+All seven run in CI (`.github/workflows/ci.yml`: six jobs, the race suite
+split into five shards by `scripts/race-shard.sh`; the non-docker
 ones inside a memory- and CPU-capped systemd scope through
 `scripts/ci-cap.sh` — pass `CAP=` (and `TEST_CAP=` for `make test`) to make
 there so the Makefile's own cap does not nest). How the race suite was

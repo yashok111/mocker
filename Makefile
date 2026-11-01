@@ -179,8 +179,12 @@ TEST_PARALLEL ?= 4
 # kept advancing through SDK schema registration. Allow 45m for the aggregate;
 # individual operation deadlines stay enforced. Override for slower hosts.
 TEST_TIMEOUT ?= 45m
+# TEST_RACE_RUN is `go test -run`; everything by default. CI's shards
+# (scripts/race-shard.sh) pass an anchored `^(A|B)$` slice of one package's
+# tests, read through $(value) so make leaves its `$` alone.
+TEST_RACE_RUN ?= .
 test: ## Test suite scoped to ./cmd ./internal, race detector, memory-capped (see TEST_CAP above and the comment above)
-	$(TEST_CAP) go test $(TEST_SUITE) -race -count=1 -p $(TEST_P) -parallel $(TEST_PARALLEL) -timeout $(TEST_TIMEOUT) -gcflags='modernc.org/...=-race=false'
+	$(TEST_CAP) go test $(TEST_SUITE) -race -count=1 -p $(TEST_P) -parallel $(TEST_PARALLEL) -timeout $(TEST_TIMEOUT) -run '$(value TEST_RACE_RUN)' -gcflags='modernc.org/...=-race=false'
 
 # Keep the uncached race gate above unchanged. Local edits can select packages
 # and tests, and unchanged packages may use Go's normal test-result cache.
