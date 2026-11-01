@@ -59,8 +59,7 @@ func (s *Service) ServeProxy(w http.ResponseWriter, r *http.Request, ws *workspa
 	controller := http.NewResponseController(w)
 	now := time.Now()
 	_ = controller.SetWriteDeadline(now.Add(2*timeout + proxyResponseWriteBudget))
-	_ = controller.SetReadDeadline(now.Add(timeout))
-	body, ok := s.readProxyBody(w, r)
+	body, ok := s.readProxyBody(w, r, controller, now.Add(timeout))
 	if !ok {
 		return true
 	}
@@ -137,7 +136,30 @@ func (s *Service) patchBody(ctx context.Context, c Config, operation, contentTyp
 
 // readProxyBody reads the request body up to the policy's MaxBody, answering
 // 413 past it and 400 on a failed read; ok is false once it has answered.
-func (s *Service) readProxyBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
+//
+// The read deadline brackets THIS read and nothing else: armed before it,
+// cleared the moment it succeeds. Left armed, it outlived the read and
+// landed on net/http's background read — the one the server keeps on an
+// idle request connection to notice a client hanging up, already running
+// for a bodyless request and for a body the mock plane's capture had read
+// to EOF. When it fired, net/http took the timeout for a dead client: it
+// canceled the CONNECTION's base context yet kept the connection for
+// keep-alive, so every later request on it (an edge proxy's pooled
+// upstream connection) arrived with a canceled context and failed its
+// first query — the "500 internal error on every path of the workspace
+// after one 504" of 2026-11-01. A FAILED read keeps it armed on purpose:
+// net/http's post-handler discard of the unread rest then fails at once
+// and closes the connection, rather than blocking on a silent client.
+func (s *Service) readProxyBody(w http.ResponseWriter, r *http.Request, controller *http.ResponseController, deadline time.Time) ([]byte, bool) {
+	_ = controller.SetReadDeadline(deadline)
+	body, ok := s.readLimitedBody(w, r)
+	if ok {
+		_ = controller.SetReadDeadline(time.Time{})
+	}
+	return body, ok
+}
+
+func (s *Service) readLimitedBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
 	var body []byte
 	if r.Body != nil {
 		var err error
