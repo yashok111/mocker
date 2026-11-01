@@ -293,9 +293,13 @@ rounded. The fix is in `convert.go`, one decision each:
   workspace function. `mock.null` is also the general way to WRITE a null.
   It is per VM, not a package value, because gopher-lua's `setmetatable`
   accepts a userdata.
-- **`[]`** — a decoded array that leaves its table empty (`[]`, or
-  all-null where null is nil) gets the `mock.array` mark. Applies to every
-  decoded input; it changes only what an echo serves.
+- **`[]`** — every decoded array gets the `mock.array` mark (one small
+  metatable each), so one that is empty when it goes back out — untouched,
+  all-null where null is nil, or emptied by the function — serves `[]`.
+  Applies to every decoded input; it changes only what an echo serves. The
+  first draft marked only arrays that decoded empty; mutation testing showed
+  the difference was observable only for an array the function emptied,
+  where `[]` is the right answer too.
 - **big integers** — `bodyValue` decodes with `UseNumber`, and
   `numberToLua` wraps an integer literal outside ±2^53 as a userdata
   holding the `jsonx.Number` (so does a literal outside float64's range,

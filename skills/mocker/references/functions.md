@@ -44,7 +44,7 @@ in an `onFrame` frame), and what handing it back unchanged serves:
 | JSON | in `req.body` | echoed back |
 |---|---|---|
 | `null` | `nil` — test it with `== nil`; the key reads as absent | the key is dropped |
-| `[]` | an empty table carrying the `mock.array` mark | `[]` |
+| `[]` | an empty table; every decoded array carries the `mock.array` mark | `[]` — and so does any decoded array the function empties |
 | `[1,null,3]` | a table with a hole at 2 (`#` is any border) | `{"1":1,"3":3}`; an all-null array echoes as `[]` |
 | an integer past ±2^53 | a big integer (below) | the original digits, exactly |
 

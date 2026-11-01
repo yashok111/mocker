@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"backend-diagram-v1\",\"diagram-view-v1\",\"backend-observations-v1\"]"
   requiredCapabilities: "[\"backend-analysis-jobs\",\"backend-analysis-diagnostics\",\"backend-finding-review\",\"backend-observations\",\"backend-observation-correlation\",\"backend-scenario-measurements\",\"backend-observed-impact\",\"backend-observed-sequences\"]"
-  guideSetId: "sha256:90434e022f72d09df736d42ab31789b4d5c6967523cf0bbb93cbadf1309844fb"
-  manifestHash: "sha256:90434e022f72d09df736d42ab31789b4d5c6967523cf0bbb93cbadf1309844fb"
+  guideSetId: "sha256:f7bdb94e0cdd744624c8f7b0bbf1ad98898d6da285a395fbc999bc1bfebf4066"
+  manifestHash: "sha256:f7bdb94e0cdd744624c8f7b0bbf1ad98898d6da285a395fbc999bc1bfebf4066"
 ---
 
 # Verify static backend structure
