@@ -36,11 +36,7 @@ import { diagramSearch, workspacePinError } from "../backendWorkspaceSearch";
 import { ArchitectureScope } from "./ArchitectureScope";
 import { viewOf, useExplorerNavigation, resolvedTargetSearch, type View } from "./navigation";
 import { resolveEntry, readSourceMap, readFlowMap, readLineageMap, type Entry } from "./reads";
-import {
-  flowNotImportedText,
-  flowNotImportedTitle,
-  isFlowNotImported,
-} from "../backendFlowReads";
+import { flowNotImportedText, flowNotImportedTitle, isFlowNotImported } from "../backendFlowReads";
 import { ExploreCanvas } from "./LazyExploreCanvas";
 import { Inspector } from "./Inspector";
 import { SearchDialog } from "./SearchDialog";

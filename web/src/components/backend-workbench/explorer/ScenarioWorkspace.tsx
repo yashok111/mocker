@@ -7,11 +7,7 @@ import { backendReadTargetKey } from "../backendReadTargets";
 import { readBehavior } from "./behaviorReads";
 import { isAccessEntrypoint, readFlowAccessEntrypoints } from "./flowAccessEntrypoints";
 import { readFlowMap, readSourceMap } from "./reads";
-import {
-  flowNotImportedText,
-  flowNotImportedTitle,
-  isFlowNotImported,
-} from "../backendFlowReads";
+import { flowNotImportedText, flowNotImportedTitle, isFlowNotImported } from "../backendFlowReads";
 import { SourceCatalog, restoreCatalog, triggerLabel, purposeText } from "./SourceCatalog";
 import { ExploreCanvas } from "./LazyExploreCanvas";
 import { Inspector } from "./Inspector";

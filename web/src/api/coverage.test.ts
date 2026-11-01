@@ -113,13 +113,18 @@ function loadRoutes(): RouteInfo[] {
 // withdrawal, in this comment.
 // B4.1 sync setup/upload/abort now have reachable UI callers; their exemptions are withdrawn.
 const EXEMPT: Record<string, string> = {
-	"PUT /api/workspaces/{id}/endpoints/{eid}/function":
-		"set_endpoint_function is the A23 point edit of one variant's Lua source; the UI edits the whole responses map through updateEndpoint (VariantEditor).",
-	"POST /api/backend-projects/{id}/coverage/query": "query_backend_coverage exposes compact pinned import inventories to MCP readers.",
-	"GET /api/backend-projects/import-schema": "get_backend_import_schema provides focused authoring schemas to MCP importers.",
-	"POST /api/backend-projects/{id}/imports/{iid}/validate": "validate_backend_import_batch checks file/MCP authoring inputs without staging.",
-	"GET /api/backend-projects/{id}/storage/usage": "get_backend_storage_usage exposes import admission accounting for MCP and file clients.",
-	"POST /api/backend-projects/{id}/imports/plan": "plan_backend_import is the pre-transfer MCP planner; the UI displays candidate preflight in READY review.",
+  "PUT /api/workspaces/{id}/endpoints/{eid}/function":
+    "set_endpoint_function is the A23 point edit of one variant's Lua source; the UI edits the whole responses map through updateEndpoint (VariantEditor).",
+  "POST /api/backend-projects/{id}/coverage/query":
+    "query_backend_coverage exposes compact pinned import inventories to MCP readers.",
+  "GET /api/backend-projects/import-schema":
+    "get_backend_import_schema provides focused authoring schemas to MCP importers.",
+  "POST /api/backend-projects/{id}/imports/{iid}/validate":
+    "validate_backend_import_batch checks file/MCP authoring inputs without staging.",
+  "GET /api/backend-projects/{id}/storage/usage":
+    "get_backend_storage_usage exposes import admission accounting for MCP and file clients.",
+  "POST /api/backend-projects/{id}/imports/plan":
+    "plan_backend_import is the pre-transfer MCP planner; the UI displays candidate preflight in READY review.",
   // Importer authoring preflight: preview_backend_architecture is the required MCP caller.
   "POST /api/backend-projects/{id}/diagrams/architecture/preview": "preview_backend_architecture",
   "POST /api/backend-projects":
