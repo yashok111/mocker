@@ -147,38 +147,46 @@ func (s *Service) patchBody(ctx context.Context, c Config, operation, contentTyp
 // keep-alive, so every later request on it (an edge proxy's pooled
 // upstream connection) arrived with a canceled context and failed its
 // first query — the "500 internal error on every path of the workspace
-// after one 504" of 2026-11-01. A FAILED read keeps it armed on purpose:
-// net/http's post-handler discard of the unread rest then fails at once
-// and closes the connection, rather than blocking on a silent client.
+// after one 504" of 2026-11-01. A REFUSED body (413, or a read that failed)
+// keeps it armed on purpose: it bounds net/http's drain of the unread rest,
+// which otherwise blocks on a silent client. Armed, it may sit on a running
+// background read (the capture read the body to EOF first), so the refusal
+// also closes the connection: today the handler returns long before the
+// deadline and net/http resets it, but a connection that is never reused
+// cannot be poisoned whatever the timing (2026-11-01 review).
 func (s *Service) readProxyBody(w http.ResponseWriter, r *http.Request, controller *http.ResponseController, deadline time.Time) ([]byte, bool) {
 	_ = controller.SetReadDeadline(deadline)
-	body, ok := s.readLimitedBody(w, r)
-	if ok {
-		_ = controller.SetReadDeadline(time.Time{})
-	}
-	return body, ok
-}
-
-func (s *Service) readLimitedBody(w http.ResponseWriter, r *http.Request) ([]byte, bool) {
-	var body []byte
-	if r.Body != nil {
-		var err error
-		body, err = io.ReadAll(io.LimitReader(r.Body, s.policy.MaxBody+1))
-		if err != nil {
-			var limitError *http.MaxBytesError
-			if errors.As(err, &limitError) {
-				httpx.Err(w, http.StatusRequestEntityTooLarge, "proxy_request_too_large", "Тело запроса превышает лимит")
-				return nil, false
-			}
+	body, err := s.readLimitedBody(r)
+	if err != nil {
+		w.Header().Set("Connection", "close")
+		var limitError *http.MaxBytesError
+		if errors.As(err, &limitError) || errors.Is(err, errProxyBodyTooLarge) {
+			httpx.Err(w, http.StatusRequestEntityTooLarge, "proxy_request_too_large", "Тело запроса превышает лимит")
+		} else {
 			httpx.Err(w, http.StatusBadRequest, "proxy_request_failed", "Не удалось прочитать тело запроса")
-			return nil, false
 		}
-	}
-	if int64(len(body)) > s.policy.MaxBody {
-		httpx.Err(w, http.StatusRequestEntityTooLarge, "proxy_request_too_large", "Тело запроса превышает лимит")
 		return nil, false
 	}
+	_ = controller.SetReadDeadline(time.Time{})
 	return body, true
+}
+
+var errProxyBodyTooLarge = errors.New("proxy request body exceeds MaxBody")
+
+// readLimitedBody reads at most MaxBody bytes of the request body; one byte
+// more is errProxyBodyTooLarge.
+func (s *Service) readLimitedBody(r *http.Request) ([]byte, error) {
+	if r.Body == nil {
+		return nil, nil
+	}
+	body, err := io.ReadAll(io.LimitReader(r.Body, s.policy.MaxBody+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > s.policy.MaxBody {
+		return nil, errProxyBodyTooLarge
+	}
+	return body, nil
 }
 
 // writeProxyExchangeError answers a failed upstream exchange: 400 for a dot

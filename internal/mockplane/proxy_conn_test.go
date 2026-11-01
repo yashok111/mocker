@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/yashok111/mocker/internal/config"
 	"github.com/yashok111/mocker/internal/domain"
 	"github.com/yashok111/mocker/internal/recordproxy"
 	"github.com/yashok111/mocker/internal/specs"
@@ -26,7 +27,9 @@ import (
 // is the deployed one. The returned client holds at most ONE connection to
 // the plane, so every request after the first rides the connection the
 // earlier ones used, exactly as an edge proxy's keep-alive pool does.
-func proxyConnFixture(t *testing.T) (*http.Client, string) {
+// tune adjusts the installation config once the fixture rows exist (the
+// spec import answers to MaxBody too), before the plane serves anything.
+func proxyConnFixture(t *testing.T, tune ...func(*config.Config)) (*http.Client, string) {
 	t.Helper()
 	db := resourceIntegrationDB(t)
 	cfg := resourceIntegrationConfig(t)
@@ -51,6 +54,9 @@ func proxyConnFixture(t *testing.T) (*http.Client, string) {
 	c.ForwardAuth = true
 	if _, err := pr.Save(t.Context(), id, c); err != nil {
 		t.Fatal(err)
+	}
+	for _, f := range tune {
+		f(cfg)
 	}
 	p := New(cfg, workspaces.NewRepo(db), sr, runtimeTestLogger())
 	p.SetProxy(recordproxy.NewService(pr, cfg))
@@ -162,7 +168,41 @@ func TestProxyBodyRequestsKeepTheUploadBoundAndTheConnection(t *testing.T) {
 		t.Fatalf("stalled upload was not answered: %v", err)
 	}
 	_ = stalled.Body.Close()
-	if stalled.StatusCode != http.StatusBadRequest {
-		t.Fatalf("stalled upload: %d, want 400", stalled.StatusCode)
+	if stalled.StatusCode != http.StatusBadRequest || !stalled.Close {
+		t.Fatalf("stalled upload: %d close=%t, want 400 and a closed connection", stalled.StatusCode, stalled.Close)
+	}
+}
+
+// TestProxyOversizedBodyLeavesTheConnectionUsable: a body over MaxBody is
+// answered 413, and the connection it came on is closed rather than kept
+// for the next request. Two routes to the 413: a JSON body the mock plane's
+// capture already read to EOF (net/http's background read is running before
+// the proxy looks), and a multipart body the capture skips, which the proxy
+// reads only partway. The proxy's read deadline stays armed on a refused
+// body (it bounds net/http's drain of the rest), so on the first route it
+// sits on that background read: today the handler returns long before it
+// fires and net/http resets it, but any slow work after the refusal would
+// bring back the poisoned keep-alive (measured: a 1.5 s pause before the 413
+// gave 500 on the next request). Closing the connection makes that
+// independent of timing. The wait outlives the 1 s deadline either way.
+func TestProxyOversizedBodyLeavesTheConnectionUsable(t *testing.T) {
+	client, base := proxyConnFixture(t, func(cfg *config.Config) { cfg.MaxBody = 16 })
+	for _, contentType := range []string{"application/json", "multipart/form-data; boundary=b"} {
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodPost, base+"/api/upload", strings.NewReader(strings.Repeat("x", 100)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Header.Set("Content-Type", contentType)
+		res, err := client.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_, _ = io.Copy(io.Discard, res.Body)
+		_ = res.Body.Close()
+		if res.StatusCode != http.StatusRequestEntityTooLarge || !res.Close {
+			t.Fatalf("%s: %d close=%t, want 413 and a closed connection", contentType, res.StatusCode, res.Close)
+		}
+		time.Sleep(1500 * time.Millisecond)
+		requireHealthyAfter(t, client, base, "a 413 for "+contentType)
 	}
 }

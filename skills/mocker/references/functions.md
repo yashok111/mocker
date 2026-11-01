@@ -393,7 +393,8 @@ method, same number of segments, literal segments equal, and each whole
 and not `/campaigns/7/budget`. On a spec route a renamed parameter matches
 (`GET /users/{userId}` covers the spec's `/users/{id}`), a literal value
 does not. Several matches: the most literal segments wins, then the
-alphabetically first key.
+alphabetically first key. Limit: the path is matched decoded, so an encoded
+slash in a value (`%2F`) counts as a segment boundary.
 
 Two arguments: `body` (JSON decodes to a value, an empty body is nil, anything
 else is the raw string) and `status` (the upstream's own code). Return a table

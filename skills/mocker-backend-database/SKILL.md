@@ -7,8 +7,8 @@ metadata:
   requiredModelSchemaVersions: "[\"2\",\"3\",\"4\",\"5\",\"6\"]"
   requiredViewSchemaVersions: "[\"proposal-relational-v1\",\"saved-view-v1\",\"proposal-graph-v1\",\"saved-view-v2\"]"
   requiredCapabilities: "[\"backend-projects\",\"backend-revisions\",\"backend-graph-query\",\"backend-database-query\",\"backend-database-er\",\"backend-db-proposals\",\"backend-db-typed-edits\",\"backend-flow-query\",\"backend-data-access-query\",\"backend-saved-views\",\"backend-field-lineage-query\",\"backend-events-query\",\"backend-change-proposals\",\"backend-source-assertions\",\"backend-saved-views-v2\"]"
-  guideSetId: "sha256:4a48d3be4b4dd421e03098d5f19efa7334d351aba4b195e2c39849604970e200"
-  manifestHash: "sha256:4a48d3be4b4dd421e03098d5f19efa7334d351aba4b195e2c39849604970e200"
+  guideSetId: "sha256:5f1daf26da89d31564959809ae4164dc53a1866592edb940538cd13ccbeeda6f"
+  manifestHash: "sha256:5f1daf26da89d31564959809ae4164dc53a1866592edb940538cd13ccbeeda6f"
 ---
 # Pinned database inspection and proposals
 

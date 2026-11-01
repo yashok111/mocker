@@ -84,8 +84,16 @@ func TestServiceMockPolicyAndBodyLimit(t *testing.T) {
 	}
 	w := httptest.NewRecorder()
 	s.ServeProxy(w, httptest.NewRequest(http.MethodPost, "/big", strings.NewReader("too large body")), ws, "POST /big", false, nil)
-	if w.Code != 413 {
-		t.Fatalf("%d %s", w.Code, w.Body)
+	// A refused body is the whole answer: nothing is forwarded after it, and
+	// the connection it came on is not offered for reuse.
+	if w.Code != 413 || strings.Contains(w.Body.String(), "proxy_upstream_failed") || w.Header().Get("Connection") != "close" {
+		t.Fatalf("%d %v %s", w.Code, w.Header(), w.Body)
+	}
+	// Exactly MaxBody bytes is allowed through (to the dead upstream: 502).
+	w = httptest.NewRecorder()
+	s.ServeProxy(w, httptest.NewRequest(http.MethodPost, "/big", strings.NewReader("12345678")), ws, "POST /big", false, nil)
+	if w.Code != http.StatusBadGateway || w.Header().Get("Connection") != "" {
+		t.Fatalf("a body of exactly MaxBody: %d %v %s", w.Code, w.Header(), w.Body)
 	}
 }
 
