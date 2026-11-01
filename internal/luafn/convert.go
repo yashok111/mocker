@@ -5,6 +5,7 @@ import (
 	"math"
 	"sort"
 	"strconv"
+	"strings"
 
 	lua "github.com/yuin/gopher-lua"
 
@@ -22,11 +23,32 @@ import (
 // the string "[]" — the raw-string path exists for exactly this kind of
 // escape.
 
-// goToLua turns a decoded JSON value into a Lua value.
-func goToLua(l *lua.LState, v any) lua.LValue {
+// goToLua turns a decoded JSON value into a Lua value, a JSON null into Lua
+// nil — the rule for every input but a patch body (see [toLua]).
+func goToLua(l *lua.LState, v any) lua.LValue { return toLua(l, v, lua.LNil) }
+
+// toLua is goToLua with the Lua value a JSON null becomes passed in. Two
+// callers, two answers, on purpose:
+//
+//   - nil (lua.LNil) for a request body, an onFrame frame, mock.state, an
+//     entity row: a nil is what `req.body.x == nil` — the test every existing
+//     workspace function writes — has always seen, and an object key whose
+//     value is nil is simply absent, which is all those readers ask about.
+//   - the VM's `mock.null` for a PATCH body ([RunPatch]): a patch re-encodes
+//     the very body it was given, so a null that became nil was a null the
+//     client never saw again — an object key silently dropped, `[1,null,3]`
+//     re-encoded as `{"1":1,"3":3}`, `[null,null]` as `{}` (found on a real
+//     budget-view response, 2026-11-01). The sentinel is a value, so the key
+//     stays, the array keeps its positions, and luaToGo renders it back as
+//     null.
+//
+// Scoping it by caller rather than switching every input to the sentinel is
+// the owner's decision: a sentinel is TRUTHY in Lua, so `if req.body.x then`
+// over a null field would flip for every function already written.
+func toLua(l *lua.LState, v any, null lua.LValue) lua.LValue {
 	switch value := v.(type) {
 	case nil:
-		return lua.LNil
+		return null
 	case bool:
 		return lua.LBool(value)
 	case float64:
@@ -40,43 +62,64 @@ func goToLua(l *lua.LState, v any) lua.LValue {
 	case int64:
 		return lua.LNumber(value)
 	case jsonx.Number:
-		if f, err := value.Float64(); err == nil {
-			return lua.LNumber(f)
-		}
-		return lua.LString(value.String())
+		return numberToLua(l, value)
 	case string:
 		return lua.LString(value)
 	case []any:
-		t := l.NewTable()
-		// RawSetInt and not Append: gopher-lua's Append is a documented
-		// no-op for LNil (table.go, `if value == LNil { return }`), so
-		// `[1, null, 3]` appended would arrive as `{1, 3}` — the null gone
-		// and the third element moved to index 2, which a function that
-		// pairs arrays positionally computes on without an error. A nil at
-		// a numeric index is a HOLE, and Lua's `#` on a table with holes
-		// is any border; the request-body doc says so. Review finding 7.
-		for i, item := range value {
-			t.RawSetInt(i+1, goToLua(l, item))
-		}
-		return t
+		return arrayToLua(l, value, null)
 	case map[string]any:
-		t := l.NewTable()
-		// Sorted so a body built from a decoded request is stable across
-		// runs: Go randomises map traversal, and this package's own output
-		// would otherwise differ between two identical calls for a reason
-		// that has nothing to do with D4's honest non-determinism.
-		keys := make([]string, 0, len(value))
-		for k := range value {
-			keys = append(keys, k)
-		}
-		sort.Strings(keys)
-		for _, k := range keys {
-			t.RawSetString(k, goToLua(l, value[k]))
-		}
-		return t
+		return objectToLua(l, value, null)
 	default:
 		return lua.LNil
 	}
+}
+
+// arrayToLua is toLua for a JSON array.
+//
+// RawSetInt and not Append: gopher-lua's Append is a documented no-op for
+// LNil (table.go, `if value == LNil { return }`), so `[1, null, 3]` appended
+// would arrive as `{1, 3}` — the null gone and the third element moved to
+// index 2, which a function that pairs arrays positionally computes on
+// without an error. A nil at a numeric index is a HOLE, and Lua's `#` on a
+// table with holes is any border; the request-body doc says so. Review
+// finding 7.
+//
+// A decoded array that leaves the table EMPTY — `[]`, or an all-null array
+// where null is nil — gets the mock.array mark, so handing it back serves
+// `[]` and not the `{}` an unmarked empty table encodes as. The mark is read
+// for the empty case only, so a table the function then fills is decided by
+// luaToGo's ordinary rules; marking costs one metatable per EMPTY array and
+// nothing for the rest.
+func arrayToLua(l *lua.LState, value []any, null lua.LValue) *lua.LTable {
+	t := l.NewTable()
+	filled := false
+	for i, item := range value {
+		converted := toLua(l, item, null)
+		filled = filled || converted != lua.LNil
+		t.RawSetInt(i+1, converted)
+	}
+	if !filled {
+		markArray(l, t)
+	}
+	return t
+}
+
+// objectToLua is toLua for a JSON object. Keys are set sorted so a body
+// built from a decoded request is stable across runs: Go randomises map
+// traversal, and this package's own output would otherwise differ between
+// two identical calls for a reason that has nothing to do with D4's honest
+// non-determinism.
+func objectToLua(l *lua.LState, value map[string]any, null lua.LValue) *lua.LTable {
+	t := l.NewTable()
+	keys := make([]string, 0, len(value))
+	for k := range value {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		t.RawSetString(k, toLua(l, value[k], null))
+	}
+	return t
 }
 
 // maxTableDepth bounds how deep a Lua table may nest before the converter
@@ -131,8 +174,6 @@ type converter struct {
 
 func (c *converter) value(v lua.LValue, depth int) (any, error) {
 	switch value := v.(type) {
-	case *lua.LNilType:
-		return nil, nil
 	case lua.LBool:
 		return bool(value), nil
 	case lua.LNumber:
@@ -146,9 +187,14 @@ func (c *converter) value(v lua.LValue, depth int) (any, error) {
 	case *lua.LTable:
 		return c.table(value, depth)
 	default:
-		// A function, a userdata or a thread has no JSON rendering. Nil is
-		// the honest answer and `readReturn` has already refused the shapes
-		// where it would be a surprise.
+		// A big integer goes back out as its own digits. Everything else
+		// here is null: nil itself, `mock.null` (whose whole meaning that
+		// is), and a function, any other userdata or a thread, which have
+		// no JSON rendering — nil is the honest answer and `readReturn` has
+		// already refused the shapes where it would be a surprise.
+		if n, ok := bigIntOf(v); ok {
+			return n, nil
+		}
 		return nil, nil
 	}
 }
@@ -243,6 +289,127 @@ func isArrayMarked(t *lua.LTable) bool {
 		return false
 	}
 	return meta.RawGetString(arrayMetaKey) == lua.LBool(true)
+}
+
+// jsonNull is the Value of the userdata `mock.null` is. A type and not a
+// pointer: only this package can construct one, so a userdata carrying it is
+// the sentinel whatever VM it came from, and the check needs no LState.
+type jsonNull struct{}
+
+// newJSONNull builds one VM's `mock.null`. One per VM, never a shared
+// package value: gopher-lua's setmetatable accepts a userdata, so a shared
+// sentinel would be state one function's VM could write under another's.
+func newJSONNull(l *lua.LState) *lua.LUserData {
+	ud := l.NewUserData()
+	ud.Value = jsonNull{}
+	return ud
+}
+
+// isJSONNull answers whether v is a `mock.null`.
+func isJSONNull(v lua.LValue) bool {
+	ud, ok := v.(*lua.LUserData)
+	if !ok {
+		return false
+	}
+	_, ok = ud.Value.(jsonNull)
+	return ok
+}
+
+// numberToLua is the one place a decoded JSON number becomes a Lua value.
+// Lua's only number is a float64, so an INTEGER a float64 cannot hold
+// exactly — past ±2^53, an id from a 64-bit column — would come back out
+// rounded (12345678901234567890 served as 12345678901234567000) even from a
+// function or a patch that never touched it. Such a number becomes an opaque
+// big integer instead (see newBigInt); every other number, fractions and
+// exponents included, is the float it always was.
+//
+// A literal outside float64's RANGE (`1e400`) takes the same wrapper: it
+// has no Lua number at all, and the wrapper is the one shape that re-emits
+// it as the number it was rather than as a string or an infinity.
+func numberToLua(l *lua.LState, n jsonx.Number) lua.LValue {
+	f, err := n.Float64()
+	if err != nil || beyondFloat(n.String()) {
+		return newBigInt(l, n)
+	}
+	return lua.LNumber(f)
+}
+
+// maxExactInt is 2^53, the largest magnitude below which every integer has
+// an exact float64.
+const maxExactInt = 1 << 53
+
+// beyondFloat answers whether text is an integer literal a float64 cannot
+// hold exactly. Only an integer qualifies: a literal with a fraction or an
+// exponent was never exact in JSON's own reading either.
+func beyondFloat(text string) bool {
+	if strings.ContainsAny(text, ".eE") {
+		return false
+	}
+	i, err := strconv.ParseInt(text, 10, 64)
+	return err != nil || i > maxExactInt || i < -maxExactInt
+}
+
+// bigIntType names the per-VM metatable every big integer shares; it lives
+// in the VM's registry, which no sandboxed function can reach.
+const bigIntType = "mocker.bigint"
+
+// newBigInt wraps n as a userdata whose metatable gives an author exactly
+// what the patch and request-body contracts promise and no more: tostring
+// and `..` yield the original digits, `==` compares two big integers by
+// those digits, and luaToGo re-emits them verbatim. Arithmetic and ordering
+// are refused by Lua itself (a userdata is not a number); `tonumber(
+// tostring(v))` is the author's explicit, rounding, way out.
+func newBigInt(l *lua.LState, n jsonx.Number) *lua.LUserData {
+	ud := l.NewUserData()
+	ud.Value = n
+	l.SetMetatable(ud, bigIntMeta(l))
+	return ud
+}
+
+func bigIntMeta(l *lua.LState) lua.LValue {
+	if meta := l.GetTypeMetatable(bigIntType); meta != lua.LNil {
+		return meta
+	}
+	meta := l.NewTypeMetatable(bigIntType)
+	meta.RawSetString("__tostring", l.NewFunction(func(l *lua.LState) int {
+		l.Push(lua.LString(concatText(l, l.Get(1))))
+		return 1
+	}))
+	meta.RawSetString("__concat", l.NewFunction(func(l *lua.LState) int {
+		l.Push(lua.LString(concatText(l, l.Get(1)) + concatText(l, l.Get(2))))
+		return 1
+	}))
+	meta.RawSetString("__eq", l.NewFunction(func(l *lua.LState) int {
+		a, _ := bigIntOf(l.Get(1))
+		b, _ := bigIntOf(l.Get(2))
+		l.Push(lua.LBool(a == b))
+		return 1
+	}))
+	return meta
+}
+
+// concatText is one operand of a `..` that has a big integer on one side:
+// the digits for a big integer, Lua's own text for a string or a number, and
+// Lua's own refusal for anything else.
+func concatText(l *lua.LState, v lua.LValue) string {
+	if n, ok := bigIntOf(v); ok {
+		return n.String()
+	}
+	if lua.LVCanConvToString(v) {
+		return lua.LVAsString(v)
+	}
+	l.RaiseError("attempt to concatenate a %s value", v.Type().String())
+	return ""
+}
+
+// bigIntOf answers whether v is a big integer, and its digits.
+func bigIntOf(v lua.LValue) (jsonx.Number, bool) {
+	ud, ok := v.(*lua.LUserData)
+	if !ok {
+		return "", false
+	}
+	n, ok := ud.Value.(jsonx.Number)
+	return n, ok
 }
 
 // marshalLua encodes a Lua value as JSON through this package's own

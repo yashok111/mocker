@@ -32,7 +32,11 @@ import (
 // while `state` is the second helper after `entities` that WRITES, and its
 // refusals (`bad_key`, `bad_data`, the caps) answer with the same nil + word
 // shape every helper uses.
-var mockTableKeys = []string{"array", "entities", "generate", "jwt", "now", "state"}
+//
+// `null` (2026-11-01) is a value, not a function: the per-VM sentinel a patch
+// body's JSON nulls arrive as and the one way any function writes a JSON
+// null, where assigning nil deletes the key (convert.go's toLua).
+var mockTableKeys = []string{"array", "entities", "generate", "jwt", "now", "null", "state"}
 
 // entitiesTableKeys pins what `mock.entities` carries beside its `__call`.
 var entitiesTableKeys = []string{"create", "delete", "update"}
@@ -58,6 +62,7 @@ func installMock(l *lua.LState, ctx context.Context, host Host) {
 	mock.RawSetString("jwt", l.NewFunction(mockJWT(ctx, host)))
 	mock.RawSetString("generate", l.NewFunction(mockGenerate(ctx, host)))
 	mock.RawSetString("array", l.NewFunction(mockArray))
+	mock.RawSetString("null", newJSONNull(l))
 
 	// `mock.entities` is a table whose __call is the reader, so the A18
 	// spelling `mock.entities("/x")` is unchanged and the three writers hang

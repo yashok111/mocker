@@ -643,3 +643,66 @@ return 200, { g = g, s = s, d = d }
 		t.Fatalf("bad keys = %s", resp.Body)
 	}
 }
+
+// TestRequest_aNullFieldStaysNilOutsideAPatch pins the SCOPE of the patch
+// body's null rule: a request body's null is still Lua nil, because existing
+// functions test `req.body.x == nil` on it, while `mock.null` still renders as
+// JSON null in a response a function builds.
+func TestRequest_aNullFieldStaysNilOutsideAPatch(t *testing.T) {
+	resp, err := run(t, `return 200, {isNil = req.body.a == nil, isNull = req.body.a == mock.null, out = mock.null, list = {1, mock.null}}`, Request{
+		Body: []byte(`{"a":null}`),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(resp.Body); got != `{"isNil":true,"isNull":false,"list":[1,null],"out":null}` {
+		t.Errorf("body = %s", got)
+	}
+}
+
+// TestRequest_echoedBodyKeepsEmptyArraysAndBigIntegers is the function
+// request body's half of the round-trip contract — the two shapes that change
+// nothing an existing function can observe: a decoded `[]` is marked the way
+// mock.array marks one, so echoing it serves `[]` and not `{}`, and an integer
+// past 2^53 keeps its digits. A null still arrives as nil there (see
+// TestRequest_aNullFieldStaysNilOutsideAPatch), so an all-null array is an
+// empty table and echoes as `[]` too.
+func TestRequest_echoedBodyKeepsEmptyArraysAndBigIntegers(t *testing.T) {
+	resp, err := run(t, `return 200, req.body`, Request{
+		Body: []byte(`{"list":[],"deep":{"rows":[{"tags":[]}]},"big":12345678901234567890,"gaps":[null,null],"emptyLen":0}`),
+	}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := `{"big":12345678901234567890,"deep":{"rows":[{"tags":[]}]},"emptyLen":0,"gaps":[],"list":[]}`
+	if got := string(resp.Body); got != want {
+		t.Errorf("body = %s\nwant   %s", got, want)
+	}
+}
+
+// valuesHost answers mock.generate with a fixed Go value, the way a host built
+// in Go hands this package values decoded JSON never produces.
+type valuesHost struct {
+	recordingHost
+	value any
+}
+
+func (h *valuesHost) Generate(context.Context, map[string]any) (any, error) { return h.value, nil }
+
+// TestHostValues_everyGoShapeReachesLua pins goToLua's host-facing half: Go
+// ints and floats are numbers, a jsonx.Number past 2^53 keeps its digits, an
+// empty slice stays an array, and a type with no JSON reading is nil — the
+// key absent rather than a failed call.
+func TestHostValues_everyGoShapeReachesLua(t *testing.T) {
+	host := &valuesHost{value: map[string]any{
+		"i": 7, "i64": int64(8), "f": 1.5, "big": jsonx.Number("12345678901234567890"),
+		"none": []any{}, "odd": struct{}{},
+	}}
+	resp, err := run(t, `local v = mock.generate({type = "object"}); v.sum = v.i + v.i64 + v.f; return 200, v`, Request{}, host)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := string(resp.Body); got != `{"big":12345678901234567890,"f":1.5,"i":7,"i64":8,"none":[],"sum":16.5}` {
+		t.Errorf("body = %s", got)
+	}
+}

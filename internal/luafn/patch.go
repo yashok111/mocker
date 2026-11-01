@@ -41,7 +41,9 @@ func ValidatePatch(source string) error {
 // RunPatch executes one patch against one upstream response body.
 //
 // body arrives under D3's one shape rule — JSON decodes to a Lua value, an
-// empty body arrives as nil, anything else as the raw string — and status is
+// empty body arrives as nil, anything else as the raw string — with one
+// difference from a request body: a JSON null inside it is `mock.null`, not
+// nil, so an untouched null survives the round trip ([toLua]). status is
 // the upstream response's own code. The return is the tick's decline shape:
 // a table becomes JSON, a string is raw bytes, and nil or NOTHING means
 // "unchanged", which is the ordinary way to write "not this response". Any
@@ -54,7 +56,13 @@ func ValidatePatch(source string) error {
 // a failure mark.
 func RunPatch(ctx context.Context, source string, body []byte, status int, host Host) (patched []byte, changed bool, err error) {
 	l, done, err := call(ctx, patchArgs, source, func(st *lua.LState) []lua.LValue {
-		return []lua.LValue{bodyValue(st, body), lua.LNumber(status)}
+		// The null rule is the patch body's own: a JSON null arrives as this
+		// VM's `mock.null`, not as nil, so a body the patch hands back
+		// re-encodes every null it carried (toLua says why only here). The
+		// sentinel is read off the freshly installed `mock` — no user code
+		// has run yet, so it is the one installMock put there.
+		null := st.GetField(st.GetGlobal("mock"), "null")
+		return []lua.LValue{decodeBody(st, body, null), lua.LNumber(status)}
 	}, host)
 	if err != nil {
 		return nil, false, err
@@ -64,18 +72,22 @@ func RunPatch(ctx context.Context, source string, body []byte, status int, host 
 	if l.GetTop() == 0 {
 		return nil, false, nil
 	}
-	switch v := l.Get(1).(type) {
+	ret := l.Get(1)
+	switch v := ret.(type) {
 	case *lua.LNilType:
 		return nil, false, nil
 	case lua.LString:
 		return []byte(v), true, nil
-	case *lua.LTable:
-		encoded, mErr := marshalLua(v)
-		if mErr != nil {
-			return nil, false, fmt.Errorf("%w: the patched body could not be encoded as JSON: %s", ErrFailed, mErr.Error())
-		}
-		return encoded, true, nil
-	default:
-		return nil, false, fmt.Errorf("%w: a patch must return a table, a string or nil, got %s", ErrFailed, v.Type())
 	}
+	// A table encodes as JSON, and so does `mock.null` itself: a body that
+	// was JSON `null` arrives as the sentinel, and `return body` must hand
+	// back the null it was rather than a refusal of a userdata.
+	if _, isTable := ret.(*lua.LTable); !isTable && !isJSONNull(ret) {
+		return nil, false, fmt.Errorf("%w: a patch must return a table, a string or nil, got %s", ErrFailed, ret.Type())
+	}
+	encoded, mErr := marshalLua(ret)
+	if mErr != nil {
+		return nil, false, fmt.Errorf("%w: the patched body could not be encoded as JSON: %s", ErrFailed, mErr.Error())
+	}
+	return encoded, true, nil
 }

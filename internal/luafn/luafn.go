@@ -14,6 +14,7 @@
 package luafn
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -271,15 +272,25 @@ func requestTable(l *lua.LState, req Request) *lua.LTable {
 // bodyValue decodes a JSON body into a table and hands anything else over as
 // the raw string. One shape rule, used here and again by the WebSocket hook of
 // D10, so a function author learns it once.
-func bodyValue(l *lua.LState, body []byte) lua.LValue {
+func bodyValue(l *lua.LState, body []byte) lua.LValue { return decodeBody(l, body, lua.LNil) }
+
+// decodeBody is bodyValue with the value a JSON null becomes passed in —
+// lua.LNil everywhere but a patch body; [toLua] says why.
+func decodeBody(l *lua.LState, body []byte, null lua.LValue) lua.LValue {
 	if len(body) == 0 {
 		return lua.LNil
 	}
+	// UseNumber, so a number reaches toLua as its own TEXT: decoded as a
+	// float64 here, an integer past 2^53 would be rounded before anything
+	// could keep it (numberToLua). Valid first because a Decoder stops after
+	// the first value and would take `{} trailing` as JSON.
 	var decoded any
-	if err := jsonx.Unmarshal(body, &decoded); err != nil {
+	dec := jsonx.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	if !jsonx.Valid(body) || dec.Decode(&decoded) != nil {
 		return lua.LString(body)
 	}
-	return goToLua(l, decoded)
+	return toLua(l, decoded, null)
 }
 
 // readReturn reads `status, body, headers` off the stack and refuses every
