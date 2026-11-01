@@ -45,8 +45,14 @@ func testCompactDatabaseTarget(t *testing.T, target string) {
 		t.Fatal("compact response changed rows/pins or repeated details")
 	}
 	in.Section = "limitations"
-	got := []string{}
+	// Every page re-resolves the effective graph. At Limit 1 the source6 target
+	// took 206 pages: ~50 s plain and past 18 min under -race in CI, which held
+	// the race suite past its job timeout. Ten per page still crosses several
+	// cursors on every target (21 items for source5 and proposal).
+	in.Limit = 10
+	got, pages := []string{}, 0
 	for {
+		pages++
 		page, err := r.QueryDatabase(t.Context(), base.Project.ID, in)
 		if err != nil {
 			t.Fatal(err)
@@ -64,6 +70,9 @@ func testCompactDatabaseTarget(t *testing.T, target string) {
 			break
 		}
 		in.Cursor = page.NextCursor
+	}
+	if pages < 2 {
+		t.Fatalf("limitations fit in %d page; the cursor path went unexercised", pages)
 	}
 	slices.Sort(got)
 	got = slices.Compact(got)
