@@ -84,23 +84,19 @@ func toLua(l *lua.LState, v any, null lua.LValue) lua.LValue {
 // table with holes is any border; the request-body doc says so. Review
 // finding 7.
 //
-// A decoded array that leaves the table EMPTY — `[]`, or an all-null array
-// where null is nil — gets the mock.array mark, so handing it back serves
-// `[]` and not the `{}` an unmarked empty table encodes as. The mark is read
-// for the empty case only, so a table the function then fills is decided by
-// luaToGo's ordinary rules; marking costs one metatable per EMPTY array and
-// nothing for the rest.
+// Every decoded array carries the mock.array mark: it WAS an array, so a
+// table that is empty when it goes back out — `[]` untouched, an all-null
+// array where null is nil, or one the function emptied — serves `[]` and not
+// the `{}` an unmarked empty table encodes as. The mark is read for the empty
+// case only, so a table the function fills or keys by name is decided by
+// luaToGo's ordinary rules. One small metatable per decoded array is the
+// price.
 func arrayToLua(l *lua.LState, value []any, null lua.LValue) *lua.LTable {
 	t := l.NewTable()
-	filled := false
 	for i, item := range value {
-		converted := toLua(l, item, null)
-		filled = filled || converted != lua.LNil
-		t.RawSetInt(i+1, converted)
+		t.RawSetInt(i+1, toLua(l, item, null))
 	}
-	if !filled {
-		markArray(l, t)
-	}
+	markArray(l, t)
 	return t
 }
 

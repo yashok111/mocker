@@ -57,7 +57,10 @@ func TestRunPatch_statusReachesTheFunction(t *testing.T) {
 }
 
 func TestRunPatch_refusesEveryOtherShapeByName(t *testing.T) {
-	_, _, err := RunPatch(t.Context(), `return 7`, []byte(`{}`), 200, nil)
+	patched, changed, err := RunPatch(t.Context(), `return 7`, []byte(`{}`), 200, nil)
+	if changed || patched != nil {
+		t.Fatalf("a refusal must not report a change: changed=%v patched=%s", changed, patched)
+	}
 	if !errors.Is(err, ErrFailed) || !strings.Contains(err.Error(), "a patch must return a table, a string or nil, got number") {
 		t.Fatalf("err = %v", err)
 	}
@@ -71,7 +74,10 @@ func TestRunPatch_aFailureInsideTheFunctionIsErrFailed(t *testing.T) {
 }
 
 func TestRunPatch_aSelfReferencingTableIsARefusalNotACrash(t *testing.T) {
-	_, _, err := RunPatch(t.Context(), `local t = {}; t.self = t; return t`, []byte(`{}`), 200, nil)
+	patched, changed, err := RunPatch(t.Context(), `local t = {}; t.self = t; return t`, []byte(`{}`), 200, nil)
+	if changed || patched != nil {
+		t.Fatalf("a refusal must not report a change: changed=%v patched=%s", changed, patched)
+	}
 	if !errors.Is(err, ErrFailed) {
 		t.Fatalf("err = %v", err)
 	}
@@ -165,17 +171,18 @@ func TestRunPatch_aBigIntegerIsExactAndReadableAsText(t *testing.T) {
 // literal past float64's range keeps its own text like a big integer.
 func TestRunPatch_otherNumbersStayLuaNumbers(t *testing.T) {
 	const src = `return {
-		kinds = type(body.f) .. type(body.e) .. type(body.edge),
+		kinds = type(body.f) .. type(body.e) .. type(body.edge) .. type(body.pedge),
 		sum = body.f + body.e,
 		huge = body.huge,
 		hugeKind = type(body.huge),
 		edge = body.edge,
+		pedge = body.pedge,
 	}`
-	patched, changed, err := RunPatch(t.Context(), src, []byte(`{"f":1.5,"e":2e3,"edge":-9007199254740992,"huge":1e400}`), 200, nil)
+	patched, changed, err := RunPatch(t.Context(), src, []byte(`{"f":1.5,"e":2e3,"edge":-9007199254740992,"pedge":9007199254740992,"huge":1e400}`), 200, nil)
 	if err != nil || !changed {
 		t.Fatalf("changed=%v err=%v", changed, err)
 	}
-	want := `{"edge":-9007199254740992,"huge":1e400,"hugeKind":"userdata","kinds":"numbernumbernumber","sum":2001.5}`
+	want := `{"edge":-9007199254740992,"huge":1e400,"hugeKind":"userdata","kinds":"numbernumbernumbernumber","pedge":9007199254740992,"sum":2001.5}`
 	if string(patched) != want {
 		t.Fatalf("patched=%s\nwant   %s", patched, want)
 	}
@@ -201,6 +208,15 @@ func TestRunPatch_aBigIntegerRefusesWhatItCannotBe(t *testing.T) {
 func TestRunPatch_aValueWithNoJSONRenderingIsNull(t *testing.T) {
 	patched, _, err := RunPatch(t.Context(), `return {fn = function() end, list = {function() end}}`, []byte(`{}`), 200, nil)
 	if err != nil || string(patched) != `{"fn":null,"list":[null]}` {
+		t.Fatalf("patched=%s err=%v", patched, err)
+	}
+}
+
+// TestRunPatch_anArrayThePatchEmptiesStaysAnArray: every decoded array is
+// marked, so one the patch empties is still served as `[]`.
+func TestRunPatch_anArrayThePatchEmptiesStaysAnArray(t *testing.T) {
+	patched, _, err := RunPatch(t.Context(), `body.list[1] = nil; return body`, []byte(`{"list":[1]}`), 200, nil)
+	if err != nil || string(patched) != `{"list":[]}` {
 		t.Fatalf("patched=%s err=%v", patched, err)
 	}
 }
