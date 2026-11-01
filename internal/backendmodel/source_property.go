@@ -338,10 +338,23 @@ func sourceSelectors(payloads []SourceAssertionPayload) ([]TypedSourcePropertySe
 			result = append(result, s)
 		}
 	}
-	slices.SortFunc(result, func(a, b TypedSourcePropertySelector) int {
-		return strings.Compare(sourcePropertyKey(a), sourcePropertyKey(b))
-	})
+	// Each key is a canonical-JSON encoding, so derive it once per selector:
+	// deriving it inside the comparator cost 2·n·log n encodings per call and
+	// was ~40% of a source6 database read's CPU (measured 2026-11-01).
+	keyed := make([]keyedSourceSelector, len(result))
+	for i, s := range result {
+		keyed[i] = keyedSourceSelector{key: sourcePropertyKey(s), selector: s}
+	}
+	slices.SortFunc(keyed, func(a, b keyedSourceSelector) int { return strings.Compare(a.key, b.key) })
+	for i := range keyed {
+		result[i] = keyed[i].selector
+	}
 	return result, nil
+}
+
+type keyedSourceSelector struct {
+	key      string
+	selector TypedSourcePropertySelector
 }
 
 func sourcePropertyKey(s TypedSourcePropertySelector) string {
